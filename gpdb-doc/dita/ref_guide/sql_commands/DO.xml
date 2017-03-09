@@ -40,7 +40,10 @@
           </pt>
           <pd>The procedural language code to be executed. This must be specified as a string
             literal, just as with the <codeph>CREATE FUNCTION</codeph> command. Use of a
-            dollar-quoted literal is recommended. Optional keywords have no effect.</pd>
+            dollar-quoted literal is recommended. Optional keywords have no effect. These procedural
+            language are supported: PL/pgSQL (<codeph>plpgsql</codeph>), PL/Python
+              (<codeph>plpythonu</codeph>), and PL/Perl (<codeph>plperl</codeph> and
+              <codeph>plperlu</codeph>)</pd>
         </plentry>
         <plentry>
           <pt>
@@ -74,7 +77,7 @@ BEGIN
         EXECUTE 'GRANT ALL ON ' || quote_ident(r.table_schema) || '.' || quote_ident(r.table_name) || ' TO webuser';
     END LOOP;
 END$$;</codeblock>
-    <p>This PL/pgSQL example determines if a Greenplum Database user is a superuser. In the
+      <p>This PL/pgSQL example determines if a Greenplum Database user is a superuser. In the
         example, the anonymous block retrieves the input value from a temporary
         table.<codeblock>CREATE TEMP TABLE list AS VALUES ('gpadmin') DISTRIBUTED RANDOMLY;
 
@@ -103,7 +106,7 @@ END $$ LANGUAGE plpgsql ;</codeblock></p>
       <title>See Also</title>
       <p>
         <codeph>CREATE LANGUAGE</codeph>
-      <xref href="../extensions/pl_sql.xml#topic1"/></p>
+        <xref href="../extensions/pl_sql.xml#topic1"/></p>
     </section>
   </body>
 </topic>
