@@ -15,7 +15,7 @@
         anonymous function in a procedural language.</p>
       <p>The code block is treated as though it were the body of a function with no parameters,
         returning void. It is parsed and executed a single time.</p>
-      <p>The optional <codeph>LANGUAGE</codeph> clause can be either before or after the code
+      <p>The optional <codeph>LANGUAGE</codeph> clause can appear either before or after the code
         block.</p>
       <p> Anonymous blocks are procedural language structures that provide the capability to create
         and execute procedural code on the fly without persistently storing the code as database
@@ -41,9 +41,9 @@
           <pd>The procedural language code to be executed. This must be specified as a string
             literal, just as with the <codeph>CREATE FUNCTION</codeph> command. Use of a
             dollar-quoted literal is recommended. Optional keywords have no effect. These procedural
-            language are supported: PL/pgSQL (<codeph>plpgsql</codeph>), PL/Python
+            languages are supported: PL/pgSQL (<codeph>plpgsql</codeph>), PL/Python
               (<codeph>plpythonu</codeph>), and PL/Perl (<codeph>plperl</codeph> and
-              <codeph>plperlu</codeph>)</pd>
+              <codeph>plperlu</codeph>).</pd>
         </plentry>
         <plentry>
           <pt>
