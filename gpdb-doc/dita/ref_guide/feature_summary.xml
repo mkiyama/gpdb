@@ -582,9 +582,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>DELETE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3"><b>Unsupported Clauses /
-                    Options:</b><p><codeph>RETURNING</codeph></p><p><b>Limitations:</b></p><p><codeph>UPDATE/DELETE
-                    WHERE CURRENT OF...</codeph> cursor statements must be executed by Greenplum
-                  Database.</p></entry>
+                    Options:</b><p><codeph>RETURNING</codeph></p></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>DO</codeph></entry>
@@ -912,9 +910,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col2">YES</entry>
               <entry colname="col3"><b>Unsupported
                     Clauses:</b><p><codeph>RETURNING</codeph></p><p><b>Limitations:</b></p><p><codeph>SET</codeph>
-                  not allowed for Greenplum distribution key columns.</p><p><codeph>UPDATE/DELETE
-                    WHERE CURRENT OF...</codeph> cursor statements must be executed by Greenplum
-                  Database.</p></entry>
+                  not allowed for Greenplum distribution key columns.</p></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>VACUUM</codeph></entry>
