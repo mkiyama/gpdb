@@ -1396,7 +1396,7 @@ writeToDDFile(FILE *fp, char *ddBoostFileName, char *ddboost_storage_unit)
 		{
 			mpp_err_msg(logError, progname, "ddboost write failed on %s with err %d\n", path1.path_name, err);
 			err = -1;
-			break;
+			goto cleanup;
 		}
 
 		total_bytes += ret_count;
@@ -2553,7 +2553,7 @@ writeToDDFileFromInput(struct ddboost_options *dd_options)
 	char	   *buf = NULL;
 	ddp_uint64_t rw_size = dd_boost_buf_size;
 	ddp_uint64_t total_bytes = 0;
-	ddp_uint64_t read_bytes = 0;
+	ddp_int64_t read_bytes = 0;
 	ddp_path_t	path1 = {0};
 	char	   *full_path = NULL;
 	char	   *buf_iogroup = NULL;
