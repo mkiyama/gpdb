@@ -2480,6 +2480,8 @@ copyFilesFromDir(const char *fromDir, char *toDir, ddp_conn_desc_t ddp_conn, cha
 
 			/* File full_path is closed in the callee */
 			err = readFromDDFile(fp, full_path, ddboost_storage_unit);
+			fclose(fp);
+			fp = NULL;
 		}
 	}
 
@@ -2723,13 +2725,14 @@ createDbdumpsDir(char *filePath)
 	int			found = 0;
 	char		curPath[MAX_PATH_NAME];
 	int			err = 0;
+	int			returnValue = 0;
 
 	memset(curPath, 0, MAX_PATH_NAME);
 	if (filePath[0] == '/')
 		curPath[0] = '/';
 
 	/* Retain a copy of the original pathname as strtok strips off the string */
-	filePathCopy = strdup(filePath);
+	filePathCopy = Safe_strdup(filePath);
 
 	pch = strtok(filePathCopy, " /");
 	while (pch != NULL)
@@ -2749,7 +2752,8 @@ createDbdumpsDir(char *filePath)
 				if (err && (err != EEXIST) && (err != -1))
 				{
 					mpp_err_msg(logError, progname, "Directory %s creation on GPDB path failed with error %d\n", curPath, err);
-					return -1;
+					returnValue = -1;
+					goto cleanup;
 				}
 
 				/*
@@ -2758,7 +2762,7 @@ createDbdumpsDir(char *filePath)
 				 * stop
 				 */
 				if (isdigit(pch[0]))
-					return 0;
+					goto cleanup;
 			}
 
 			strcat(curPath, "/");
@@ -2767,7 +2771,11 @@ createDbdumpsDir(char *filePath)
 		else
 			break;
 	}
-	return 0;
+cleanup:
+	if (filePathCopy)
+		free(filePathCopy);
+
+	return returnValue;
 }
 
 int
@@ -3019,6 +3027,8 @@ syncFilesFromDDBoostTimestamp(struct ddboost_options *dd_options, ddp_conn_desc_
 
 			/* Close both files in the called function */
 			err = readFromDDFile(fp, ddboostPath, dd_options->ddboost_storage_unit);
+			fclose(fp);
+			fp = NULL;
 			if (err)
 			{
 				mpp_err_msg(logError, progname, "Copy failed from DDboost file %s to GPDB file %s\n", ddboostPath, gpdbPath);
@@ -3191,14 +3201,15 @@ copyWithinDDboost(struct ddboost_options *dd_options, ddp_conn_desc_t ddp_conn, 
 	if (!fromFile)
 	{
 		mpp_err_msg(logError, progname, "Source file on DDboost not specified\n");
-		return -1;
+		err = -1;
+		goto cleanup;
 	}
 
 	if (!toFile)
 	{
 		mpp_err_msg(logError, progname, "Destination file on GPDB not specified\n");
-		free(fromFile);
-		return -1;
+		err = -1;
+		goto cleanup;
 	}
 
 	full_path_source = (char *) malloc(MAX_PATH_NAME);
