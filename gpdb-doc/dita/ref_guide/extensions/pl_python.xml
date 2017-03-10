@@ -46,6 +46,8 @@
         <ul id="ul_qhg_33m_zt">
           <li>Greenplum Database does not support PL/Python triggers.</li>
           <li>PL/Python is available only as a Greenplum Database untrusted language.</li>
+          <li>Updatable cursors (<codeph>UPDATE...WHERE CURRENT OF</codeph> and
+              <codeph>DELETE...WHERE CURRENT OF</codeph>) are not supported.</li>
         </ul>
       </body>
     </topic>
