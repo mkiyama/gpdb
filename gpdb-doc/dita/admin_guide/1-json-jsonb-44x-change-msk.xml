@@ -1,0 +1,1353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="topic1" xml:lang="en">
+  <title id="ih135496">JSON Support - 5.0.0</title>
+  <body>
+    <draft-comment author="msk">DRAFT - json data type support <xref
+        href="https://www.pivotaltracker.com/story/show/78313302" format="html" scope="external"
+        >https://www.pivotaltracker.com/story/show/78313302</xref><p>NOTE: Information about VARADIC
+        and default input for functions at end of this topic.</p><p><b>GIN, jsonb not supported in
+          GPDB</b></p><p>Notes for upgrade, or new install?</p><p>Link to postgresql <xref
+          href="http://www.postgresql.org/docs/9.4/static/datatype-json.html" format="html"
+          scope="external"
+      >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p></draft-comment>
+    <p>Link to postgresql <xref href="http://www.postgresql.org/docs/9.4/static/datatype-json.html"
+        format="html" scope="external"
+        >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p>
+    <p>The JSON data types store JSON (JavaScript Object Notation) data, as specified in <xref
+        href="http://rfc7159.net/rfc7159" format="html" scope="external">RFC 7159</xref>. The JSON
+      data types enforce data validity according to the JSON rules. There are also JSON-specific
+      functions and operators available for data stored in these data types; see <xref
+        href="#topic_gn4_x3w_mq" format="dita"/> .</p>
+    <p>There are two JSON data types: <codeph>json</codeph> and <codeph>jsonb</codeph>. They accept
+      almost identical sets of values as input. The major difference is one of efficiency. <ul
+        id="ul_qv2_zrw_mq">
+        <li>The <codeph>json</codeph> data type stores an exact copy of the input text, which
+          processing functions must reparse on each execution.</li>
+        <li>The <codeph>jsonb</codeph> data is stored as a decomposed binary format that makes it
+          slightly slower to input due to added conversion overhead, but significantly faster to
+          process, since no reparsing is needed.</li>
+        <li><codeph>jsonb</codeph> also supports indexing. See <xref href="#topic_aqt_1tw_mq"
+            format="dita"/> )<draft-comment author="msk"><b>GIN not supported in
+            GPDB</b></draft-comment></li>
+      </ul></p>
+    <p>Because the <codeph>json</codeph> type stores an exact copy of the input text, it will
+      preserve semantically-insignificant white space between tokens, as well as the order of keys
+      within JSON objects. Also, if a JSON object within the value contains the same key more than
+      once, all the key/value pairs are kept. (The processing functions consider the last value as
+      the operative one.) By contrast, jsonb does not preserve white space, does not preserve the
+      order of object keys, and does not keep duplicate object keys. If duplicate keys are specified
+      in the input, only the last value is kept.</p>
+    <p>In general, most applications should prefer to store JSON data as <codeph>jsonb</codeph>,
+      unless there are quite specialized needs, such as legacy assumptions about ordering of object
+      keys.</p>
+    <p>Greenplum Database allows only one character set encoding per database. It is therefore not
+      possible for the JSON types to conform rigidly to the JSON specification unless the database
+      encoding is UTF8. Attempts to directly include characters that cannot be represented in the
+      database encoding will fail; conversely, characters that can be represented in the database
+      encoding but not in UTF8 will be allowed.</p>
+    <p>RFC 7159 permits JSON strings to contain Unicode escape sequences denoted by
+          <codeph>\u<varname>XXXX</varname></codeph>. In the input function for the
+        <codeph>json</codeph> type, Unicode escapes are allowed regardless of the database encoding,
+      and are checked only for syntactic correctness (that is, that four hex digits follow
+        <codeph>\u</codeph>). However, the input function for <codeph>jsonb</codeph> is stricter: it
+      disallows Unicode escapes for non-ASCII characters (those above U+007F) unless the database
+      encoding is UTF8. It also insists that any use of Unicode surrogate pairs to designate
+      characters outside the Unicode Basic Multilingual Plane be correct. Valid Unicode escapes,
+      except for \u0000, are then converted to the equivalent ASCII or UTF8 character for
+      storage.</p>
+    <note>Many of the JSON processing functions described in <xref
+        href="http://www.postgresql.org/docs/9.4/static/functions-json.html" format="html"
+        scope="external">Section 9.15</xref> will convert Unicode escapes to regular characters, and
+      will therefore throw the same types of errors just described even if their input is of type
+        <codeph>json</codeph> not <codeph>jsonb</codeph>. The fact that the <codeph>json</codeph>
+      input function does not make these checks may be considered a historical artifact, although it
+      does allow for simple storage (without processing) of JSON Unicode escapes in a non-UTF8
+      database encoding. In general, it is best to avoid mixing Unicode escapes in JSON with a
+      non-UTF8 database encoding, if possible.</note>
+    <p>When converting textual JSON input into <codeph>jsonb</codeph>, the primitive types described
+      by RFC 7159 are effectively mapped onto native PostgreSQL types, as shown in <xref
+        href="http://www.postgresql.org/docs/9.4/static/datatype-json.html#JSON-TYPE-MAPPING-TABLE"
+        format="html" scope="external">Table 8-23</xref>. Therefore, there are some minor additional
+      constraints on what constitutes valid <codeph>jsonb</codeph> data that do not apply to the
+        <codeph>json</codeph> type, nor to JSON in the abstract, corresponding to limits on what can
+      be represented by the underlying data type. Specifically, <codeph>jsonb</codeph> will reject
+      numbers that are outside the range of the PostgreSQL <codeph>numeric</codeph> data type, while
+        <codeph>json</codeph> will not. Such implementation-defined restrictions are permitted by
+      RFC 7159. However, in practice such problems are far more likely to occur in other
+      implementations, as it is common to represent JSON's <codeph>number</codeph> primitive type as
+      IEEE 754 double precision floating point (which RFC 7159 explicitly anticipates and allows
+      for). When using JSON as an interchange format with such systems, the danger of losing numeric
+      precision compared to data originally stored by PostgreSQL should be considered.</p>
+    <p>Conversely, as noted in the table there are some minor restrictions on the input format of
+      JSON primitive types that do not apply to the corresponding PostgreSQL types.</p>
+    <p>Table 8-23. JSON primitive types and corresponding PostgreSQL types</p>
+    <table id="table_spm_m3w_mq">
+      <tgroup cols="3">
+        <colspec colnum="1" colname="col1"/>
+        <colspec colnum="2" colname="col2"/>
+        <colspec colnum="3" colname="col3"/>
+        <thead>
+          <row>
+            <entry>JSON primitive type</entry>
+            <entry>PostgreSQL type</entry>
+            <entry>Notes</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <codeph>string</codeph>
+            </entry>
+            <entry>
+              <codeph>text</codeph>
+            </entry>
+            <entry>See notes above concerning encoding restrictions</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>number</codeph>
+            </entry>
+            <entry>
+              <codeph>numeric</codeph>
+            </entry>
+            <entry><codeph>NaN</codeph> and <codeph>infinity</codeph> values are disallowed</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>boolean</codeph>
+            </entry>
+            <entry>
+              <codeph>boolean</codeph>
+            </entry>
+            <entry>Only lowercase <codeph>true</codeph> and <codeph>false</codeph> spellings are
+              accepted</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>null</codeph>
+            </entry>
+            <entry>(none)</entry>
+            <entry>SQL <codeph>NULL</codeph> is a different concept</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+  </body>
+  <topic id="topic_isn_ltw_mq">
+    <title>8.14.1. JSON Input and Output Syntax</title>
+    <body>
+      <p>
+        <b>
+          <ph id="JSON-KEYS-ELEMENTS">8.14.1. JSON Input and Output Syntax</ph>
+        </b>
+      </p>
+      <p>The input/output syntax for the JSON data types is as specified in RFC 7159.</p>
+      <p>The following are all valid <codeph>json</codeph> (or <codeph>jsonb</codeph>)
+        expressions:</p>
+      <pre>-- Simple scalar/primitive value
+-- Primitive values can be numbers, quoted strings, true, false, or null
+SELECT '5'::json;
+
+-- Array of zero or more elements (elements need not be of same type)
+SELECT '[1, 2, "foo", null]'::json;
+
+-- Object containing pairs of keys and values
+-- Note that object keys must always be quoted strings
+SELECT '{"bar": "baz", "balance": 7.77, "active": false}'::json;
+
+-- Arrays and objects can be nested arbitrarily
+SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;
+</pre>
+      <p>As previously stated, when a JSON value is input and then printed without any additional
+        processing, <codeph>json</codeph> outputs the same text that was input, while
+          <codeph>jsonb</codeph> does not preserve semantically-insignificant details such as
+        whitespace. For example, note the differences here:</p>
+      <pre>SELECT '{"bar": "baz", "balance": 7.77, "active":false}'::json;
+                      json                       
+-------------------------------------------------
+ {"bar": "baz", "balance": 7.77, "active":false}
+(1 row)
+
+SELECT '{"bar": "baz", "balance": 7.77, "active":false}'::jsonb;
+                      jsonb                       
+--------------------------------------------------
+ {"bar": "baz", "active": false, "balance": 7.77}
+(1 row)
+</pre>
+      <p>One semantically-insignificant detail worth noting is that in <cmdname>jsonb</cmdname>,
+        numbers will be printed according to the behavior of the underlying numeric type. In
+        practice this means that numbers entered with E notation will be printed without it, for
+        example:</p>
+      <pre>SELECT '{"reading": 1.230e-5}'::json, '{"reading": 1.230e-5}'::jsonb;
+         json          |          jsonb          
+-----------------------+-------------------------
+ {"reading": 1.230e-5} | {"reading": 0.00001230}
+(1 row)
+</pre>
+      <p>However, <codeph>jsonb</codeph> will preserve trailing fractional zeroes, as seen in this
+        example, even though those are semantically insignificant for purposes such as equality
+        checks.</p>
+    </body>
+  </topic>
+  <topic id="topic_eyt_3tw_mq">
+    <title>8.14.2. Designing JSON documents effectively</title>
+    <body>
+      <p>
+        <b>
+          <ph>8.14.2. Designing JSON documents effectively</ph>
+        </b>
+      </p>
+      <p>Representing data as JSON can be considerably more flexible than the traditional relational
+        data model, which is compelling in environments where requirements are fluid. It is quite
+        possible for both approaches to co-exist and complement each other within the same
+        application. However, even for applications where maximal flexibility is desired, it is
+        still recommended that JSON documents have a somewhat fixed structure. The structure is
+        typically unenforced (though enforcing some business rules declaratively is possible), but
+        having a predictable structure makes it easier to write queries that usefully summarize a
+        set of "documents" (datums) in a table.</p>
+      <p>JSON data is subject to the same concurrency-control considerations as any other data type
+        when stored in a table. Although storing large documents is practicable, keep in mind that
+        any update acquires a row-level lock on the whole row. Consider limiting JSON documents to a
+        manageable size in order to decrease lock contention among updating transactions. Ideally,
+        JSON documents should each represent an atomic datum that business rules dictate cannot
+        reasonably be further subdivided into smaller datums that could be modified
+        independently.</p>
+    </body>
+  </topic>
+  <topic id="topic_isx_2tw_mq">
+    <title>8.14.3. jsonb Containment and Existence</title>
+    <body>
+      <p>
+        <b>
+          <ph>8.14.3. jsonb Containment and Existence</ph>
+        </b>
+      </p>
+      <p>Testing <i>containment</i> is an important capability of <codeph>jsonb</codeph>. There is
+        no parallel set of facilities for the <codeph>json</codeph> type. Containment tests whether
+        one <codeph>jsonb</codeph> document has contained within it another one. These examples
+        return true except as noted:</p>
+      <pre>-- Simple scalar/primitive values contain only the identical value:
+SELECT '"foo"'::jsonb @> '"foo"'::jsonb;
+
+-- The array on the right side is contained within the one on the left:
+SELECT '[1, 2, 3]'::jsonb @> '[1, 3]'::jsonb;
+
+-- Order of array elements is not significant, so this is also true:
+SELECT '[1, 2, 3]'::jsonb @> '[3, 1]'::jsonb;
+
+-- Duplicate array elements don't matter either:
+SELECT '[1, 2, 3]'::jsonb @> '[1, 2, 2]'::jsonb;
+
+-- The object with a single pair on the right side is contained
+-- within the object on the left side:
+SELECT '{"product": "PostgreSQL", "version": 9.4, "jsonb":true}'::jsonb @> '{"version":9.4}'::jsonb;
+
+-- The array on the right side is <b>not</b> considered contained within the
+-- array on the left, even though a similar array is nested within it:
+SELECT '[1, 2, [1, 3]]'::jsonb @> '[1, 3]'::jsonb;  -- yields false
+
+-- But with a layer of nesting, it is contained:
+SELECT '[1, 2, [1, 3]]'::jsonb @> '[[1, 3]]'::jsonb;
+
+-- Similarly, containment is not reported here:
+SELECT '{"foo": {"bar": "baz"}}'::jsonb @> '{"bar": "baz"}'::jsonb;  -- yields false
+</pre>
+      <p>The general principle is that the contained object must match the containing object as to
+        structure and data contents, possibly after discarding some non-matching array elements or
+        object key/value pairs from the containing object. But remember that the order of array
+        elements is not significant when doing a containment match, and duplicate array elements are
+        effectively considered only once.</p>
+      <p>As a special exception to the general principle that the structures must match, an array
+        may contain a primitive value:</p>
+      <pre>-- This array contains the primitive string value:
+SELECT '["foo", "bar"]'::jsonb @> '"bar"'::jsonb;
+
+-- This exception is not reciprocal -- non-containment is reported here:
+SELECT '"bar"'::jsonb @> '["bar"]'::jsonb;  -- yields false
+</pre>
+      <p><codeph>jsonb</codeph> also has an <i>existence</i> operator, which is a variation on the
+        theme of containment: it tests whether a string (given as a text value) appears as an object
+        key or array element at the top level of the <codeph>jsonb</codeph> value. These examples
+        return true except as noted:</p>
+      <pre>-- String exists as array element:
+SELECT '["foo", "bar", "baz"]'::jsonb ? 'bar';
+
+-- String exists as object key:
+SELECT '{"foo": "bar"}'::jsonb ? 'foo';
+
+-- Object values are not considered:
+SELECT '{"foo": "bar"}'::jsonb ? 'bar';  -- yields false
+
+-- As with containment, existence must match at the top level:
+SELECT '{"foo": {"bar": "baz"}}'::jsonb ? 'bar'; -- yields false
+
+-- A string is considered to exist if it matches a primitive JSON string:
+SELECT '"foo"'::jsonb ? 'foo';
+</pre>
+      <p>JSON objects are better suited than arrays for testing containment or existence when there
+        are many keys or elements involved, because unlike arrays they are internally optimized for
+        searching, and do not need to be searched linearly.</p>
+      <p>The various containment and existence operators, along with all other JSON operators and
+        functions are documented in <xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-json.html" format="html"
+          scope="external">Section 9.15</xref>.</p>
+    </body>
+  </topic>
+  <topic id="topic_aqt_1tw_mq">
+    <title>8.14.4. jsonb Indexing</title>
+    <body>
+      <p>
+        <b>
+          <ph id="JSON-INDEXING">8.14.4. jsonb Indexing</ph>
+        </b>
+      </p>
+      <p>Because we don't support GIN, so we only support btree index for <codeph>jsonb</codeph>
+        columns. </p>
+      <draft-comment author="msk">Most of the information is GIN, small part for btree. Any
+        recommendations for indexing JSON columns?</draft-comment>
+      <p>GIN indexes can be used to efficiently search for keys or key/value pairs occurring within
+        a large number of <codeph>jsonb</codeph> documents (datums). Two GIN "operator classes" are
+        provided, offering different performance and flexibility trade-offs.</p>
+      <p>The default GIN operator class for <varname>jsonb</varname> supports queries with the
+          <codeph>@></codeph>, <codeph>?</codeph>, <codeph>?&amp;</codeph> and <codeph>?|</codeph>
+        operators. (For details of the semantics that these operators implement, see <xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-json.html#FUNCTIONS-JSONB-OP-TABLE"
+          format="html" scope="external">Table 9-41</xref>.) An example of creating an index with
+        this operator class is:</p>
+      <pre>CREATE INDEX idxgin ON api USING gin (jdoc);
+</pre>
+      <p>The non-default GIN operator class <codeph>jsonb_path_ops</codeph> supports indexing the
+          <codeph>@></codeph> operator only. An example of creating an index with this operator
+        class is:</p>
+      <pre>CREATE INDEX idxginp ON api USING gin (jdoc jsonb_path_ops);
+</pre>
+      <p>Consider the example of a table that stores JSON documents retrieved from a third-party web
+        service, with a documented schema definition. A typical document is:</p>
+      <pre>{
+    "guid": "9c36adc1-7fb5-4d5b-83b4-90356a46061a",
+    "name": "Angela Barton",
+    "is_active": true,
+    "company": "Magnafone",
+    "address": "178 Howard Place, Gulf, Washington, 702",
+    "registered": "2009-11-07T08:53:22 +08:00",
+    "latitude": 19.793713,
+    "longitude": 86.513373,
+    "tags": [
+        "enim",
+        "aliquip",
+        "qui"
+    ]
+}
+</pre>
+      <p>We store these documents in a table named <i>api</i>, in a <codeph>jsonb</codeph> column
+        named <i>jdoc</i>. If a GIN index is created on this column, queries like the following can
+        make use of the index:</p>
+      <pre>-- Find documents in which the key "company" has value "Magnafone"
+SELECT jdoc->'guid', jdoc->'name' FROM api WHERE jdoc @> '{"company": "Magnafone"}';
+</pre>
+      <p>However, the index could not be used for queries like the following, because though the
+        operator <codeph>?</codeph> is indexable, it is not applied directly to the indexed column
+          <i>jdoc</i>:</p>
+      <pre>-- Find documents in which the key "tags" contains key or array element "qui"
+SELECT jdoc->'guid', jdoc->'name' FROM api WHERE jdoc -> 'tags' ? 'qui';
+</pre>
+      <p>Still, with appropriate use of expression indexes, the above query can use an index. If
+        querying for particular items within the "tags" key is common, defining an index like this
+        may be worthwhile:</p>
+      <pre>CREATE INDEX idxgintags ON api USING gin ((jdoc -> 'tags'));
+</pre>
+      <p>Now, the <cmdname>WHERE</cmdname> clause <codeph>jdoc -> 'tags' ? 'qui'</codeph> will be
+        recognized as an application of the indexable operator <codeph>?</codeph> to the indexed
+        expression <codeph>jdoc -> 'tags'</codeph>. (More information on expression indexes can be
+        found in <xref href="http://www.postgresql.org/docs/9.4/static/indexes-expressional.html"
+          format="html" scope="external">Section 11.7</xref>.)</p>
+      <p>Another approach to querying is to exploit containment, for example:</p>
+      <pre>-- Find documents in which the key "tags" contains array element "qui"
+SELECT jdoc->'guid', jdoc->'name' FROM api WHERE jdoc @> '{"tags": ["qui"]}';
+</pre>
+      <p>A simple GIN index on the <i>jdoc</i> column can support this query. But note that such an
+        index will store copies of every key and value in the <i>jdoc</i> column, whereas the
+        expression index of the previous example stores only data found under the tags key. While
+        the simple-index approach is far more flexible (since it supports queries about any key),
+        targeted expression indexes are likely to be smaller and faster to search than a simple
+        index.</p>
+      <p>Although the <codeph>jsonb_path_ops</codeph> operator class supports only queries with the
+          <codeph>@></codeph> operator, it has notable performance advantages over the default
+        operator class <codeph>jsonb_ops</codeph>. A <codeph>jsonb_path_ops</codeph> index is
+        usually much smaller than a <codeph>jsonb_ops</codeph> index over the same data, and the
+        specificity of searches is better, particularly when queries contain keys that appear
+        frequently in the data. Therefore search operations typically perform better than with the
+        default operator class.</p>
+      <p>The technical difference between a <codeph>jsonb_ops</codeph> and a
+          <codeph>jsonb_path_ops</codeph> GIN index is that the former creates independent index
+        items for each key and value in the data, while the latter creates index items only for each
+        value in the data. [1] Basically, each <codeph>jsonb_path_ops</codeph> index item is a hash
+        of the value and the key(s) leading to it; for example to index <codeph>{"foo": {"bar":
+          "baz"}}</codeph>, a single index item would be created incorporating all three of
+          <codeph>foo</codeph>, <codeph>bar</codeph>, and <codeph>baz</codeph> into the hash value.
+        Thus a containment query looking for this structure would result in an extremely specific
+        index search; but there is no way at all to find out whether foo appears as a key. On the
+        other hand, a <codeph>jsonb_ops</codeph> index would create three index items representing
+          <codeph>foo</codeph>, <codeph>bar</codeph>, and <codeph>baz</codeph> separately; then to
+        do the containment query, it would look for rows containing all three of these items. While
+        GIN indexes can perform such an <codeph>AND</codeph> search fairly efficiently, it will
+        still be less specific and slower than the equivalent <codeph>jsonb_path_ops</codeph>
+        search, especially if there are a very large number of rows containing any single one of the
+        three index items.</p>
+      <p>A disadvantage of the <codeph>jsonb_path_ops</codeph> approach is that it produces no index
+        entries for JSON structures not containing any values, such as <codeph>{"a": {}}</codeph>.
+        If a search for documents containing such a structure is requested, it will require a
+        full-index scan, which is quite slow. <codeph>jsonb_path_ops</codeph> is therefore
+        ill-suited for applications that often perform such searches.</p>
+      <note>[1] For this purpose, the term "value" includes array elements, though JSON terminology
+        sometimes considers array elements distinct from values within objects.</note>
+    </body>
+    <topic id="topic_ahb_5ly_wq">
+      <title>btree and hash indexes</title>
+      <body>
+        <draft-comment author="msk">Is this the only indexing feature supported in
+          GPDB?</draft-comment>
+        <p><codeph>jsonb</codeph> also supports <codeph>btree</codeph> and <codeph>hash</codeph>
+          indexes. These are usually useful only if it's important to check equality of complete
+          JSON documents. The <codeph>btree</codeph> ordering for <codeph>jsonb</codeph> datums is
+          seldom of great interest, but for completeness it is:</p>
+        <pre>Object > Array > Boolean > Number > String > NullObject with n pairs > object with n - 1 pairsArray with n elements > array with n - 1 elements</pre>
+        <p>Objects with equal numbers of pairs are compared in the order:</p>
+        <pre>key-1, value-1, key-2 ...</pre>
+        <p>Note that object keys are compared in their storage order; in particular, since shorter
+          keys are stored before longer keys, this can lead to results that might be unintuitive,
+          such as:</p>
+        <pre>{ "aa": 1, "c": 1} > {"b": 1, "d": 1}</pre>
+        <p>Similarly, arrays with equal numbers of elements are compared in the order:</p>
+        <pre>element-1, element-2 ...</pre>
+        <p>Primitive JSON values are compared using the same comparison rules as for the underlying
+          PostgreSQL data type. Strings are compared using the default database collation.</p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_gn4_x3w_mq">
+    <title>JSON Functions and Operators</title>
+    <body>
+      <p>The following table shows the operators that are available for use with the two JSON data
+        types (see <xref href="#topic1" format="dita"/>.</p>
+      <p>Table 9-40. <varname>json</varname> and <varname>jsonb</varname> Operators</p>
+      <table id="table_e41_y3w_mq">
+        <tgroup cols="5">
+          <colspec colnum="1" colname="col1"/>
+          <colspec colnum="2" colname="col2"/>
+          <colspec colnum="3" colname="col3"/>
+          <colspec colnum="4" colname="col4"/>
+          <colspec colnum="5" colname="col5"/>
+          <thead>
+            <row>
+              <entry>Operator</entry>
+              <entry>Right Operand Type</entry>
+              <entry>Description</entry>
+              <entry>Example</entry>
+              <entry>Example Result</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <codeph>-></codeph>
+              </entry>
+              <entry>
+                <codeph>int</codeph>
+              </entry>
+              <entry>Get JSON array element (indexed from zero)</entry>
+              <entry>
+                <codeph>'[{"a":"foo"},{"b":"bar"},{"c":"baz"}]'::json->2</codeph>
+              </entry>
+              <entry>
+                <codeph>{"c":"baz"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>-></codeph>
+              </entry>
+              <entry>
+                <codeph>text</codeph>
+              </entry>
+              <entry>Get JSON object field by key</entry>
+              <entry>
+                <codeph>'{"a": {"b":"foo"}}'::json->'a'</codeph>
+              </entry>
+              <entry>
+                <codeph>{"b":"foo"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>->></codeph>
+              </entry>
+              <entry>
+                <codeph>int</codeph>
+              </entry>
+              <entry>Get JSON array element as text</entry>
+              <entry>
+                <codeph>'[1,2,3]'::json->>2</codeph>
+              </entry>
+              <entry>
+                <codeph>3</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>->></codeph>
+              </entry>
+              <entry>
+                <codeph>text</codeph>
+              </entry>
+              <entry>Get JSON object field as text</entry>
+              <entry>
+                <codeph>'{"a":1,"b":2}'::json->>'b'</codeph>
+              </entry>
+              <entry>
+                <codeph>2</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>#></codeph>
+              </entry>
+              <entry>
+                <codeph>text[]</codeph>
+              </entry>
+              <entry>Get JSON object at specified path</entry>
+              <entry><codeph>'{"a": {"b":{"c": "foo"}}}'::json#>'{a,b}</codeph>'</entry>
+              <entry>
+                <codeph>{"c": "foo"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>#>></codeph>
+              </entry>
+              <entry>
+                <codeph>text[]</codeph>
+              </entry>
+              <entry>Get JSON object at specified path as text</entry>
+              <entry>
+                <codeph>'{"a":[1,2,3],"b":[4,5,6]}'::json#>>'{a,2}'</codeph>
+              </entry>
+              <entry>
+                <codeph>3</codeph>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <note> There are parallel variants of these operators for both the <codeph>json</codeph> and
+          <codeph>jsonb</codeph> types. The field/element/path extraction operators return the same
+        type as their left-hand input (either <codeph>json</codeph> or <codeph>jsonb</codeph>),
+        except for those specified as returning text, which coerce the value to text. The
+        field/element/path extraction operators return <codeph>NULL</codeph>, rather than failing,
+        if the JSON input does not have the right structure to match the request; for example if no
+        such element exists.</note>
+      <p>The standard comparison operators shown in <xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-comparison.html#FUNCTIONS-COMPARISON-TABLE"
+          format="html" scope="external">Table 9-1</xref> are available for <codeph>jsonb</codeph>,
+        but not for <codeph>json</codeph>. They follow the ordering rules for B-tree operations
+        outlined at <xref
+          href="http://www.postgresql.org/docs/9.4/static/datatype-json.html#JSON-INDEXING"
+          format="html" scope="external">Section 8.14.4</xref><xref href="#topic_aqt_1tw_mq"
+          format="dita"/> .</p>
+      <p>Table 9-1. jsonb Comparison Operators</p>
+      <table id="table_j4w_z5n_vq">
+        <tgroup cols="2">
+          <colspec colnum="1" colname="col1"/>
+          <colspec colnum="2" colname="col2"/>
+          <thead>
+            <row>
+              <entry>Operator</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <codeph>&lt;</codeph>
+              </entry>
+              <entry>less than</entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>&gt;</codeph>
+              </entry>
+              <entry>greater than</entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>&lt;=</codeph>
+              </entry>
+              <entry>less than or equal to</entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>&gt;=</codeph>
+              </entry>
+              <entry>greater than or equal to</entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>=</codeph>
+              </entry>
+              <entry>equal</entry>
+            </row>
+            <row>
+              <entry><codeph>&lt;&gt;</codeph> or <codeph>!=</codeph></entry>
+              <entry>not equal</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <note>The <codeph>!=</codeph> operator is converted to <codeph>&lt;&gt;</codeph> in the parser
+        stage. It is not possible to implement <codeph>!=</codeph> and <codeph>&lt;&gt;</codeph>
+        operators that do different things.</note>
+      <p>Some further operators also exist only for <codeph>jsonb</codeph>, as shown in <xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-json.html#FUNCTIONS-JSONB-OP-TABLE"
+          format="html" scope="external">Table 9-41</xref>. Many of these operators can be indexed
+        by <codeph>jsonb</codeph> operator classes. For a full description of <codeph>jsonb</codeph>
+        containment and existence semantics, see <xref href="#topic_isx_2tw_mq" format="dita"/>.
+          <xref href="#topic_aqt_1tw_mq" format="dita"/> describes how these operators can be used
+        to effectively index <codeph>jsonb</codeph> data.</p>
+      <p>Table 9-41. Additional <varname>jsonb</varname> Operators</p>
+      <table id="table_dcb_y3w_mq">
+        <tgroup cols="4">
+          <colspec colnum="1" colname="col1"/>
+          <colspec colnum="2" colname="col2"/>
+          <colspec colnum="3" colname="col3"/>
+          <colspec colnum="4" colname="col4"/>
+          <thead>
+            <row>
+              <entry>Operator</entry>
+              <entry>Right Operand Type</entry>
+              <entry>Description</entry>
+              <entry>Example</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <codeph>@></codeph>
+              </entry>
+              <entry>
+                <codeph>jsonb</codeph>
+              </entry>
+              <entry>Does the left JSON value contain within it the right value?</entry>
+              <entry>
+                <codeph>'{"a":1, "b":2}'::jsonb @> '{"b":2}'::jsonb</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>&lt;@</codeph>
+              </entry>
+              <entry>
+                <codeph>jsonb</codeph>
+              </entry>
+              <entry>Is the left JSON value contained within the right value?</entry>
+              <entry>
+                <codeph>'{"b":2}'::jsonb &lt;@ '{"a":1, "b":2}'::jsonb</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>?</codeph>
+              </entry>
+              <entry>
+                <codeph>text</codeph>
+              </entry>
+              <entry>Does the key/element string exist within the JSON value?</entry>
+              <entry>
+                <codeph>'{"a":1, "b":2}'::jsonb ? 'b'</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>?|</codeph>
+              </entry>
+              <entry>
+                <codeph>text[]</codeph>
+              </entry>
+              <entry>Do any of these key/element strings exist?</entry>
+              <entry>
+                <codeph>'{"a":1, "b":2, "c":3}'::jsonb ?| array['b', 'c']</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>?&amp;</codeph>
+              </entry>
+              <entry>
+                <codeph>text[]</codeph>
+              </entry>
+              <entry>Do all of these key/element strings exist?</entry>
+              <entry>
+                <codeph>'["a", "b"]'::jsonb ?&amp; array['a', 'b']</codeph>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <p><xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-json.html#FUNCTIONS-JSON-CREATION-TABLE"
+          format="html" scope="external">Table 9-42</xref> shows the functions that are available
+        for creating <codeph>json</codeph> values. (Currently, there are no equivalent functions for
+          <codeph>jsonb</codeph>, but you can cast the result of one of these functions to
+          <codeph>jsonb</codeph>.)</p>
+      <p>Table 9-42. JSON Creation Functions</p>
+      <draft-comment author="msk">For <codeph>json_build_array</codeph> and
+          <codeph>json_build_object</codeph> is function input type <cmdname>VARIADIC</cmdname>
+        supported? or does input have to be a one-dimensional array?</draft-comment>
+      <table id="table_sqb_y3w_mq">
+        <tgroup cols="4">
+          <colspec colnum="1" colname="col1"/>
+          <colspec colnum="2" colname="col2"/>
+          <colspec colnum="3" colname="col3"/>
+          <colspec colnum="4" colname="col4"/>
+          <thead>
+            <row>
+              <entry>Function</entry>
+              <entry>Description</entry>
+              <entry>Example</entry>
+              <entry>Example Result</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <codeph>to_json(anyelement)</codeph>
+              </entry>
+              <entry>Returns the value as a JSON object. Arrays and composites are processed
+                recursively and are converted to arrays and objects. If the input contains a cast
+                from the type to <cmdname>json</cmdname>, the cast function is used to perform the
+                conversion; otherwise, a JSON scalar value is produced. For any scalar type other
+                than a number, a Boolean, or a null value, the text representation will be used,
+                properly quoted and escaped so that it is a valid JSON string.</entry>
+              <entry>
+                <codeph>to_json('Fred said "Hi."'::text)</codeph>
+              </entry>
+              <entry>
+                <codeph>"Fred said \"Hi.\""</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>array_to_json(anyarray [, pretty_bool])</codeph>
+              </entry>
+              <entry>Returns the array as a JSON array. A PostgreSQL multidimensional array becomes
+                a JSON array of arrays. <p>Line feeds will be added between dimension-1 elements if
+                    <cmdname>pretty_bool</cmdname> is true.</p></entry>
+              <entry>
+                <codeph>array_to_json('{{1,5},{99,100}}'::int[])</codeph>
+              </entry>
+              <entry>
+                <codeph>[[1,5],[99,100]]</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>row_to_json(record [, pretty_bool])</codeph>
+              </entry>
+              <entry>Returns the row as a JSON object. <p>Line feeds will be added between level-1
+                  elements if <cmdname>pretty_bool</cmdname> is true.</p></entry>
+              <entry>
+                <codeph>row_to_json(row(1,'foo'))</codeph>
+              </entry>
+              <entry>
+                <codeph>{"f1":1,"f2":"foo"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry><codeph>json_build_array(VARIADIC "any"</codeph>)</entry>
+              <entry>Builds a possibly-heterogeneously-typed JSON array out of a
+                  <cmdname>VARIADIC</cmdname> argument list.<draft-comment author="msk"><b>Q</b>- Is
+                    <cmdname>VARIADIC</cmdname> supported?</draft-comment></entry>
+              <entry>
+                <codeph>json_build_array(1,2,'3',4,5)</codeph>
+              </entry>
+              <entry>
+                <codeph>[1, 2, "3", 4, 5]</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>json_build_object(VARIADIC "any")</codeph>
+              </entry>
+              <entry>Builds a JSON object out of a <cmdname>VARIADIC</cmdname> argument list. The
+                argument list is taken in order and converted to a set of key/value
+                  pairs.<draft-comment author="msk"><b>Q</b>- Is <cmdname>VARIADIC</cmdname>
+                    supported?<p>Are even number of elements required?</p></draft-comment></entry>
+              <entry>
+                <codeph>json_build_object('foo',1,'bar',2)</codeph>
+              </entry>
+              <entry>
+                <codeph>{"foo": 1, "bar": 2}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>json_object(text[])</codeph>
+              </entry>
+              <entry>Builds a JSON object out of a text array. The array must be either a one or a
+                two dimensional array.<p>The one dimensional array must have an even number of
+                  elements. The elements are taken as key/value pairs. </p><p>For a two dimensional
+                  array, each inner array must have exactly two elements, which are taken as a
+                  key/value pair.</p></entry>
+              <entry>
+                <p>
+                  <codeph>json_object('{a, 1, b, "def", c, 3.5}')</codeph>
+                </p>
+                <p>
+                  <codeph>json_object('{{a, 1},{b, "def"},{c, 3.5}}')</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>{"a": "1", "b": "def", "c": "3.5"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>json_object(keys text[], values text[])</codeph>
+              </entry>
+              <entry>Builds a JSON object out of a text array. This form of
+                  <codeph>json_object</codeph> takes keys and values pairwise from two separate
+                arrays. In all other respects it is identical to the one-argument
+                  form.<draft-comment author="msk"><b>Q</b>- do counts for keys and values arrays
+                  have to be the same?</draft-comment></entry>
+              <entry>
+                <codeph>json_object('{a, b}', '{1,2}')</codeph>
+              </entry>
+              <entry>
+                <codeph>{"a": "1", "b": "2"}</codeph>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <note><codeph>array_to_json</codeph> and <codeph>row_to_json</codeph> have the same behavior
+        as <codeph>to_json</codeph> except for offering a pretty-printing option. The behavior
+        described for <codeph>to_json</codeph> likewise applies to each individual value converted
+        by the other JSON creation functions.</note>
+      <draft-comment author="msk">Is hstore included in GPDB?</draft-comment>
+      <note>The <xref href="http://www.postgresql.org/docs/9.4/static/hstore.html" format="html"
+          scope="external">hstore</xref> extension has a cast from <codeph>hstore</codeph> to
+          <codeph>json</codeph>, so that <codeph>hstore</codeph> values converted via the JSON
+        creation functions will be represented as JSON objects, not as primitive string
+        values.</note>
+      <p><xref
+          href="http://www.postgresql.org/docs/9.4/static/functions-json.html#FUNCTIONS-JSON-PROCESSING-TABLE"
+          format="html" scope="external">Table 9-43</xref> shows the functions that are available
+        for processing <codeph>json</codeph> and <codeph>jsonb</codeph> values.</p>
+      <p>Table 9-43. JSON Processing Functions</p>
+      <table id="table_wfc_y3w_mq">
+        <tgroup cols="5">
+          <colspec colnum="1" colname="col1" colwidth="1.08*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1.01*"/>
+          <colspec colnum="4" colname="col4" colwidth="1.24*"/>
+          <colspec colnum="5" colname="col5" colwidth="1.01*"/>
+          <thead>
+            <row>
+              <entry>Function</entry>
+              <entry>Return Type</entry>
+              <entry>Description</entry>
+              <entry>Example</entry>
+              <entry>Example Result</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_array_length(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_array_length(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>int</codeph>
+              </entry>
+              <entry>Returns the number of elements in the outermost JSON array.</entry>
+              <entry>
+                <codeph>json_array_length('[1,2,3,{"f1":1,"f2":[5,6]},4]')</codeph>
+              </entry>
+              <entry>
+                <codeph>5</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_each(json)</codeph>
+                </p>
+                <codeph>jsonb_each(jsonb)</codeph>
+              </entry>
+              <entry>
+                <codeph>setof key text, value json</codeph>
+                <p>
+                  <codeph>setof key text, value jsonb</codeph>
+                </p>
+              </entry>
+              <entry>Expands the outermost JSON object into a set of key/value pairs.</entry>
+              <entry>
+                <codeph>select * from json_each('{"a":"foo", "b":"bar"}')</codeph>
+              </entry>
+              <entry>
+                <pre> key | value
+-----+-------
+ a   | "foo"
+ b   | "bar"
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>json_each_text(json)</codeph>
+                <p>
+                  <codeph>jsonb_each_text(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>setof key text, value text</codeph>
+              </entry>
+              <entry>Expands the outermost JSON object into a set of key/value pairs. The returned
+                values will be of type text.</entry>
+              <entry>
+                <codeph>select * from json_each_text('{"a":"foo", "b":"bar"}')</codeph>
+              </entry>
+              <entry>
+                <pre> key | value
+-----+-------
+ a   | foo
+ b   | bar
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_extract_path(from_json json, VARIADIC path_elems text[])</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_extract_path(from_json jsonb, VARIADIC path_elems text[])</codeph>
+                </p>
+              </entry>
+              <entry>
+                <p>
+                  <codeph>json</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb</codeph>
+                </p>
+              </entry>
+              <entry>Returns JSON value pointed to by <codeph>path_elems</codeph> (equivalent to
+                  <codeph>#></codeph> operator).</entry>
+              <entry>
+                <codeph>json_extract_path('{"f2":{"f3":1},"f4":{"f5":99,"f6":"foo"}}','f4')</codeph>
+              </entry>
+              <entry>
+                <codeph>{"f5":99,"f6":"foo"}</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_extract_path_text(from_json json, VARIADIC path_elems
+                    text[])</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_extract_path_text(from_json jsonb, VARIADIC path_elems
+                    text[])</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>text</codeph>
+              </entry>
+              <entry>Returns JSON value pointed to by <codeph>path_elems</codeph> as text
+                (equivalent to <codeph>#>></codeph> operator).</entry>
+              <entry>
+                <codeph>json_extract_path_text('{"f2":{"f3":1},"f4":{"f5":99,"f6":"foo"}}','f4',
+                  'f6')</codeph>
+              </entry>
+              <entry>
+                <codeph>foo</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_object_keys(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_object_keys(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>setof text</codeph>
+              </entry>
+              <entry>Returns set of keys in the outermost JSON object.</entry>
+              <entry>
+                <codeph>json_object_keys('{"f1":"abc","f2":{"f3":"a", "f4":"b"}}')</codeph>
+              </entry>
+              <entry>
+                <pre> json_object_keys
+------------------
+ f1
+ f2
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_populate_record(base anyelement, from_json json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_populate_record(base anyelement, from_json jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>anyelement</codeph>
+              </entry>
+              <entry>Expands the object in <codeph>from_json</codeph> to a row whose columns match
+                the record type defined by base (see note below).</entry>
+              <entry>
+                <codeph>select * from json_populate_record(null::myrowtype,
+                  '{"a":1,"b":2}')</codeph>
+              </entry>
+              <entry>
+                <pre> a | b
+---+---
+ 1 | 2
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_populate_recordset(base anyelement, from_json json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_populate_recordset(base anyelement, from_json jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>setof anyelement</codeph>
+              </entry>
+              <entry>Expands the outermost array of objects in <codeph>from_json</codeph> to a set
+                of rows whose columns match the record type defined by base (see note
+                below).</entry>
+              <entry>
+                <codeph>select * from json_populate_recordset(null::myrowtype,
+                  '[{"a":1,"b":2},{"a":3,"b":4}]')</codeph>
+              </entry>
+              <entry>
+                <pre> a | b
+---+---
+ 1 | 2
+ 3 | 4
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_array_elements(json)</codeph>
+                </p>
+                <p><codeph>jsonb_array_elements(jsonb</codeph>)</p>
+              </entry>
+              <entry>
+                <p>
+                  <codeph>setof json</codeph>
+                </p>
+                <p>
+                  <codeph>setof jsonb</codeph>
+                </p>
+              </entry>
+              <entry>Expands a JSON array to a set of JSON values.</entry>
+              <entry>
+                <codeph>select * from json_array_elements('[1,true, [2,false]]')</codeph>
+              </entry>
+              <entry>
+                <pre>   value
+-----------
+ 1
+ true
+ [2,false]
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_array_elements_text(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_array_elements_text(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>setof text</codeph>
+              </entry>
+              <entry>Expands a JSON array to a set of <codeph>text</codeph> values.</entry>
+              <entry>
+                <codeph>select * from json_array_elements_text('["foo", "bar"]')</codeph>
+              </entry>
+              <entry>
+                <pre>   value
+-----------
+ foo
+ bar
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_typeof(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_typeof(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>text</codeph>
+              </entry>
+              <entry>Returns the type of the outermost JSON value as a text string. Possible types
+                are <codeph>object</codeph>, <codeph>array</codeph>, <codeph>string</codeph>,
+                  <codeph>number</codeph>, <codeph>boolean</codeph>, and
+                <codeph>null</codeph>.</entry>
+              <entry>
+                <codeph>json_typeof('-123.4')</codeph>
+              </entry>
+              <entry>
+                <codeph>number</codeph>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_to_record(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_to_record(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>record</codeph>
+              </entry>
+              <entry>Builds an arbitrary record from a JSON object (see note below). As with all
+                functions returning record, the caller must explicitly define the structure of the
+                record with an <cmdname>AS</cmdname> clause.</entry>
+              <entry>
+                <codeph>select * from json_to_record('{"a":1,"b":[1,2,3],"c":"bar"}') as x(a int, b
+                  text, d text)</codeph>
+              </entry>
+              <entry>
+                <pre> a |    b    | d
+---+---------+---
+ 1 | [1,2,3] |
+</pre>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <p>
+                  <codeph>json_to_recordset(json)</codeph>
+                </p>
+                <p>
+                  <codeph>jsonb_to_recordset(jsonb)</codeph>
+                </p>
+              </entry>
+              <entry>
+                <codeph>setof record</codeph>
+              </entry>
+              <entry>Builds an arbitrary set of records from a JSON array of objects (see note
+                below). As with all functions returning record, the caller must explicitly define
+                the structure of the record with an <cmdname>AS</cmdname> clause.</entry>
+              <entry>
+                <codeph>select * from json_to_recordset('[{"a":1,"b":"foo"},{"a":"2","c":"bar"}]')
+                  as x(a int, b text);</codeph>
+              </entry>
+              <entry>
+                <pre> a |  b
+---+-----
+ 1 | foo
+ 2 |
+</pre>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <note>Many of these functions and operators will convert Unicode escapes in JSON strings to
+        the appropriate single character. This is a non-issue if the input is type
+          <cmdname>jsonb</cmdname>, because the conversion was already done; but for
+          <cmdname>json</cmdname> input, this may result in throwing an error, as noted in <xref
+          href="http://www.postgresql.org/docs/9.4/static/datatype-json.html" format="html"
+          scope="external">Section 8.14</xref><xref href="#topic1" format="dita"/>.<p>In
+            <codeph>json_populate_record</codeph>, <codeph>json_populate_recordset</codeph>,
+            <codeph>json_to_record</codeph> and <codeph>json_to_recordset</codeph>, type coercion
+          from the JSON is "best effort" and may not result in desired values for some types. JSON
+          keys are matched to identical column names in the target row type. JSON fields that do not
+          appear in the target row type will be omitted from the output, and target columns that do
+          not match any JSON field will simply be <codeph>NULL</codeph>.</p>
+      </note>
+      <note>The <codeph>json_typeof</codeph> function null return value of <codeph>null</codeph>
+        should not be confused with a SQL <codeph>NULL</codeph>. While calling
+          <codeph>json_typeof('null'::json)</codeph> will return <codeph>null</codeph>, calling
+          <codeph>json_typeof(NULL::json)</codeph> will return a SQL <codeph>NULL</codeph>.</note>
+      <p>See also <xref href="http://www.postgresql.org/docs/9.4/static/functions-aggregate.html"
+          format="html" scope="external">Section 9.20</xref> for the aggregate function
+          <codeph>json_agg</codeph> which aggregates record values as JSON, and the aggregate
+        function <codeph>json_object_agg</codeph> which aggregates pairs of values into a JSON
+        object.</p>
+      <table id="table_xgw_cjw_mq">
+        <tgroup cols="4">
+          <colspec colnum="1" colname="col1"/>
+          <colspec colnum="2" colname="col2"/>
+          <colspec colnum="3" colname="col3"/>
+          <colspec colnum="4" colname="col4"/>
+          <thead>
+            <row>
+              <entry>Function</entry>
+              <entry>Agument Types</entry>
+              <entry>Return Type</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <codeph>json_agg(record)</codeph>
+              </entry>
+              <entry>
+                <codeph>record</codeph>
+              </entry>
+              <entry>
+                <codeph>json</codeph>
+              </entry>
+              <entry>aggregates records as a JSON array of objects</entry>
+            </row>
+            <row>
+              <entry>
+                <codeph>json_object_agg(name, value)</codeph>
+              </entry>
+              <entry>
+                <codeph>("any", "any")</codeph>
+              </entry>
+              <entry>
+                <codeph>json</codeph>
+              </entry>
+              <entry>aggregates name/value pairs as a JSON object</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="topic_tww_ftn_vq">
+    <title>Function Enhancements</title>
+    <body>
+      <draft-comment author="msk">default function - demo'ed from Metro China<p>VARIADIC - variable
+          number of parameter arguments <xref
+            href="http://www.postgresql.org/docs/8.4/static/xfunc-sql.html#XFUNC-SQL-VARIADIC-FUNCTIONS"
+            format="html" scope="external">postgresql 8.4 -VARIADIC</xref></p><p>Default function
+          values <xref
+            href=" http://www.postgresql.org/docs/8.4/static/xfunc-sql.html#XFUNC-SQL-PARAMETER-DEFAULTS"
+            format="html" scope="external">postgresql 8.4 -parameter
+        defaults</xref></p></draft-comment>
+    </body>
+    <topic id="topic_ypj_1tn_vq">
+      <title>34.4.4. SQL Functions with Variable Numbers of Arguments</title>
+      <body>
+        <p>
+          <b>
+            <ph id="XFUNC-SQL-VARIADIC-FUNCTIONS">34.4.4. SQL Functions with Variable Numbers of
+              Arguments</ph>
+          </b>
+        </p>
+        <p>SQL functions can be declared to accept variable numbers of arguments, so long as all the
+          "optional" arguments are of the same data type. The optional arguments will be passed to
+          the function as an array. The function is declared by marking the last parameter as
+          VARIADIC; this parameter must be declared as being of an array type. For example:</p>
+        <pre>CREATE FUNCTION mleast(VARIADIC numeric[]) RETURNS numeric AS $$
+    SELECT min($1[i]) FROM generate_subscripts($1, 1) g(i);
+$$ LANGUAGE SQL;
+
+SELECT mleast(10, -1, 5, 4.4);
+ mleast 
+--------
+     -1
+(1 row)
+</pre>
+        <p>Effectively, all the actual arguments at or beyond the VARIADIC position are gathered up
+          into a one-dimensional array, as if you had written</p>
+        <pre>SELECT mleast(ARRAY[10, -1, 5, 4.4]);    -- doesn't work
+</pre>
+        <p>You can't actually write that, though — or at least, it will not match this function
+          definition. A parameter marked VARIADIC matches one or more occurrences of its element
+          type, not of its own type.</p>
+        <p>Sometimes it is useful to be able to pass an already-constructed array to a variadic
+          function; this is particularly handy when one variadic function wants to pass on its array
+          parameter to another one. You can do that by specifying VARIADIC in the call:</p>
+        <pre>SELECT mleast(VARIADIC ARRAY[10, -1, 5, 4.4]);
+</pre>
+        <p>This prevents expansion of the function's variadic parameter into its element type,
+          thereby allowing the array argument value to match normally. VARIADIC can only be attached
+          to the last actual argument of a function call.</p>
+      </body>
+    </topic>
+    <topic id="topic_jxb_btn_vq">
+      <title>34.4.5. SQL Functions with Default Values for Arguments</title>
+      <body>
+        <p>
+          <b>
+            <ph>34.4.5. SQL Functions with Default Values for Arguments</ph>
+          </b>
+        </p>
+        <p>Functions can be declared with default values for some or all input arguments. The
+          default values are inserted whenever the function is called with insufficiently many
+          actual arguments. Since arguments can only be omitted from the end of the actual argument
+          list, all parameters after a parameter with a default value have to have default values as
+          well.</p>
+        <p>For example:</p>
+        <pre>CREATE FUNCTION foo(a int, b int DEFAULT 2, c int DEFAULT 3)
+RETURNS int
+LANGUAGE SQL
+AS $$
+    SELECT $1 + $2 + $3;
+$$;
+
+SELECT foo(10, 20, 30);
+ foo 
+-----
+  60
+(1 row)
+
+SELECT foo(10, 20);
+ foo 
+-----
+  33
+(1 row)
+
+SELECT foo(10);
+ foo 
+-----
+  15
+(1 row)
+
+SELECT foo();  -- fails since there is no default for the first argument
+ERROR:  function foo() does not exist
+</pre>
+        <p>The = sign can also be used in place of the key word DEFAULT,</p>
+      </body>
+    </topic>
+  </topic>
+</topic>
