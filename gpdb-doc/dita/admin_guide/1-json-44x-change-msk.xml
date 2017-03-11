@@ -10,20 +10,22 @@
           href="http://www.postgresql.org/docs/9.4/static/datatype-json.html" format="html"
           scope="external"
       >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p></draft-comment>
-    <p>The <codeph>json</codeph> data type store JSON (JavaScript Object Notation) data, as
-      specified in <xref href="http://rfc7159.net/rfc7159" format="html" scope="external">RFC
-        7159</xref>. The <codeph>json</codeph> data type enforce data validity according to the JSON
-      rules. There are also JSON-specific functions and operators available for data stored in these
-      data types, see <xref href="#topic_gn4_x3w_mq" format="dita"/>.</p>
-    <p>Greenplum Database supports the <codeph>json</codeph> data type, the <codeph>jsonb</codeph>
-      data type is not supported. </p>
+    <p>Greenplum Database supports the <codeph>json</codeph> data type that stores JSON (JavaScript
+      Object Notation) data, as specified in <xref href="http://rfc7159.net/rfc7159" format="html"
+        scope="external">RFC 7159</xref>. </p>
+    <p>The <codeph>json</codeph> data type stores an exact copy of the input text. The
+        <codeph>json</codeph> data type enforces data validity according to the JSON rules.</p>
+    <p>There are also JSON-specific functions and operators available for data stored in these data
+      types, see <xref href="#topic_gn4_x3w_mq" format="dita"/>. </p>
+    <p>Greenplum Database does not support the <codeph>jsonb</codeph> data type. </p>
     <p>The <codeph>json</codeph> data type stores an exact copy of the input text, which processing
       functions must reparse on each execution.</p>
     <p>Because the <codeph>json</codeph> type stores an exact copy of the input text, it preserves
       semantically-insignificant white space between tokens, as well as the order of keys within
-      JSON objects. Also, if a JSON object within the value contains the same key more than once,
-      all the key/value pairs are kept. (The processing functions consider the last value as the
-      operative one.) </p>
+      JSON objects. </p>
+    <p>Also, if a JSON object within the value contains the same key more than once, all the
+      key/value pairs are kept. (The processing functions consider the last value as the operative
+      one.) </p>
     <p>Greenplum Database allows only one character set encoding per database. It is therefore not
       possible for the <codeph>json</codeph> type to conform rigidly to the JSON specification
       unless the database encoding is UTF8. Attempts to directly include characters that cannot be
@@ -33,12 +35,7 @@
           <codeph>\u<varname>XXXX</varname></codeph>. In the input function for the
         <codeph>json</codeph> type, Unicode escapes are allowed regardless of the database encoding,
       and are checked only for syntactic correctness (that is, that four hex digits follow
-        <codeph>\u</codeph>). However, the input function for <codeph>jsonb</codeph> is stricter: it
-      disallows Unicode escapes for non-ASCII characters (those above U+007F) unless the database
-      encoding is UTF8. It also insists that any use of Unicode surrogate pairs to designate
-      characters outside the Unicode Basic Multilingual Plane be correct. Valid Unicode escapes,
-      except for \u0000, are then converted to the equivalent ASCII or UTF8 character for
-      storage.</p>
+        <codeph>\u</codeph>). </p>
     <note>Many of the JSON processing functions described in <xref href="#topic_gn4_x3w_mq"
         format="dita">JSON Functions and Operators</xref>will convert Unicode escapes to regular
       characters, and will therefore throw the same types of errors previously described. The fact
@@ -91,8 +88,20 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
   <topic id="topic_gn4_x3w_mq">
     <title>JSON Functions and Operators</title>
     <body>
+      <p>Functions and operators to work with JSON data.<ul id="ul_ypx_f4w_2z">
+          <li><xref href="#topic_o5y_14w_2z" format="dita"/></li>
+          <li><xref href="#topic_u4s_wnw_2z" format="dita"/></li>
+          <li><xref href="#topic_z5d_snw_2z" format="dita"/></li>
+        </ul></p>
+      <p>If a JSON object within the value contains the same key more than once, all the key/value
+        pairs are kept. The processing functions consider the last value as the operative one.</p>
+    </body>
+  </topic>
+  <topic id="topic_o5y_14w_2z">
+    <title>JSON Operators</title>
+    <body>
       <p>The following table shows the operators that are available for use with the
-          <codeph>json</codeph> data types (see <xref href="#topic1" format="dita"/>.</p>
+          <codeph>json</codeph> data type (see <xref href="#topic1" format="dita"/>).</p>
       <table id="table_e41_y3w_mq">
         <title><varname>json</varname> Operators</title>
         <tgroup cols="5">
@@ -202,6 +211,11 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
           </tbody>
         </tgroup>
       </table>
+    </body>
+  </topic>
+  <topic id="topic_u4s_wnw_2z">
+    <title>JSON Creation Functions</title>
+    <body>
       <p><xref href="#topic_gn4_x3w_mq/table_sqb_y3w_mq" format="dita">JSON Creation
           Functions</xref> shows the functions that are available for creating <codeph>json</codeph>
         values.</p>
@@ -331,7 +345,67 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
         as <codeph>to_json</codeph> except for offering a pretty-printing option. The behavior
         described for <codeph>to_json</codeph> likewise applies to each individual value converted
         by the other JSON creation functions.</note>
-      <p><xref href="#topic_gn4_x3w_mq/table_wfc_y3w_mq" format="dita"/> shows the functions that
+    </body>
+    <topic id="topic_nds_bnw_2z">
+      <title>JSON Aggregate Functions</title>
+      <body>
+        <draft-comment author="msk">Update to aggregate functions in GPDB? is this
+          supported?</draft-comment>
+        <p>See also <xref href="http://www.postgresql.org/docs/9.4/static/functions-aggregate.html"
+            format="html" scope="external">Section 9.20</xref> for the aggregate function
+            <codeph>json_agg</codeph> which aggregates record values as JSON, and the aggregate
+          function <codeph>json_object_agg</codeph> which aggregates pairs of values into a JSON
+          object.</p>
+        <table id="table_rbb_rnw_2z">
+          <title>JSON Aggregate Functions</title>
+          <tgroup cols="4">
+            <colspec colnum="1" colname="col1"/>
+            <colspec colnum="2" colname="col2"/>
+            <colspec colnum="3" colname="col3"/>
+            <colspec colnum="4" colname="col4"/>
+            <thead>
+              <row>
+                <entry>Function</entry>
+                <entry>Agument Types</entry>
+                <entry>Return Type</entry>
+                <entry>Description</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <codeph>json_agg(record)</codeph>
+                </entry>
+                <entry>
+                  <codeph>record</codeph>
+                </entry>
+                <entry>
+                  <codeph>json</codeph>
+                </entry>
+                <entry>aggregates records as a JSON array of objects</entry>
+              </row>
+              <row>
+                <entry>
+                  <codeph>json_object_agg(name, value)</codeph>
+                </entry>
+                <entry>
+                  <codeph>("any", "any")</codeph>
+                </entry>
+                <entry>
+                  <codeph>json</codeph>
+                </entry>
+                <entry>aggregates name/value pairs as a JSON object</entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_z5d_snw_2z">
+    <title>JSON Processing Functions</title>
+    <body>
+      <p><xref href="#topic_z5d_snw_2z/table_wfc_y3w_mq" format="dita"/> shows the functions that
         are available for processing <codeph>json</codeph> values.</p>
       <table id="table_wfc_y3w_mq">
         <title>JSON Processing Functions</title>
@@ -651,56 +725,6 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
             <codeph>json_typeof('null'::json)</codeph> will return <codeph>null</codeph>, calling
             <codeph>json_typeof(NULL::json)</codeph> will return a SQL
         <codeph>NULL</codeph>.</p></note>
-      <draft-comment author="msk">Update to aggregate functions in GPDB? is this
-        supported?</draft-comment>
-      <p>See also <xref href="http://www.postgresql.org/docs/9.4/static/functions-aggregate.html"
-          format="html" scope="external">Section 9.20</xref> for the aggregate function
-          <codeph>json_agg</codeph> which aggregates record values as JSON, and the aggregate
-        function <codeph>json_object_agg</codeph> which aggregates pairs of values into a JSON
-        object.</p>
-      <table id="table_xgw_cjw_mq">
-        <title>JSON Aggregate Functions</title>
-        <tgroup cols="4">
-          <colspec colnum="1" colname="col1"/>
-          <colspec colnum="2" colname="col2"/>
-          <colspec colnum="3" colname="col3"/>
-          <colspec colnum="4" colname="col4"/>
-          <thead>
-            <row>
-              <entry>Function</entry>
-              <entry>Agument Types</entry>
-              <entry>Return Type</entry>
-              <entry>Description</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <codeph>json_agg(record)</codeph>
-              </entry>
-              <entry>
-                <codeph>record</codeph>
-              </entry>
-              <entry>
-                <codeph>json</codeph>
-              </entry>
-              <entry>aggregates records as a JSON array of objects</entry>
-            </row>
-            <row>
-              <entry>
-                <codeph>json_object_agg(name, value)</codeph>
-              </entry>
-              <entry>
-                <codeph>("any", "any")</codeph>
-              </entry>
-              <entry>
-                <codeph>json</codeph>
-              </entry>
-              <entry>aggregates name/value pairs as a JSON object</entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
     </body>
   </topic>
 </topic>
