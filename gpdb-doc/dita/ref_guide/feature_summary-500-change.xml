@@ -4,6 +4,7 @@
 <topic id="topic1" xml:lang="en">
   <title id="ik110126">Summary of Greenplum Features</title>
   <body>
+    <draft-comment author="msk">DRAFT 5.0.0 updates for 5.0.0</draft-comment>
     <p>This section provides a high-level overview of the system requirements and feature set of
       Greenplum Database. It contains the following topics:</p>
     <ul>
@@ -111,8 +112,7 @@
           <li id="ik265013"><codeph>CREATE PROCEDURE</codeph> (<codeph>SQL/PSM</codeph>). This can
             be worked around in Greenplum Database by creating a <codeph>FUNCTION</codeph> that
             returns <codeph>void</codeph>, and invoking the function as
-            follows:<codeblock>SELECT <i>myfunc</i>(<i>args</i>);
-</codeblock></li>
+            follows:<codeblock>SELECT <i>myfunc</i>(<i>args</i>);</codeblock></li>
           <li id="ik265014">The PostgreSQL/Greenplum function definition language
               (<codeph>PL/PGSQL</codeph>) is a subset of Oracle's <codeph>PL/SQL</codeph>, rather
             than being compatible with the <codeph>SQL/PSM</codeph> function definition language.
@@ -205,6 +205,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
   <topic id="topic8" xml:lang="en">
     <title id="ik264019">Greenplum and PostgreSQL Compatibility</title>
     <body>
+      <draft-comment author="msk">5.0.0 DRAFT upates for 8.3 merge + other features</draft-comment>
       <p>Greenplum Database is based on PostgreSQL 8.3 with additional features from newer
         PostgreSQL releases. To support the distributed nature and typical workload of a Greenplum
         Database system, some SQL commands have been added or modified, and there are a few
@@ -582,7 +583,9 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>DELETE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3"><b>Unsupported Clauses /
-                    Options:</b><p><codeph>RETURNING</codeph></p></entry>
+                    Options:</b><p><codeph>RETURNING</codeph></p><p><b>Limitations:</b></p><p><codeph>UPDATE/DELETE
+                    WHERE CURRENT OF...</codeph> cursor statements must be executed by Greenplum
+                  Database.</p></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>DO</codeph></entry>
@@ -877,8 +880,9 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
             <row>
               <entry colname="col1"><codeph>SET SESSION AUTHORIZATION</codeph></entry>
               <entry colname="col2">YES</entry>
-              <entry colname="col3">Deprecated as of PostgreSQL 8.1 - see <xref
-                  href="sql_commands/SET_ROLE.xml#topic1" type="topic" format="dita"/></entry>
+              <entry colname="col3"><draft-comment author="msk">REMOVE?</draft-comment>Deprecated as
+                of PostgreSQL 8.1 - see <xref href="sql_commands/SET_ROLE.xml#topic1" type="topic"
+                  format="dita"/></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>SET TRANSACTION</codeph></entry>
@@ -910,7 +914,9 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col2">YES</entry>
               <entry colname="col3"><b>Unsupported
                     Clauses:</b><p><codeph>RETURNING</codeph></p><p><b>Limitations:</b></p><p><codeph>SET</codeph>
-                  not allowed for Greenplum distribution key columns.</p></entry>
+                  not allowed for Greenplum distribution key columns.</p><p><codeph>UPDATE/DELETE
+                    WHERE CURRENT OF...</codeph> cursor statements must be executed by Greenplum
+                  Database.</p></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>VACUUM</codeph></entry>

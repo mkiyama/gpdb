@@ -3,6 +3,8 @@
 <topic id="topic26" xml:lang="en">
     <title id="in151167">Using Functions and Operators</title>
     <body>
+        <draft-comment author="msk">5.0.0 DRAFT <p>JSON data </p><p>Anonymous blocks
+            DONE</p></draft-comment>
         <ul>
             <li id="in140953">
                 <xref format="dita" href="#topic27" type="topic"/>
@@ -393,9 +395,6 @@ SELECT foo();
                                 </p>
                                 <p>
                                     <i>All comment information functions</i>
-                                </p>
-                                <p>
-                                    <i>All transaction ids and snapshots</i>
                                 </p>
                             </entry>
                             <entry colname="col4"/>

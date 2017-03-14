@@ -4,6 +4,7 @@
 <topic id="topic1" xml:lang="en">
   <title id="pt212122">Greenplum PL/pgSQL Procedural Language</title>
   <body>
+    <draft-comment author="msk">5.0.0 - DRAFT - add anonymous block example</draft-comment>
     <p>This section contains an overview of the Greenplum Database PL/pgSQL language.</p>
     <ul>
       <li id="pt222286">
@@ -48,9 +49,7 @@
         <p>When using Greenplum Database PL/pgSQL, limitations include</p>
         <ul>
           <li id="pt219857">Triggers are not supported</li>
-          <li id="pt222490">Cursors are forward moving only (not scrollable)</li>
-          <li>Updatable cursors (<codeph>UPDATE...WHERE CURRENT OF</codeph> and
-              <codeph>DELETE...WHERE CURRENT OF</codeph>) are not supported.</li>
+          <li id="pt222490">Cursors are forward moving only (not scrollable) </li>
         </ul>
         <p>For information about Greenplum Database SQL conformance, see <xref
             href="../feature_summary.xml#topic1"/> in the <cite>Greenplum Database Reference
@@ -145,10 +144,10 @@ $$ LANGUAGE plpgsql;</codeblock>
     <topic id="topic7" xml:lang="en">
       <title>Example: Aliases for Function Parameters</title>
       <body>
-        <p>Parameters passed to functions are named with identifiers such as <codeph>$1</codeph>,
-            <codeph>$2</codeph>. Optionally, aliases can be declared for <codeph>$n</codeph>
-          parameter names for increased readability. Either the alias or the numeric identifier can
-          then be used to refer to the parameter value.</p>
+        <p>Parameters passed to functions are named with the identifiers such as
+          <codeph>$1</codeph>, <codeph>$2</codeph>. Optionally, aliases can be declared for
+            <codeph>$n</codeph> parameter names for increased readability. Either the alias or the
+          numeric identifier can then be used to refer to the parameter value.</p>
         <p>There are two ways to create an alias. The preferred way is to give a name to the
           parameter in the <codeph>CREATE FUNCTION</codeph> command, for example:</p>
         <codeblock>CREATE FUNCTION sales_tax(subtotal real) RETURNS real AS $$
