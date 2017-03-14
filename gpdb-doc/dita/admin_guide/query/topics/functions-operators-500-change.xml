@@ -3,7 +3,8 @@
 <topic id="topic26" xml:lang="en">
     <title id="in151167">Using Functions and Operators</title>
     <body>
-        <draft-comment author="msk">5.0.0 DRAFT Anonymous blocks</draft-comment>
+        <draft-comment author="msk">5.0.0 DRAFT <p>JSON data </p><p>Anonymous blocks
+            DONE</p></draft-comment>
         <ul>
             <li id="in140953">
                 <xref format="dita" href="#topic27" type="topic"/>
@@ -137,6 +138,9 @@ SELECT foo();
                     href="https://www.postgresql.org/docs/8.3/static/functions.html"
                     scope="external">Functions and Operators</xref> section of the PostgreSQL
                 documentation for more information about these built-in functions and operators.</p>
+            <p>Greenplum Database includes JSON processing functions that manipulate values the
+                    <codeph>json</codeph> data type. For information about JSON data, see <xref
+                    href="json-data.xml#topic1"/>.</p>
             <table id="in204913">
                 <title>Built-in functions and operators</title>
                 <tgroup cols="4">

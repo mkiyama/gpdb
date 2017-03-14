@@ -10,7 +10,11 @@
         for upgrade, or new install?</p><p>Link to postgresql <xref
           href="http://www.postgresql.org/docs/9.4/static/datatype-json.html" format="html"
           scope="external"
-      >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p></draft-comment>
+        >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p><p>GPDB 5.0.0 is
+        using json from postgres 9.3 <xref
+          href="https://www.postgresql.org/docs/9.3/static/functions-json.html" format="html"
+          scope="external"
+      >https://www.postgresql.org/docs/9.3/static/functions-json.html</xref></p></draft-comment>
     <p>Link to postgresql <xref href="http://www.postgresql.org/docs/9.4/static/datatype-json.html"
         format="html" scope="external"
         >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p>

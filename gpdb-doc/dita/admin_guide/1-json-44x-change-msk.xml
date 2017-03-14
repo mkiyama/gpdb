@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
 <topic id="topic1" xml:lang="en">
-  <title id="ih135496">JSON</title>
+  <title id="ih135496">Working with JSON Data</title>
   <body>
     <draft-comment author="msk">DRAFT - json data type support <xref
         href="https://www.pivotaltracker.com/story/show/78313302" format="html" scope="external"
@@ -9,40 +9,40 @@
           GPDB</b></p><p>Notes for upgrade, or new install?</p><p>Link to postgresql <xref
           href="http://www.postgresql.org/docs/9.4/static/datatype-json.html" format="html"
           scope="external"
-      >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p></draft-comment>
+        >http://www.postgresql.org/docs/9.4/static/datatype-json.html</xref></p><p>GPDB 5.0.0 is
+        using json from postgres 9.3 <xref
+          href="https://www.postgresql.org/docs/9.3/static/functions-json.html" format="html"
+          scope="external"
+      >https://www.postgresql.org/docs/9.3/static/functions-json.html</xref></p></draft-comment>
     <p>Greenplum Database supports the <codeph>json</codeph> data type that stores JSON (JavaScript
-      Object Notation) data, as specified in <xref href="http://rfc7159.net/rfc7159" format="html"
-        scope="external">RFC 7159</xref>. </p>
-    <p>The <codeph>json</codeph> data type stores an exact copy of the input text. The
-        <codeph>json</codeph> data type enforces data validity according to the JSON rules.</p>
-    <p>There are also JSON-specific functions and operators available for data stored in these data
-      types, see <xref href="#topic_gn4_x3w_mq" format="dita"/>. </p>
-    <p>Greenplum Database does not support the <codeph>jsonb</codeph> data type. </p>
-    <p>The <codeph>json</codeph> data type stores an exact copy of the input text, which processing
-      functions must reparse on each execution.</p>
-    <p>Because the <codeph>json</codeph> type stores an exact copy of the input text, it preserves
-      semantically-insignificant white space between tokens, as well as the order of keys within
-      JSON objects. </p>
-    <p>Also, if a JSON object within the value contains the same key more than once, all the
-      key/value pairs are kept. (The processing functions consider the last value as the operative
-      one.) </p>
-    <p>Greenplum Database allows only one character set encoding per database. It is therefore not
-      possible for the <codeph>json</codeph> type to conform rigidly to the JSON specification
-      unless the database encoding is UTF8. Attempts to directly include characters that cannot be
-      represented in the database encoding will fail; conversely, characters that can be represented
-      in the database encoding but not in UTF8 will be allowed.</p>
-    <p>RFC 7159 permits JSON strings to contain Unicode escape sequences denoted by
-          <codeph>\u<varname>XXXX</varname></codeph>. In the input function for the
-        <codeph>json</codeph> type, Unicode escapes are allowed regardless of the database encoding,
-      and are checked only for syntactic correctness (that is, that four hex digits follow
+      Object Notation) data, as specified in the <xref href="http://rfc7159.net/rfc7159"
+        format="html" scope="external">RFC 7159</xref> document and enforces data validity according
+      to the JSON rules. There are also JSON-specific functions and operators available for
+        <codeph>json</codeph> data. See <xref href="#topic_gn4_x3w_mq" format="dita"/>. </p>
+    <p>When Greenplum Database stores data as <codeph>json</codeph> data type, an exact copy of the
+      input text is stored and the JSON processing functions reparse the data on each execution.<ul
+        id="ul_lzs_c5p_fz">
+        <li>Semantically-insignificant white space between tokens is retained, as well as the order
+          of keys within JSON objects. </li>
+        <li>All key/value pairs are kept even if a JSON object within the value contains the same
+          key more than once. The JSON processing functions consider the last value as the operative
+          one.</li>
+      </ul></p>
+    <p>Greenplum Database allows only one character set encoding per database. It is not possible
+      for the <codeph>json</codeph> type to conform rigidly to the JSON specification unless the
+      database encoding is UTF8. Attempts to include characters that cannot be represented in the
+      database encoding will fail. Characters that can be represented in the database encoding but
+      not in UTF8 are allowed.</p>
+    <p>The RFC 7159 document permits JSON strings to contain Unicode escape sequences denoted by
+          <codeph>\u<varname>XXXX</varname></codeph>. For the <codeph>json</codeph> type, the
+      Greenplum Database input function allows Unicode escapes regardless of the database encoding
+      and checks Unicode escapes only for syntactic correctness (four hex digits following
         <codeph>\u</codeph>). </p>
     <note>Many of the JSON processing functions described in <xref href="#topic_gn4_x3w_mq"
-        format="dita">JSON Functions and Operators</xref>will convert Unicode escapes to regular
-      characters, and will therefore throw the same types of errors previously described. The fact
-      that the <codeph>json</codeph> input function does not make these checks may be considered a
-      historical artifact, although it does allow for simple storage (without processing) of JSON
-      Unicode escapes in a non-UTF8 database encoding. In general, it is best to avoid mixing
-      Unicode escapes in JSON with a non-UTF8 database encoding, if possible.</note>
+        format="dita">JSON Functions and Operators</xref> convert Unicode escapes to regular
+      characters. The functions throw an error for characters that cannot be represented in the
+      database encoding. You should avoid mixing Unicode escapes in JSON with a non-UTF8 database
+      encoding, if possible.</note>
   </body>
   <topic id="topic_isn_ltw_mq">
     <title>JSON Input and Output Syntax</title>
@@ -93,23 +93,24 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
           <li><xref href="#topic_u4s_wnw_2z" format="dita"/></li>
           <li><xref href="#topic_z5d_snw_2z" format="dita"/></li>
         </ul></p>
-      <p>If a JSON object within the value contains the same key more than once, all the key/value
-        pairs are kept. The processing functions consider the last value as the operative one.</p>
+      <note>For <codeph>json</codeph> values, all key/value pairs are kept even if a JSON object
+        contains duplicate key/value pairs. The processing functions consider the last value as the
+        operative one.</note>
     </body>
   </topic>
   <topic id="topic_o5y_14w_2z">
     <title>JSON Operators</title>
     <body>
       <p>The following table shows the operators that are available for use with the
-          <codeph>json</codeph> data type (see <xref href="#topic1" format="dita"/>).</p>
+          <codeph>json</codeph> data type.</p>
       <table id="table_e41_y3w_mq">
         <title><varname>json</varname> Operators</title>
         <tgroup cols="5">
-          <colspec colnum="1" colname="col1"/>
-          <colspec colnum="2" colname="col2"/>
-          <colspec colnum="3" colname="col3"/>
-          <colspec colnum="4" colname="col4"/>
-          <colspec colnum="5" colname="col5"/>
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1.17*"/>
+          <colspec colnum="3" colname="col3" colwidth="2.79*"/>
+          <colspec colnum="4" colname="col4" colwidth="2.78*"/>
+          <colspec colnum="5" colname="col5" colwidth="1.92*"/>
           <thead>
             <row>
               <entry>Operator</entry>
@@ -127,7 +128,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>int</codeph>
               </entry>
-              <entry>Get JSON array element (indexed from zero)</entry>
+              <entry>Get JSON array element (indexed from zero).</entry>
               <entry>
                 <codeph>'[{"a":"foo"},{"b":"bar"},{"c":"baz"}]'::json->2</codeph>
               </entry>
@@ -142,7 +143,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>text</codeph>
               </entry>
-              <entry>Get JSON object field by key</entry>
+              <entry>Get JSON object field by key.</entry>
               <entry>
                 <codeph>'{"a": {"b":"foo"}}'::json->'a'</codeph>
               </entry>
@@ -157,7 +158,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>int</codeph>
               </entry>
-              <entry>Get JSON array element as text</entry>
+              <entry>Get JSON array element as text.</entry>
               <entry>
                 <codeph>'[1,2,3]'::json->>2</codeph>
               </entry>
@@ -172,7 +173,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>text</codeph>
               </entry>
-              <entry>Get JSON object field as text</entry>
+              <entry>Get JSON object field as text.</entry>
               <entry>
                 <codeph>'{"a":1,"b":2}'::json->>'b'</codeph>
               </entry>
@@ -187,7 +188,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>text[]</codeph>
               </entry>
-              <entry>Get JSON object at specified path</entry>
+              <entry>Get JSON object at specified path.</entry>
               <entry><codeph>'{"a": {"b":{"c": "foo"}}}'::json#>'{a,b}</codeph>'</entry>
               <entry>
                 <codeph>{"c": "foo"}</codeph>
@@ -200,7 +201,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
               <entry>
                 <codeph>text[]</codeph>
               </entry>
-              <entry>Get JSON object at specified path as text</entry>
+              <entry>Get JSON object at specified path as text.</entry>
               <entry>
                 <codeph>'{"a":[1,2,3],"b":[4,5,6]}'::json#>>'{a,2}'</codeph>
               </entry>
@@ -216,9 +217,9 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
   <topic id="topic_u4s_wnw_2z">
     <title>JSON Creation Functions</title>
     <body>
-      <p><xref href="#topic_gn4_x3w_mq/table_sqb_y3w_mq" format="dita">JSON Creation
-          Functions</xref> shows the functions that are available for creating <codeph>json</codeph>
-        values.</p>
+      <p>The <xref href="#topic_gn4_x3w_mq/table_sqb_y3w_mq" format="dita">JSON Creation
+          Functions</xref> table shows the functions that are available for creating
+          <codeph>json</codeph> values.</p>
       <table id="table_sqb_y3w_mq">
         <title>JSON Creation Functions</title>
         <tgroup cols="4">
@@ -343,19 +344,15 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
       </table>
       <note><codeph>array_to_json</codeph> and <codeph>row_to_json</codeph> have the same behavior
         as <codeph>to_json</codeph> except for offering a pretty-printing option. The behavior
-        described for <codeph>to_json</codeph> likewise applies to each individual value converted
-        by the other JSON creation functions.</note>
+        described for <codeph>to_json</codeph> also applies to individual values converted by the
+        other JSON creation functions.</note>
     </body>
     <topic id="topic_nds_bnw_2z">
       <title>JSON Aggregate Functions</title>
       <body>
-        <draft-comment author="msk">Update to aggregate functions in GPDB? is this
-          supported?</draft-comment>
-        <p>See also <xref href="http://www.postgresql.org/docs/9.4/static/functions-aggregate.html"
-            format="html" scope="external">Section 9.20</xref> for the aggregate function
-            <codeph>json_agg</codeph> which aggregates record values as JSON, and the aggregate
-          function <codeph>json_object_agg</codeph> which aggregates pairs of values into a JSON
-          object.</p>
+        <p>The <xref href="#topic_nds_bnw_2z/table_rbb_rnw_2z" format="dita">JSON Aggregate
+            Functions</xref> table shows the functions that combine data into <codeph>json</codeph>
+          values. </p>
         <table id="table_rbb_rnw_2z">
           <title>JSON Aggregate Functions</title>
           <tgroup cols="4">
@@ -382,7 +379,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
                 <entry>
                   <codeph>json</codeph>
                 </entry>
-                <entry>aggregates records as a JSON array of objects</entry>
+                <entry>Aggregates records as a JSON array of objects.</entry>
               </row>
               <row>
                 <entry>
@@ -394,7 +391,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
                 <entry>
                   <codeph>json</codeph>
                 </entry>
-                <entry>aggregates name/value pairs as a JSON object</entry>
+                <entry>Aggregates name/value pairs as a JSON object.</entry>
               </row>
             </tbody>
           </tgroup>
@@ -583,7 +580,7 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
                 <codeph>setof anyelement</codeph>
               </entry>
               <entry>Expands the outermost array of objects in <codeph>from_json</codeph> to a set
-                of rows whose columns match the record type defined by base See <xref
+                of rows whose columns match the record type defined by base. See <xref
                   href="#topic_gn4_x3w_mq/json-note" format="dita">Note</xref>.</entry>
               <entry>
                 <codeph>select * from json_populate_recordset(null::myrowtype,
@@ -712,19 +709,19 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;</pre>
           </tbody>
         </tgroup>
       </table>
-      <note id="json-note">Many of these functions and operators will convert Unicode escapes in
-        JSON strings to the appropriate single character. This may result in throwing an error.<p>In
-            <codeph>json_populate_record</codeph>, <codeph>json_populate_recordset</codeph>,
-            <codeph>json_to_record</codeph> and <codeph>json_to_recordset</codeph>, type coercion
-          from the JSON is best effort and might not result in desired values for some types. JSON
-          keys are matched to identical column names in the target row type. JSON fields that do not
-          appear in the target row type will be omitted from the output, and target columns that do
-          not match any JSON field will simply be <codeph>NULL</codeph>.</p><p>The
-            <codeph>json_typeof</codeph> function null return value of <codeph>null</codeph> should
-          not be confused with a SQL <codeph>NULL</codeph>. While calling
-            <codeph>json_typeof('null'::json)</codeph> will return <codeph>null</codeph>, calling
-            <codeph>json_typeof(NULL::json)</codeph> will return a SQL
-        <codeph>NULL</codeph>.</p></note>
+      <note id="json-note">Many of these functions and operators convert Unicode escapes in JSON
+        strings to regular characters. The functions throw an error for characters that cannot be
+        represented in the database encoding.<p>In <codeph>json_populate_record</codeph>,
+            <codeph>json_populate_recordset</codeph>, <codeph>json_to_record</codeph> and
+            <codeph>json_to_recordset</codeph>, type coercion from the JSON is best effort and might
+          not result in desired values for some types. JSON keys are matched to identical column
+          names in the target row type. JSON fields that do not appear in the target row type will
+          be omitted from the output, and target columns that do not match any JSON field will
+          simply be <codeph>NULL</codeph>.</p><p>The <codeph>json_typeof</codeph> function null
+          return value of <codeph>null</codeph> should not be confused with a SQL
+            <codeph>NULL</codeph>. While calling <codeph>json_typeof('null'::json)</codeph> will
+          return <codeph>null</codeph>, calling <codeph>json_typeof(NULL::json)</codeph> will return
+          a SQL <codeph>NULL</codeph>.</p></note>
     </body>
   </topic>
 </topic>
