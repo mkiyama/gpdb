@@ -118,7 +118,7 @@ SELECT foo();
             <p>In Greenplum Database, the shared library files for user-created functions must
                 reside in the same library path location on every host in the Greenplum Database
                 array (masters, segments, and mirrors).</p>
-            <p>You can also create and execute anonymous code blocks that are written in a Greenplum
+        <p>You can also create and execute anonymous code blocks that are written in a Greenplum
                 Database procedural language such as PL/pgSQL. The anonymous blocks run as transient
                 anonymous functions. For information about creating and executing anonymous blocks,
                 see the <xref href="../../../ref_guide/sql_commands/DO.xml#topic1"
@@ -228,7 +228,7 @@ SELECT foo();
                         <row>
                             <entry colname="col1">
                                 <xref format="html"
-                                    href="http://www.postgresql.org/docs/8.3/static/functions-matching.html"
+                                    href="https://www.postgresql.org/docs/8.3/static/functions-matching.html"
                                     scope="external">
                                     <ph>Pattern Matching</ph>
                                 </xref>
@@ -417,7 +417,7 @@ SELECT foo();
                         <row>
                             <entry colname="col1">
                                 <xref format="html"
-                                    href="http://www.postgresql.org/docs/9.1/interactive/functions-xml.html"
+                                    href="https://www.postgresql.org/docs/9.1/static/functions-xml.html"
                                     scope="external">XML Functions</xref>
                             </entry>
                             <entry colname="col2"/>
