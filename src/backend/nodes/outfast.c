@@ -1929,6 +1929,10 @@ _outNode(StringInfo str, void *obj)
 				_outPartOidExpr(str, obj);
 				break;
 
+			case T_PartSelectedExpr:
+				_outPartSelectedExpr(str, obj);
+				break;
+
 			case T_PartDefaultExpr:
 				_outPartDefaultExpr(str, obj);
 				break;
@@ -1943,6 +1947,14 @@ _outNode(StringInfo str, void *obj)
 
 			case T_PartBoundOpenExpr:
 				_outPartBoundOpenExpr(str, obj);
+				break;
+
+			case T_PartListRuleExpr:
+				_outPartListRuleExpr(str, obj);
+				break;
+
+			case T_PartListNullTestExpr:
+				_outPartListNullTestExpr(str, obj);
 				break;
 
 			case T_CreateTrigStmt:

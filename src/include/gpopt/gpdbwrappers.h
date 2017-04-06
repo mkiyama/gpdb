@@ -21,7 +21,6 @@
 
 // fwd declarations
 typedef struct SysScanDescData *SysScanDesc;
-typedef struct SnapshotData *Snapshot;
 typedef int LOCKMODE;
 struct TypeCacheEntry;
 typedef struct NumericData *Numeric;
@@ -32,7 +31,6 @@ struct Value;
 typedef struct tupleDesc *TupleDesc;
 struct Query;
 typedef struct ScanKeyData *ScanKey;
-typedef uint16 StrategyNumber;
 struct Bitmapset;
 struct Plan;
 struct ListCell;
@@ -293,6 +291,9 @@ namespace gpdb {
 	
 	// partition attributes
 	List *PlPartitionAttrs(Oid oid);
+
+	// get partition keys and kinds ordered by partition level
+	void GetOrderedPartKeysAndKinds(Oid oid, List **pkeys, List **pkinds);
 
 	// parts of a partitioned table
 	PartitionNode *PpnParts(Oid relid, int2 level, Oid parent, bool inctemplate, bool includesubparts);

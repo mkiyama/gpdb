@@ -28,6 +28,7 @@
 #undef TUPSER_SCRATCH_SPACE
 #define VARLEN_SCRATCH_SIZE 500
 
+typedef struct MotionConn MotionConn;
 
 /*
  * The next two structures are for cached tuple serialization and

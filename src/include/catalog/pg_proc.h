@@ -3505,7 +3505,8 @@ DATA(insert OID = 2289 ( pg_relation_size		PGNSP PGUID 12 1 0 f f t f v 1 20 "25
 DESCR("disk space usage for the specified table or index");
 DATA(insert OID = 2286 ( pg_total_relation_size		PGNSP PGUID 12 1 0 f f t f v 1 20 "26" _null_ _null_ _null_ pg_total_relation_size_oid - _null_ _null_ ));
 DESCR("total disk space usage for the specified table and associated indexes and toast tables");
-DATA(insert OID = 2287 ( pg_total_relation_size		PGNSP PGUID 12 1 0 f f t f v 1 20 "25" _null_ _null_ _null_ pg_total_relation_size_name - _null_ _null_ ));
+/* 2287 is used for RECORDARRAYOID in upstream postgreSQL */
+DATA(insert OID = 3287 ( pg_total_relation_size		PGNSP PGUID 12 1 0 f f t f v 1 20 "25" _null_ _null_ _null_ pg_total_relation_size_name - _null_ _null_ ));
 DESCR("total disk space usage for the specified table and associated indexes and toast tables");
 DATA(insert OID = 2288 ( pg_size_pretty			PGNSP PGUID 12 1 0 f f t f v 1 25 "20" _null_ _null_ _null_ pg_size_pretty - _null_ _null_ ));
 DESCR("convert a long int to a human readable text using size units");

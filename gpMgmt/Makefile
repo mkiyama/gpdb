@@ -9,7 +9,6 @@ include $(top_builddir)/gpMgmt/Makefile.behave
 SET_VERSION_SCRIPTS = \
 	bin/gpactivatestandby \
 	bin/gpaddmirrors \
-	bin/gpbitmapreindex \
 	bin/gpcheckperf \
 	bin/gpcrondump \
 	bin/gpdbrestore \
@@ -20,8 +19,6 @@ SET_VERSION_SCRIPTS = \
 	bin/gpinitsystem \
 	bin/gpload.py \
 	bin/gplogfilter \
-	bin/gpmigrator \
-	bin/gpmigrator_mirror \
 	bin/gpmovemirrors \
 	bin/gprecoverseg \
 	bin/gpreload \
@@ -94,7 +91,6 @@ install: generate_greenplum_path_file
 
 	$(MAKE) -C sbin $@ prefix=$(DESTDIR)$(prefix)
 
-	#cp -p extensions/gpfdist/gpfdist$(EXE_EXT) $(DESTDIR)$(prefix)/bin/
 	cp $(top_builddir)/src/test/regress/*.pl $(DESTDIR)$(prefix)/bin
 	cp $(top_builddir)/src/test/regress/*.pm $(DESTDIR)$(prefix)/bin
 	if [ ! -d ${DESTDIR}${prefix}/docs ] ; then mkdir ${DESTDIR}${prefix}/docs ; fi

@@ -4,20 +4,16 @@
 set optimizer_disable_missing_stats_collection = on;
 CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
 -- start_ignore
--- --------------------------------------
--- check platform
--- --------------------------------------
-
 -- end_ignore
 -- --------------------------------------
 -- 'gpfdist' protocol
 -- --------------------------------------
 CREATE EXTERNAL WEB TABLE gpfdist2_start (x text)
-execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data  </dev/null >/dev/null 2>&1 &); sleep 2; echo "starting...") '
+execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data  </dev/null >/dev/null 2>&1 &); sleep 1; echo "starting...") '
 on SEGMENT 0
 FORMAT 'text' (delimiter '|');
 CREATE EXTERNAL WEB TABLE gpfdist2_stop (x text)
-execute E'(/bin/pkill gpfdist || killall gpfdist) > /dev/null 2>&1; echo "stopping..."'
+execute E'(ps -A |grep [g]pfdist |awk \'{print $1;}\' |xargs kill) > /dev/null 2>&1; echo "stopping..."'
 on SEGMENT 0
 FORMAT 'text' (delimiter '|');
 -- start_ignore
@@ -982,6 +978,48 @@ SELECT count(*) FROM ext_test1;
 ERROR:  gpfdist error - line too long in file @abs_srcdir@/data/gpfdist2/longline.csv near (0 bytes) (url_curl.c:1505)  (seg0 slice1 172.17.0.4:25432 pid=36415)
 DETAIL:  External table ext_test1, file gpfdist://@hostname@:7070/gpfdist2/longline.csv
 DROP EXTERNAL TABLE ext_test1;
+CREATE EXTERNAL TABLE ext_lineitem (
+                L_ORDERKEY INT8,
+                L_PARTKEY INTEGER,
+                L_SUPPKEY INTEGER,
+                L_LINENUMBER integer,
+                L_QUANTITY decimal,
+                L_EXTENDEDPRICE decimal,
+                L_DISCOUNT decimal,
+                L_TAX decimal,
+                L_RETURNFLAG CHAR(1),
+                L_LINESTATUS CHAR(1),
+                L_SHIPDATE date,
+                L_COMMITDATE date,
+                L_RECEIPTDATE date,
+                L_SHIPINSTRUCT CHAR(25),
+                L_SHIPMODE CHAR(10),
+                L_COMMENT VARCHAR(44)
+                )
+LOCATION
+(
+      'gpfdist://@hostname@:7070/gpfdist2/lineitem_cr.tbl'
+)
+FORMAT 'csv'
+(
+        DELIMITER AS '|'
+      NEWLINE 'CR'
+)
+;
+SELECT count(*) FROM ext_lineitem;
+  2985
+
+DROP EXTERNAL TABLE ext_lineitem;
+CREATE EXTERNAL TABLE ext_crlf_with_lf_column(c1 int, c2 text) LOCATION ('gpfdist://@hostname@:7070/gpfdist2/crlf_with_lf_column.csv') FORMAT 'csv' (NEWLINE 'CRLF');
+SELECT count(*) FROM ext_crlf_with_lf_column;
+ 10367
+
+DROP EXTERNAL TABLE ext_crlf_with_lf_column;
+CREATE EXTERNAL TABLE ext_crlf_with_lf_column(c1 int, c2 text) LOCATION ('gpfdist://@hostname@:7070/gpfdist2/crlf_with_lf_column.csv') FORMAT 'text' (DELIMITER ',' NEWLINE 'CRLF');
+SELECT count(*) FROM ext_crlf_with_lf_column;
+ 10367
+
+DROP EXTERNAL TABLE ext_crlf_with_lf_column;
 -- start_ignore
 select * from gpfdist2_stop;
  stopping...

@@ -275,7 +275,7 @@ class PgCtlStartArgs(CmdArgs):
         """
 
         CmdArgs.__init__(self, [
-            "env",			# variables examined by gpkill/gpdebug/etc
+            "env",			# variables examined by gpdebug/etc
             "GPSESSID=0000000000", 	# <- overwritten with gp_session_id to help identify orphans
             "GPERA=%s" % str(era),	# <- master era used to help identify orphans
             "$GPHOME/bin/pg_ctl",
@@ -1684,7 +1684,6 @@ def createTempDirectoryName(masterDataDirectory, tempDirPrefix):
 
 #-------------------------------------------------------------------------
 # gp_dbid methods moved to gp_dbid.py, but this class was left here
-# to avoid changing gpmigrator and gpmigrator_mirror (which is the only caller).
 #
 
 class GpCreateDBIdFile(Command):

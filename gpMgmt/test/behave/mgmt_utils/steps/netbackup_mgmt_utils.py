@@ -1,13 +1,15 @@
 # coding: utf-8
 
 import os
+from collections import defaultdict
 from gppylib.db import dbconn
-from test.behave_utils.utils import run_gpcommand
+from gppylib.commands.base import Command, REMOTE, WorkerPool
 from gppylib.gparray import GpArray
-from test.behave_utils.utils import get_all_hostnames_as_list
+from test.behave_utils.utils import get_all_hostnames_as_list, run_command, run_gpcommand
 from gppylib.operations.backup_utils import Context
 from datetime import datetime
 import json
+import yaml
 
 master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
 old_format_indicator = '/tmp/is_old.file'
@@ -16,6 +18,27 @@ def _read_timestamp_from_json(context):
     scenario_name = context._stack[0]['scenario'].name
     with open(timestamp_json, 'r') as infile:
         return json.load(infile)[scenario_name]
+
+def parse_netbackup_params():
+    current_path = os.path.realpath(__file__)
+    current_dir = os.path.dirname(current_path)
+    netbackup_yaml_file_path = os.path.join(current_dir, 'data/netbackup_behave_config.yaml')
+    try:
+        nbufile = open(netbackup_yaml_file_path, 'r')
+    except IOError,e:
+        raise Exception("Unable to open file %s: %s" % (netbackup_yaml_file_path, e))
+    try:
+        nbudata = yaml.load(nbufile.read())
+    except yaml.YAMLError, exc:
+        raise Exception("Error reading file %s: %s" % (netbackup_yaml_file_path, exc))
+    finally:
+        nbufile.close()
+
+    if len(nbudata) == 0:
+        raise Exception("The load of the config file %s failed.\
+         No configuration information to continue testing operation." % netbackup_yaml_file_path)
+    else:
+        return nbudata
 
 @given('the netbackup params have been parsed')
 def impl(context):
@@ -524,53 +547,3 @@ def impl(context, substr):
     del_cmd_str = "gp_bsa_delete_agent --netbackup-service-host=%s --netbackup-delete-objects=*%s*" % (netbackup_service_host, substr)
     cmd = Command('Delete the list of objects matching regex on NetBackup server', del_cmd_str)
     cmd.run(validateAfter=True)
-
-@given('read old timestamp from json')
-def impl(context):
-    context.backup_timestamp = _read_timestamp_from_json(context)[-1]
-    context.inc_backup_timestamps = _read_timestamp_from_json(context)[1:]
-    context.backup_subdir = _read_timestamp_from_json(context)[-1][:8]
-
-@given('the old database is started')
-def impl(context):
-    command = 'gpstop -a -M fast'
-    run_gpcommand(context, command)
-
-    fo = open("is_old.file", "wb")
-    fo.close()
-
-    command = 'gpstart -a'
-    run_gpcommand(context, command)
-
-    # Wait for database to come up, to prevent race conditions in later tests
-    cmd = Command(name="check if database is up", cmdStr="psql -l")
-    for i in range (30):
-        sleep(10)
-        cmd.run()
-        results = cmd.get_results()
-        if results.rc == 0:
-            return
-    raise Exception("Database did not start up within 5 minutes`")
-
-@given('the new database is started')
-def impl(context):
-    command = 'gpstop -a -M fast'
-    run_gpcommand(context, command)
-
-    try:
-        os.remove('/tmp/is_old.file')
-    except OSError:
-        pass
-
-    command = 'gpstart -a'
-    run_gpcommand(context, command)
-
-    # Wait for database to come up, to prevent race conditions in later tests
-    cmd = Command(name="check if database is up", cmdStr="psql -l")
-    for i in range (30):
-        sleep(10)
-        cmd.run()
-        results = cmd.get_results()
-        if results.rc == 0:
-            return
-    raise Exception("Database did not start up within 5 minutes`")

@@ -96,7 +96,6 @@ typedef enum MotionConnState
 	mcsEosSent
 } MotionConnState;
 
-typedef struct MotionConn MotionConn;
 typedef struct ICBuffer ICBuffer;
 typedef struct ICBufferLink ICBufferLink;
 

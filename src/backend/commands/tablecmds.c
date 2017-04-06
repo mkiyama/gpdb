@@ -981,6 +981,86 @@ RelationToRemoveIsTemp(const RangeVar *relation, DropBehavior behavior)
 	return isTemp;
 }
 
+static bool
+CheckExclusiveAccess(Relation rel)
+{
+	if (LockRelationNoWait(rel, AccessExclusiveLock) !=
+		LOCKACQUIRE_ALREADY_HELD)
+	{
+		UnlockRelation(rel, AccessExclusiveLock);
+		return false;
+	}
+	return true;
+}
+
+/*
+ * Allocate new relfiles for the specified relation and schedule old
+ * relfile for deletion.  Caller must hold AccessExclusiveLock on the
+ * relation.
+ */
+void
+TruncateRelfiles(Relation rel)
+{
+	Oid			heap_relid;
+	Oid			toast_relid;
+	Oid			aoseg_relid = InvalidOid;
+	Oid			aoblkdir_relid = InvalidOid;
+	Oid			aovisimap_relid = InvalidOid;
+
+	Assert(CheckExclusiveAccess(rel));
+
+	/*
+	 * Create a new empty storage file for the relation, and assign it as
+	 * the relfilenode value.	The old storage file is scheduled for
+	 * deletion at commit.
+	 */
+	setNewRelfilenode(rel, RecentXmin);
+
+	heap_relid = RelationGetRelid(rel);
+	toast_relid = rel->rd_rel->reltoastrelid;
+
+	if (RelationIsAoRows(rel) ||
+		RelationIsAoCols(rel))
+		GetAppendOnlyEntryAuxOids(heap_relid, SnapshotNow,
+								  &aoseg_relid,
+								  &aoblkdir_relid, NULL,
+								  &aovisimap_relid, NULL);
+
+	/*
+	 * The same for the toast table, if any.
+	 */
+	if (OidIsValid(toast_relid))
+	{
+		rel = relation_open(toast_relid, AccessExclusiveLock);
+		setNewRelfilenode(rel, RecentXmin);
+		heap_close(rel, NoLock);
+	}
+
+	/*
+	 * The same for the aoseg table, if any.
+	 */
+	if (OidIsValid(aoseg_relid))
+	{
+		rel = relation_open(aoseg_relid, AccessExclusiveLock);
+		setNewRelfilenode(rel, RecentXmin);
+		heap_close(rel, NoLock);
+	}
+
+	if (OidIsValid(aoblkdir_relid))
+	{
+		rel = relation_open(aoblkdir_relid, AccessExclusiveLock);
+		setNewRelfilenode(rel, RecentXmin);
+		heap_close(rel, NoLock);
+	}
+
+	if (OidIsValid(aovisimap_relid))
+	{
+		rel = relation_open(aovisimap_relid, AccessExclusiveLock);
+		setNewRelfilenode(rel, RecentXmin);
+		heap_close(rel, NoLock);
+	}
+}
+
 /*
  * ExecuteTruncate
  *		Executes a TRUNCATE command.
@@ -1146,69 +1226,12 @@ ExecuteTruncate(TruncateStmt *stmt)
 	foreach(cell, rels)
 	{
 		Relation	rel = (Relation) lfirst(cell);
-		Oid			heap_relid;
-		Oid			toast_relid;
-		Oid			aoseg_relid = InvalidOid;
-		Oid			aoblkdir_relid = InvalidOid;
-		Oid			aovisimap_relid = InvalidOid;
-
-		/*
-		 * Create a new empty storage file for the relation, and assign it as
-		 * the relfilenode value.	The old storage file is scheduled for
-		 * deletion at commit.
-		 */
-		setNewRelfilenode(rel, RecentXmin);
-
-		heap_relid = RelationGetRelid(rel);
-		toast_relid = rel->rd_rel->reltoastrelid;
-
-		heap_close(rel, NoLock);
-
-		if (RelationIsAoRows(rel) ||
-			RelationIsAoCols(rel))
-			GetAppendOnlyEntryAuxOids(heap_relid, SnapshotNow,
-									  &aoseg_relid,
-									  &aoblkdir_relid, NULL,
-									  &aovisimap_relid, NULL);
-
-		/*
-		 * The same for the toast table, if any.
-		 */
-		if (OidIsValid(toast_relid))
-		{
-			rel = relation_open(toast_relid, AccessExclusiveLock);
-			setNewRelfilenode(rel, RecentXmin);
-			heap_close(rel, NoLock);
-		}
-
-		/*
-		 * The same for the aoseg table, if any.
-		 */
-		if (OidIsValid(aoseg_relid))
-		{
-			rel = relation_open(aoseg_relid, AccessExclusiveLock);
-			setNewRelfilenode(rel, RecentXmin);
-			heap_close(rel, NoLock);
-		}
-
-		if (OidIsValid(aoblkdir_relid))
-		{
-			rel = relation_open(aoblkdir_relid, AccessExclusiveLock);
-			setNewRelfilenode(rel, RecentXmin);
-			heap_close(rel, NoLock);
-		}
-	
-		if (OidIsValid(aovisimap_relid))
-		{
-			rel = relation_open(aovisimap_relid, AccessExclusiveLock);
-			setNewRelfilenode(rel, RecentXmin);
-			heap_close(rel, NoLock);
-		}
-
+		TruncateRelfiles(rel);
 		/*
 		 * Reconstruct the indexes to match, and we're done.
 		 */
-		reindex_relation(heap_relid, true);
+		reindex_relation(RelationGetRelid(rel), true);
+		heap_close(rel, NoLock);
 	}
 
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -9981,8 +10004,7 @@ ATExecSetTableSpace_Relation(Oid tableOid, Oid newTableSpace)
 	 * a new one in the new tablespace.
 	 */
 	newrelfilenode = GetNewRelFileNode(newTableSpace,
-									   rel->rd_rel->relisshared,
-									   NULL);
+									   rel->rd_rel->relisshared);
 
 	gp_relation_node = heap_open(GpRelationNodeRelationId, RowExclusiveLock);
 
@@ -11761,34 +11783,27 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			{
 				foreach(lc, ldistro)
 				{
-					char *colName = strVal((Value *)lfirst(lc));
-					HeapTuple tuple;
+					char	   *colName = strVal((Value *)lfirst(lc));
+					HeapTuple	tuple;
 					AttrNumber	attnum;
 
 					tuple = SearchSysCacheAttName(RelationGetRelid(rel), colName);
 
-					if (list_member(cols, lfirst(lc)))
-							ereport(ERROR,
-								(errcode(ERRCODE_DUPLICATE_OBJECT),
-								errmsg("distribution policy must be a "
-									"unique set of columns"),
-								errhint("Column \"%s\" appears "
-									"more than once", colName)));
 					if (!HeapTupleIsValid(tuple))
-							ereport(ERROR,
+						ereport(ERROR,
 								(errcode(ERRCODE_UNDEFINED_COLUMN),
-								errmsg("column \"%s\" of "
-									"relation \"%s\" does not exist",
-									colName,
-									RelationGetRelationName(rel))));
+								 errmsg("column \"%s\" of relation \"%s\" does not exist",
+										colName,
+										RelationGetRelationName(rel))));
 
 					attnum = ((Form_pg_attribute) GETSTRUCT(tuple))->attnum;
 
 					/* Prevent them from altering a system attribute */
 					if (attnum <= 0)
-					ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute by system column \"%s\"", colName)));
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("cannot distribute by system column \"%s\"",
+										colName)));
 
 					policy->attrs[policy->nattrs++] = attnum;
 
@@ -11819,6 +11834,12 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 					}
 					if (!diff)
 					{
+						/*
+						 * This string length calculation relies on that we add
+						 * a comma after each column entry except the last one,
+						 * at which point the string should be NULL terminated
+						 * instead.
+						 */
 						char *dist = palloc(list_length(ldistro) * (NAMEDATALEN + 1));
 
 						dist[0] = '\0';
@@ -11858,8 +11879,11 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		if (!ldistro)
 			ldistro = make_dist_clause(rel);
 
-		/* force the use of legacy query optimizer, since PQO will not redistribute the tuples if the current and required
-		   distributions are both RANDOM even when reorganize is set to "true"*/
+		/*
+		 * Force the use of legacy query optimizer, since PQO will not
+		 * redistribute the tuples if the current and required distributions
+		 * are both RANDOM even when reorganize is set to "true"
+		 */
 		bool saveOptimizerGucValue = optimizer;
 		optimizer = false;
 

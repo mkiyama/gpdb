@@ -56,9 +56,6 @@ struct List;
 struct SubLink;
 struct SubPlan;
 
-typedef OpExpr DistinctExpr;
-
-
 namespace gpdxl
 {
 	using namespace gpopt;
@@ -376,6 +373,20 @@ namespace gpdxl
 			Expr *PexprPartBoundOpen
 				(
 				const CDXLNode *pdxlnPartBoundOpen,
+				CMappingColIdVar *pmapcidvar
+				);
+
+			// translate a scalar part list values into an Expr
+			Expr *PexprPartListValues
+				(
+				const CDXLNode *pdxlnPartListValues,
+				CMappingColIdVar *pmapcidvar
+				);
+
+			// translate a scalar part list null test into an Expr
+			Expr *PexprPartListNullTest
+				(
+				const CDXLNode *pdxlnPartListNullTest,
 				CMappingColIdVar *pmapcidvar
 				);
 
