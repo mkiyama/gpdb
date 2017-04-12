@@ -326,7 +326,7 @@ define BUILD_STEPS
 	if [ "$(findstring $(BLD_ARCH),$(SERVER_PLATFORMS))" != "" ]; then \
 	  $(MAKE) mkgpcloud INSTLOC=$(INSTLOC) && \
 	  $(MAKE) mkgphdfs INSTLOC=$(INSTLOC) && \
-	  $(MAKE) mkorafce INSTLOC=$(INSTLOC); \
+	  $(MAKE) mkorafce INSTLOC=$(INSTLOC);  \
 	fi
 	cd extensions/gpmapreduce/ && $(MAKE) install
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
