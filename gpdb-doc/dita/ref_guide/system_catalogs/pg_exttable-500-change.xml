@@ -6,7 +6,8 @@
   <body>
     <draft-comment author="msk">500 - deprecate fmterrtbl column <xref
         href="https://www.pivotaltracker.com/story/show/140743221" format="html" scope="external"
-        >#140743221</xref></draft-comment>
+        >#140743221</xref><p>name change location -> urilocation </p><p>add exelocation,
+      options</p></draft-comment>
     <p>The <codeph>pg_exttable</codeph> system catalog table is used to track external tables and
       web tables created by the <codeph>CREATE EXTERNAL TABLE</codeph> command.</p>
     <table id="gn143898">
@@ -32,10 +33,16 @@
             <entry colname="col4">The OID of this external table.</entry>
           </row>
           <row>
-            <entry colname="col1"><codeph>location</codeph></entry>
+            <entry colname="col1"><codeph>urilocation</codeph></entry>
             <entry colname="col2">text[]</entry>
             <entry colname="col3"/>
             <entry colname="col4">The URI location(s) of the external table files.</entry>
+          </row>
+          <row>
+            <entry colname="col1"><codeph>execlocation</codeph></entry>
+            <entry colname="col2">text[]</entry>
+            <entry colname="col3"/>
+            <entry colname="col4">The ON segment locations defined for the external table.</entry>
           </row>
           <row>
             <entry colname="col1"><codeph>fmttype</codeph></entry>
@@ -50,6 +57,12 @@
             <entry colname="col3"/>
             <entry colname="col4">Formatting options of the external table files, such as the field
               delimiter, null string, escape character, etc.</entry>
+          </row>
+          <row>
+            <entry colname="col1"><codeph>options</codeph></entry>
+            <entry colname="col2">text[]</entry>
+            <entry colname="col3"/>
+            <entry colname="col4">The options defined for the external table.</entry>
           </row>
           <row>
             <entry colname="col1"><codeph>command</codeph></entry>
