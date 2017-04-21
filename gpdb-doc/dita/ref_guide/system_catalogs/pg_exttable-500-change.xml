@@ -4,7 +4,7 @@
 <topic id="topic1" xml:lang="en">
   <title id="gn143896">pg_exttable</title>
   <body>
-    <draft-comment author="msk">500 - deprecate fmterrtbl column <xref
+    <draft-comment author="msk">5.0.0 DONE - deprecate fmterrtbl column <xref
         href="https://www.pivotaltracker.com/story/show/140743221" format="html" scope="external"
         >#140743221</xref><p>name change location -> urilocation </p><p>add exelocation,
       options</p></draft-comment>
