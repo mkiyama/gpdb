@@ -548,12 +548,12 @@ bool		optimizer_apply_left_outer_to_union_all_disregarding_stats;
 bool		optimizer_enable_ctas;
 bool		optimizer_remove_order_below_dml;
 bool		optimizer_static_partition_selection;
+bool		optimizer_enable_partial_index;
 bool		optimizer_dml_triggers;
 bool		optimizer_dml_constraints;
 bool		optimizer_enable_master_only_queries;
 bool		optimizer_multilevel_partitioning;
 bool		optimizer_enable_derive_stats_all_groups;
-bool		optimizer_explain_show_status;
 bool		optimizer_prefer_scalar_dqa_multistage_agg;
 bool 		optimizer_parallel_union;
 bool		optimizer_array_constraints;
@@ -2801,16 +2801,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"optimizer_explain_show_status", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Display optimizer version information in explain messages."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&optimizer_explain_show_status,
-		true, NULL, NULL
-	},
-
-	{
 		{"optimizer_prefer_multistage_agg", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Prefer multistage aggregates in the optimizer."),
 			NULL,
@@ -3022,6 +3012,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_static_partition_selection,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_partial_index", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable heterogeneous index plans."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_partial_index,
 		true, NULL, NULL
 	},
 
