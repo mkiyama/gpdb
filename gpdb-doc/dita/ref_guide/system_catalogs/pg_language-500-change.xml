@@ -4,7 +4,7 @@
 <topic id="topic1" xml:lang="en">
   <title id="gs143896">pg_language</title>
   <body>
-    <draft-comment author="msk">5.0.0 DRAFT changes to CREATE LANGUAGE for DO command (postgres 9.0)
+    <draft-comment author="msk">5.0.0 DONE changes to CREATE LANGUAGE for DO command (postgres 9.0)
       and language owner</draft-comment>
     <p>The <codeph>pg_language</codeph> system catalog table registers languages in which you can
       write functions or stored procedures. It is populated by <codeph>CREATE LANGUAGE</codeph>.</p>
