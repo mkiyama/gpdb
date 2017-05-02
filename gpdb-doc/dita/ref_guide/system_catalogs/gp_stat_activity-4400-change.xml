@@ -1,0 +1,1720 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+  PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="topic1" xml:lang="en">
+  <title id="hq141670">gp_stat_activity</title>
+  <body>
+    <!--msk - update catalog view table and TOC.-->
+    <draft-comment author="msk">4400 - new views<p>See <xref
+          href="https://docs.google.com/document/d/1FcJgnAAbt4VaqRMQ5atwl2jDfUy2rJqmV5Gtbro5SDs/edit"
+          format="html" scope="external"
+          >https://docs.google.com/document/d/1FcJgnAAbt4VaqRMQ5atwl2jDfUy2rJqmV5Gtbro5SDs/edit#</xref></p><p>Original
+        doc <xref
+          href="https://docs.google.com/document/d/1oF5rd7zwg2EX2cSh2q5eaL80vkao-3MsywuI13r5aEc/edit"
+          format="html" scope="external"
+          >https://docs.google.com/document/d/1oF5rd7zwg2EX2cSh2q5eaL80vkao-3MsywuI13r5aEc/edit</xref></p></draft-comment>
+    <p dir="ltr" id="docs-internal-guid-76966df3-d188-d4ba-34d6-1fe857fe2d54">We introduce a new
+      built in function gp_stat_get_activity, and a system view gp_proc_activity. Unlike
+      pg_stat_activity, this view shows information from all segments and master in one shot. The
+      information is stored in PgBackendStatus struct with extended fields from today’s one. Upon
+      the backend process initialization, this slot is acquired and is released when the process
+      dies.</p>
+    <p dir="ltr">We also introduce gp_session_activity. This is an aggregated version of
+      gp_proc_activity grouped by session.</p>
+    <p dir="ltr" id="docs-internal-guid-76966df3-d185-bf8b-be3f-fc271e96c33b">Most of the values are
+      about the current query, and reset when every query starts. Therefore, when calling this
+      function even after the last query finished, users are still able to see the values from the
+      last query.</p>
+    <p dir="ltr">Like pg_stat_get_activity, this function should show only the authorized
+      information, i.e. superuser can see the information from all the processes, whereas
+      non-superuser can see only from the current user’s backend processes.</p>
+    <p dir="ltr">This function is supposed to query the same function in segments and union all the
+      records to return to the client, when it is executed on master.</p>
+    <p>
+      <b>gp_proc_activity</b>
+    </p>
+    <p dir="ltr">Like pg_stat_activity, this is a system view on top of gp_stat_get_activity. We
+      name this as “proc”, with in mind that there is another view for “session”. This view joins
+      pg_database and pg_authid and show test representation of database and user.</p>
+    <p>
+      <b>gp_segment_activity</b>
+    </p>
+    <p dir="ltr">This is a system view that aggregates gp_proc_activity to session/segment level.
+      The grouping keys are session_id and segment_id.</p>
+    <p>
+      <b>gp_session_activity</b>
+    </p>
+    <p dir="ltr">This is another system view that aggregates gp_proc_activity into session level.
+      The Agg column in the gp_stat_get_activity definition table shows how to gather the
+      information to the session level. “Master” means to use the value from QD record, “GROUP BY”
+      means it’s a grouping key, other aggregate name indicates how to aggregate this value up to
+      the session level.</p>
+    <p>The view <codeph>gp_stat_activity</codeph> shows one row per server process and details about
+      it associated user session and query. The columns that report data on the current query are
+      available unless the parameter <codeph>stats_command_string</codeph> has been turned off.
+      Furthermore, these columns are only visible if the user examining the view is a superuser or
+      the same as the user owning the process being reported on.</p>
+    <p>The maximum length of the query text sting stored in the column
+        <codeph>current_query</codeph> can be controlled with the server configuration parameter
+        <codeph>pgstat_track_activity_query_size</codeph>. </p>
+    <table id="table_x23_szg_vs">
+      <title>gp_catalog.pg_stat_activity original</title>
+      <tgroup cols="4">
+        <colspec colnum="1" colname="col1" colwidth="131pt"/>
+        <colspec colnum="2" colname="col2" colwidth="86pt"/>
+        <colspec colnum="3" colname="col3" colwidth="85pt"/>
+        <colspec colnum="4" colname="col4" colwidth="147pt"/>
+        <thead>
+          <row>
+            <entry colname="col1">Column</entry>
+            <entry colname="col2">Type</entry>
+            <entry colname="col3">Agg</entry>
+            <entry colname="col4">Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <codeph>datid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the database this backend is connected to</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>authenticated_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the AuthenticatedUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the SessionUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>outer_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the OuterUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the CurrentUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>segment_id</codeph>
+            </entry>
+            <entry>int2</entry>
+            <entry>N/A</entry>
+            <entry>
+              <codeph>gp_segment_id</codeph>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>pid</codeph>
+            </entry>
+            <entry>integer</entry>
+            <entry>COUNT</entry>
+            <entry>process ID of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_id</codeph>
+            </entry>
+            <entry>integer</entry>
+            <entry>GROUP BY</entry>
+            <entry>session ID of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>activity</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>activity value in set_ps_display</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_id</codeph>
+            </entry>
+            <entry>xid</entry>
+            <entry>N/A</entry>
+            <entry>current transaction ID</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>gid</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>current global transaction id. currentGxact-&gt;gid</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>command_id</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>Master</entry>
+            <entry>
+              <codeph>gp_command_count</codeph>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_count</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>Master</entry>
+            <entry>number of transactions to date. Bump up at StartTransaction()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_type</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>The type of statement. For example INSERT, UPDATE, DELETE, SELECT, etc....
+              automated tools like Kraken need this information in order to set rules on the
+              query.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_start_time</codeph>
+            </entry>
+            <entry>timestamp with timezone</entry>
+            <entry>Master</entry>
+            <entry>login / connection made</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_start_time</codeph>
+            </entry>
+            <entry>timestamp with timezone</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_end_time</codeph>
+            </entry>
+            <entry>timestamp with timezone</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement ended and a prompt was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_statement_start_time</codeph>
+            </entry>
+            <entry>timestamp with timezone</entry>
+            <entry>Master</entry>
+            <entry>start time of current statement running. Null if idle</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_count</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>Master</entry>
+            <entry>count of statements run in this session</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_slices</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>Master</entry>
+            <entry>number of slices in the currently running query.
+              list_length(estate-&gt;es_sliceTable)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_slice_id</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>N/A</entry>
+            <entry>currentSliceId value</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>process_type</codeph>
+            </entry>
+            <entry>char</entry>
+            <entry>N/A</entry>
+            <entry>‘w’ for writer, ‘r’ for reader</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_appended</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted into AO / CO tables in the current query. Increment at
+              BufferedAppendWrite().</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes read for AO / CO tables. Increment at
+              AppendOnlyStorageRead_ReadNextBlock() for AO</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_blocks_extended</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks newly extended by the current query. increment at
+              ReadBuffer_Internal() if block is P_NEW</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_blocks_modified</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks modified by the current query. Increment when MarkBufferDirty()
+              is called on the undirty buffer</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_hit</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from buffer cache for heap. Increment if ReadBuffer()
+              fetches from cache</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from disk. Increment if ReaderBuffer() reads from
+              disk</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_bytes_insert</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted to xlog buffer. Add the size of buffer in
+              XLogInsert()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_bytes_write</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written to disk by this process. Add the size of written bytes in
+              XLogWrite()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>tuples_in</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>N/A</entry>
+            <entry>number of tuples read into this process. (scanned tuples in the leaf slice,
+              receiving motion tuples in the middle slices)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>tuples_out</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>N/A</entry>
+            <entry>number of tuples sent out from this process. (sender Motion tuples in QE or
+              processed tuples in the top executor)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>net_bytes_sent</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>N/A</entry>
+            <entry>number of bytes the current query sent to client so far</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>net_bytes_received</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>N/A</entry>
+            <entry>number of bytes the current query received from client so far</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>lock_wait_time</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>N/A</entry>
+            <entry>milliseconds the current query is blocked by heavyweight locks totally. Time
+              since the call to PGSemaphoreLock() from ProcSleep()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>query_cost</codeph>
+            </entry>
+            <entry>float8</entry>
+            <entry>N/A</entry>
+            <entry>cost as estimated by the optimizer, QD only. &lt;ask QP&gt;</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>optimizer_time</codeph>
+            </entry>
+            <entry>float8</entry>
+            <entry>Master</entry>
+            <entry>milliseconds for the optimizer to come up with plan, QD only. Time spent in
+              pg_plan_queries()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>dispatch_at</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>milliseconds for the query to be dispatched to segments, QD only. Time at
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>plan_size</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>number of bytes of the serialized plan tree. plan_size_in_kb in
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>parse_time</codeph>
+            </entry>
+            <entry>float8</entry>
+            <entry>Master</entry>
+            <entry>milliseconds for the SQL parser and rewrite engine, QD only. Time spent in
+              pg_analyze_and_rewrite()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>memory_bytes</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes this process allocated locally. &lt;ask QP&gt;</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_files</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>SUM</entry>
+            <entry>number of files used for spill. &lt;ask QP&gt;</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written for spill. &lt;ask QP&gt;</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>waiting_lwlockid</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>N/A</entry>
+            <entry>lightweight lock id if it’s waiting on it. lockid in LWLockAcquire()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_relcache</codeph>
+            </entry>
+            <entry>int</entry>
+            <entry>N/A</entry>
+            <entry>number of relation cached in memory. +1 in RelationCacheInsert() and -1 in
+              RelationCacheDelete()</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+    <p/>
+    <table id="table_nt2_dhh_vs">
+      <title>gp_catalog.pg_stat_activity </title>
+      <tgroup cols="4">
+        <colspec colnum="1" colname="col1" colwidth="131pt"/>
+        <colspec colnum="2" colname="col2" colwidth="86pt"/>
+        <colspec colnum="3" colname="col3" colwidth="85pt"/>
+        <colspec colnum="4" colname="col4" colwidth="147pt"/>
+        <thead>
+          <row>
+            <entry colname="col1">Column</entry>
+            <entry colname="col2">Type</entry>
+            <entry colname="col3">Agg</entry>
+            <entry colname="col4">Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <codeph>datid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the database this backend is connected to</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>authenticated_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the AuthenticatedUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the SessionUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>outer_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the OuterUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the CurrentUserId</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>segment_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>gp_segment_id</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>procpid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>COUNT</entry>
+            <entry>process id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>GROUP BY</entry>
+            <entry>session id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_query</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>activity value in set_ps_display</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_id</codeph>
+            </entry>
+            <entry>xid</entry>
+            <entry>N/A</entry>
+            <entry>current transaction id</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>gid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>current global transaction id. currentGxact-&gt;gid</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>command_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>gp_command_count</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of transactions to date. Bump up at StartTransaction()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_type</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>the value would be for example INSERT, UPDATE, DELETE, SELECT, etc.... automated
+              tools like Kraken need this information in order to set rules on the query.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>login / connection made</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>last_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>start time of current statement running. Null if idle</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>count of statements run in this session</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_slices</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of slices in the currently running query.
+              list_length(estate-&gt;es_sliceTable)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_slice_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>currentSliceId value</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>is_writer</codeph>
+            </entry>
+            <entry>bool</entry>
+            <entry>N/A</entry>
+            <entry>true for writer, false for reader</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_append</codeph>
+            </entry>
+            <entry>bigint(int8)</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted into AO / CO tables in the current query. Increment at
+              BufferedAppendWrite().</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes read for AO / CO tables. Increment at
+              AppendOnlyStorageRead_ReadNextBlock() for AO</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_blocks_extended</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks newly extended by the current query. increment at
+              ReadBuffer_Internal() if block is P_NEW</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_blocks_modified</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks modified by the current query. Increment when MarkBufferDirty()
+              is called on the undirty buffer</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_hit</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from buffer cache for heap. Increment if ReadBuffer()
+              fetches from cache</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from disk. Increment if ReaderBuffer() reads from
+              disk</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_insert_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted to xlog buffer. Add the size of buffer in
+              XLogInsert()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_write_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written to disk by this process. Add the size of written bytes in
+              XLogWrite()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>lock_waiting_starttime</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>N/A</entry>
+            <entry>since when the current query is blocked by heavyweight locks. Time since the call
+              to PGSemaphoreLock() from ProcSleep()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>dispatch_plan_size</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>number of bytes of the serialized plan tree. plan_size_in_kb in
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>memory_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes this process allocated locally.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_files</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>SUM</entry>
+            <entry>number of files used for spill.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>waiting_lwlockid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>lightweight lock id if it’s waiting on it. lockid in LWLockAcquire()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_relcache</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>SUM</entry>
+            <entry>number of relation cached in memory. +1 in RelationCacheInsert() and -1 in
+              RelationCacheDelete()</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+    <p/>
+    <p>
+      <b>gp_proc_activity</b>
+    </p>
+    <p dir="ltr">Like pg_stat_activity, this is a system view on top of gp_stat_get_activity. We
+      name this as “proc”, with in mind that there is another view for “session”. This view joins
+      pg_database and pg_authid and show test representation of database and user. The returned
+      columns of this view is like:</p>
+    <table id="table_h31_v2h_vs">
+      <title>gp_proc_activity</title>
+      <tgroup cols="4">
+        <colspec colnum="1" colname="col1" colwidth="131pt"/>
+        <colspec colnum="2" colname="col2" colwidth="86pt"/>
+        <colspec colnum="3" colname="col3" colwidth="85pt"/>
+        <colspec colnum="4" colname="col4" colwidth="147pt"/>
+        <thead>
+          <row>
+            <entry colname="col1">Column</entry>
+            <entry colname="col2">Type</entry>
+            <entry colname="col3">Agg</entry>
+            <entry colname="col4">Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry><b>Column</b>
+            </entry>
+            <entry><b>Type</b>
+            </entry>
+            <entry><b>Agg</b>
+            </entry>
+            <entry><b>Description</b>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>datid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the database this backend is connected to</entry>
+          </row>
+          <row>
+            <entry>datname</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>procpid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>COUNT</entry>
+            <entry>process id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>segment_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>gp_segment_id</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>GROUP BY</entry>
+            <entry>session id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>command_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>gp_command_count</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>authenticated_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the AuthenticatedUserId</entry>
+          </row>
+          <row>
+            <entry>authenticated_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the SessionUserId</entry>
+          </row>
+          <row>
+            <entry>session_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>outer_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the OuterUserId</entry>
+          </row>
+          <row>
+            <entry>outer_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the CurrentUserId</entry>
+          </row>
+          <row>
+            <entry>current_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_query</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>activity value in set_ps_display</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_type</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>the value would be for example INSERT, UPDATE, DELETE, SELECT, etc.... automated
+              tools like Kraken need this information in order to set rules on the query.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>count of statements run in this session</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_id</codeph>
+            </entry>
+            <entry>xid</entry>
+            <entry>N/A</entry>
+            <entry>current transaction id</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>gid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>current global transaction id. currentGxact-&gt;gid</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of transactions to date. Bump up at StartTransaction()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>login / connection made</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>last_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>start time of current statement running. Null if idle</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_slices</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of slices in the currently running query.
+              list_length(estate-&gt;es_sliceTable)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_slice_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>currentSliceId value</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>is_writer</codeph>
+            </entry>
+            <entry>bool</entry>
+            <entry>N/A</entry>
+            <entry>true for writer, false for reader</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>dispatch_plan_size</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>number of bytes of the serialized plan tree. plan_size_in_kb in
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry><codeph>heap_blocks_extended</codeph>???</entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks newly extended by the current query. increment at
+              ReadBuffer_Internal() if block is P_NEW</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_blocks_modified</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks modified by the current query. Increment when MarkBufferDirty()
+              is called on the undirty buffer</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_hit</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from buffer cache for heap. Increment if ReadBuffer()
+              fetches from cache</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>heap_buffer_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks read from disk. Increment if ReaderBuffer() reads from
+              disk</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_relcache</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>SUM</entry>
+            <entry>number of relation cached in memory. +1 in RelationCacheInsert() and -1 in
+              RelationCacheDelete()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_read</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes read for AO / CO tables. Increment at
+              AppendOnlyStorageRead_ReadNextBlock() for AO</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>ao_bytes_append</codeph>
+            </entry>
+            <entry>bigint(int8)</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted into AO / CO tables in the current query. Increment at
+              BufferedAppendWrite().</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_insert_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes inserted to xlog buffer. Add the size of buffer in
+              XLogInsert()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>xlog_write_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written to disk by this process. Add the size of written bytes in
+              XLogWrite()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_files</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>SUM</entry>
+            <entry>number of files used for spill.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>spill_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>lock_waiting_starttime</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>N/A</entry>
+            <entry>since when the current query is blocked by heavyweight locks. Time since the call
+              to PGSemaphoreLock() from ProcSleep()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>waiting_lwlockid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>lightweight lock id if it’s waiting on it. lockid in LWLockAcquire()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>memory_bytes</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of bytes this process allocated locally.</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+    <p/>
+    <p>
+      <b>gp_segment_activity</b>
+    </p>
+    <p dir="ltr">This is a system view that aggregates gp_proc_activity to session/segment level.
+      The grouping keys are session_id and segment_id. The returned columns of this view would be
+      like:</p>
+    <table id="table_rlz_lfh_vs">
+      <title>gp_segment_activity</title>
+      <tgroup cols="4">
+        <colspec colnum="1" colname="col1" colwidth="131pt"/>
+        <colspec colnum="2" colname="col2" colwidth="86pt"/>
+        <colspec colnum="3" colname="col3" colwidth="85pt"/>
+        <colspec colnum="4" colname="col4" colwidth="147pt"/>
+        <thead>
+          <row>
+            <entry colname="col1">Column</entry>
+            <entry colname="col2">Type</entry>
+            <entry colname="col3">Agg</entry>
+            <entry colname="col4">Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <codeph>session_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>GROUP BY</entry>
+            <entry>session id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>segment_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>N/A</entry>
+            <entry>gp_segment_id</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>datid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the database this backend is connected to</entry>
+          </row>
+          <row>
+            <entry>datname</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>process_count</entry>
+            <entry>bigint</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>command_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>gp_command_count</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>authenticated_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the AuthenticatedUserId</entry>
+          </row>
+          <row>
+            <entry>authenticated_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>sesion_userid</entry>
+            <entry>oid</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>session_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> ???</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>outer_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the OuterUserId</entry>
+          </row>
+          <row>
+            <entry>outer_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the CurrentUserId</entry>
+          </row>
+          <row>
+            <entry>current_user</entry>
+            <entry>name</entry>
+            <entry> </entry>
+            <entry> </entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_query</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>activity value in set_ps_display</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_type</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>the value would be for example INSERT, UPDATE, DELETE, SELECT, etc.... automated
+              tools like Kraken need this information in order to set rules on the query.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>count of statements run in this session</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>gid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>current global transaction id. currentGxact-&gt;gid</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of transactions to date. Bump up at StartTransaction()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>login / connection made</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>last_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>start time of current statement running. Null if idle</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_slices</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of slices in the currently running query.
+              list_length(estate-&gt;es_sliceTable)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>dispatch_plan_size</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>number of bytes of the serialized plan tree. plan_size_in_kb in
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry><codeph>heap_blocks_extended</codeph>???</entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks newly extended by the current query. increment at
+              ReadBuffer_Internal() if block is P_NEW</entry>
+          </row>
+          <row>
+            <entry>sum_heap_blocks_modified</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of blocks modified by the current query. Increment when MarkBufferDirty()
+              is called on the undirty buffer</entry>
+          </row>
+          <row>
+            <entry>sum_heap_buffer_hit</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of blocks read from buffer cache for heap. Increment if ReadBuffer()
+              fetches from cache</entry>
+          </row>
+          <row>
+            <entry>sum_heap_buffer_read</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of blocks read from disk. Increment if ReaderBuffer() reads from
+              disk</entry>
+          </row>
+          <row>
+            <entry>sum_num_relcache</entry>
+            <entry>bigint</entry>
+            <entry> </entry>
+            <entry>number of relation cached in memory. +1 in RelationCacheInsert() and -1 in
+              RelationCacheDelete()</entry>
+          </row>
+          <row>
+            <entry>sum_ao_bytes_read</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes read for AO / CO tables. Increment at
+              AppendOnlyStorageRead_ReadNextBlock() for AO</entry>
+          </row>
+          <row>
+            <entry>sum_ao_bytes_append</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes inserted into AO / CO tables in the current query. Increment at
+              BufferedAppendWrite().</entry>
+          </row>
+          <row>
+            <entry>sum_xlog_insert_bytes</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes inserted to xlog buffer. Add the size of buffer in
+              XLogInsert()</entry>
+          </row>
+          <row>
+            <entry>sum_xlog_write_bytes</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes written to disk by this process. Add the size of written bytes in
+              XLogWrite()</entry>
+          </row>
+          <row>
+            <entry>sum_spill_files</entry>
+            <entry>bigint</entry>
+            <entry> </entry>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry>sum_spill_bytes</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry>sum_memory_bytes</entry>
+            <entry>numeric</entry>
+            <entry> </entry>
+            <entry>number of bytes this process allocated locally.</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+    <p/>
+    <p>
+      <b>gp_session_activity</b>
+    </p>
+    <p dir="ltr">This is another system view that aggregates gp_proc_activity into session level.
+      The Agg column in the gp_stat_get_activity definition table shows how to gather the
+      information to the session level. “Master” means to use the value from QD record, “GROUP BY”
+      means it’s a grouping key, other aggregate name indicates how to aggregate this value up to
+      the session level. The returned columns of this view is like:</p>
+    <p/>
+    <table id="table_pqs_pfh_vs">
+      <tgroup cols="4">
+        <colspec colnum="1" colname="col1" colwidth="131pt"/>
+        <colspec colnum="2" colname="col2" colwidth="86pt"/>
+        <colspec colnum="3" colname="col3" colwidth="85pt"/>
+        <colspec colnum="4" colname="col4" colwidth="147pt"/>
+        <thead>
+          <row>
+            <entry colname="col1">Column</entry>
+            <entry colname="col2">Type</entry>
+            <entry colname="col3">Agg</entry>
+            <entry colname="col4">Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <codeph>session_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>GROUP BY</entry>
+            <entry>session id of this backend</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>datid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the database this backend is connected to</entry>
+          </row>
+          <row>
+            <entry dir="ltr">datname</entry>
+            <entry dir="ltr">name</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry dir="ltr">process_count</entry>
+            <entry dir="ltr">bigint</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry>
+              <codeph>command_id</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>gp_command_count</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>authenticated_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the AuthenticatedUserId</entry>
+          </row>
+          <row>
+            <entry dir="ltr">authenticated_user</entry>
+            <entry dir="ltr">name</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry dir="ltr">sesion_userid</entry>
+            <entry dir="ltr">oid</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry dir="ltr">session_user</entry>
+            <entry dir="ltr">name</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry>
+              <codeph>outer_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the OuterUserId</entry>
+          </row>
+          <row>
+            <entry dir="ltr">outer_user</entry>
+            <entry dir="ltr">name</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_userid</codeph>
+            </entry>
+            <entry>oid</entry>
+            <entry>Master</entry>
+            <entry>OID of the CurrentUserId</entry>
+          </row>
+          <row>
+            <entry dir="ltr">current_user</entry>
+            <entry dir="ltr">name</entry>
+            <entry/>
+            <entry/>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_query</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>activity value in set_ps_display</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_type</codeph>
+            </entry>
+            <entry>text</entry>
+            <entry>Master</entry>
+            <entry>the value would be for example INSERT, UPDATE, DELETE, SELECT, etc.... automated
+              tools like Kraken need this information in order to set rules on the query.</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>statement_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>count of statements run in this session</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>gid</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>current global transaction id. currentGxact-&gt;gid</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>transaction_count</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of transactions to date. Bump up at StartTransaction()</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>session_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>login / connection made</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>last_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>time the last sql statement was issued</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>current_statement_start_time</codeph>
+            </entry>
+            <entry>timestamptz</entry>
+            <entry>Master</entry>
+            <entry>start time of current statement running. Null if idle</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>num_slices</codeph>
+            </entry>
+            <entry>int4</entry>
+            <entry>Master</entry>
+            <entry>number of slices in the currently running query.
+              list_length(estate-&gt;es_sliceTable)</entry>
+          </row>
+          <row>
+            <entry>
+              <codeph>dispatch_plan_size</codeph>
+            </entry>
+            <entry>bigint</entry>
+            <entry>Master</entry>
+            <entry>number of bytes of the serialized plan tree. plan_size_in_kb in
+              cdbdisp_dispatchPlan()</entry>
+          </row>
+          <row>
+            <entry><codeph>heap_blocks_extended</codeph>???</entry>
+            <entry>bigint</entry>
+            <entry>SUM</entry>
+            <entry>number of blocks newly extended by the current query. increment at
+              ReadBuffer_Internal() if block is P_NEW</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_heap_blocks_modified</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of blocks modified by the current query. Increment when MarkBufferDirty()
+              is called on the undirty buffer</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_heap_buffer_hit</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of blocks read from buffer cache for heap. Increment if ReadBuffer()
+              fetches from cache</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_heap_buffer_read</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of blocks read from disk. Increment if ReaderBuffer() reads from
+              disk</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_num_relcache</entry>
+            <entry dir="ltr">bigint</entry>
+            <entry/>
+            <entry>number of relation cached in memory. +1 in RelationCacheInsert() and -1 in
+              RelationCacheDelete()</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_ao_bytes_read</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes read for AO / CO tables. Increment at
+              AppendOnlyStorageRead_ReadNextBlock() for AO</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_ao_bytes_append</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes inserted into AO / CO tables in the current query. Increment at
+              BufferedAppendWrite().</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_xlog_insert_bytes</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes inserted to xlog buffer. Add the size of buffer in
+              XLogInsert()</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_xlog_write_bytes</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes written to disk by this process. Add the size of written bytes in
+              XLogWrite()</entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_spill_files</entry>
+            <entry dir="ltr">bigint</entry>
+            <entry/>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_spill_bytes</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes written for spill. </entry>
+          </row>
+          <row>
+            <entry dir="ltr">sum_memory_bytes</entry>
+            <entry dir="ltr">numeric</entry>
+            <entry/>
+            <entry>number of bytes this process allocated locally.</entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+  </body>
+</topic>
