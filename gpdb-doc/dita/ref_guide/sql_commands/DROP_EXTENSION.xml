@@ -4,12 +4,7 @@
 <topic id="topic1">
   <title id="cw20941">DROP EXTENSION</title>
   <body>
-    <draft-comment author="msk">5000 DRAFT - drop a registered extension.<p>Ported from postgres
-          <xref href="https://www.postgresql.org/docs/9.6/static/sql-dropextension.html"
-          format="html" scope="external">DROP EXTENSION -9.6</xref></p><p>TODO Add xrefs to related
-        commands and system table, views</p><p>DONE -- edit, formatting, and postgres ->
-      GPDB</p></draft-comment>
-    <p id="sql_command_desc">Removes an extension from a database.</p>
+    <p id="sql_command_desc">Removes an extension from a Greenplum database.</p>
     <section id="section2">
       <title>Synopsis</title>
       <codeblock id="sql_command_synopsis">DROP EXTENSION [ IF EXISTS ] <varname>name</varname> [, ...] [ CASCADE | RESTRICT ]</codeblock>
@@ -46,7 +41,7 @@
           <pt>CASCADE</pt>
           <pd>
             <p>Automatically drop objects that depend on the extension, and in turn all objects that
-              depend on those objects. See <xref
+              depend on those objects. See the PostgreSQL information about <xref
                 href="https://www.postgresql.org/docs/9.6/static/ddl-depend.html" format="html"
                 scope="external">Dependency Tracking</xref>.</p>
           </pd>
@@ -66,7 +61,8 @@
     </section>
     <section id="section7">
       <title>See Also</title>
-      <p><codeph>CREATE EXTENSION</codeph>, <codeph>ALTER EXTENSION</codeph></p>
+      <p><codeph><xref href="CREATE_EXTENSION.xml#topic1">CREATE EXTENSION</xref></codeph>,
+            <codeph><xref href="ALTER_EXTENSION.xml#topic1">ALTER EXTENSION</xref></codeph></p>
     </section>
   </body>
 </topic>

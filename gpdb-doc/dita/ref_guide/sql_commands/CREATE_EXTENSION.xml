@@ -4,14 +4,6 @@
 <topic id="topic1">
     <title id="bv20941">CREATE EXTENSION</title>
     <body>
-        <draft-comment author="msk">500 DRAFT - Register an extension.<p>Ported from postgres <xref
-                    href="https://www.postgresql.org/docs/9.6/static/sql-createextension.html"
-                    format="html" scope="external">CREATE EXTENSION -9.6</xref> - Also ported <xref
-                    href="https://www.postgresql.org/docs/9.6/static/extend-extensions.html"
-                    format="html" scope="external">Section 36.15</xref> in <xref
-                    href="../../admin_guide/1-package-extension-5000-change.xml#topic1"/></p><p>TODO
-                Add xrefs to related commands and system table, views</p><p>DONE -- edit,
-                formatting, and postgres -> GPDB</p></draft-comment>
         <p id="sql_command_desc">Registers an extension in a Greenplum database.</p>
         <section id="section2">
             <title>Synopsis</title>
@@ -128,17 +120,16 @@
         </section>
         <section id="section5">
             <title>Notes</title>
-            <p>The extensions currently available for loading can be identified from the <xref
-                    href="https://www.postgresql.org/docs/9.6/static/view-pg-available-extensions.html"
-                    format="html" scope="external">pg_available_extensions</xref> or <xref
-                    href="https://www.postgresql.org/docs/9.6/static/view-pg-available-extension-versions.html"
-                    format="html" scope="external">pg_available_extension_versions</xref> system
-                views.</p>
+            <p>The extensions currently available for loading can be identified from the <i><xref
+                        href="../system_catalogs/pg_available_extensions.xml#topic1"
+                        >pg_available_extensions</xref></i> or <i><xref
+                        href="../system_catalogs/pg_available_extension_versions.xml#topic_sln_wfx_tz"
+                        >pg_available_extension_versions</xref></i> system views.</p>
             <p>Before you use <codeph>CREATE EXTENSION</codeph> to load an extension into a
                 database, the supporting extension files must be installed including an extension
                 control file and at least one least one SQL script file. The support files must be
                 installed in the same location on all Greenplum Database hosts. For information
-                about creating new extensions, see <xref
+                about creating new extensions, see PostgreSQL information about <xref
                     href="https://www.postgresql.org/docs/9.6/static/extend-extensions.html"
                     format="html" scope="external">Packaging Related Objects into an
                     Extension</xref>.</p>
@@ -149,7 +140,9 @@
         </section>
         <section id="section8">
             <title>See Also</title>
-            <p><codeph>ALTER EXTENSION</codeph>, <codeph>DROP EXTENSION</codeph></p>
+            <p><codeph><xref href="ALTER_EXTENSION.xml#topic1">ALTER EXTENSION</xref></codeph>,
+                        <codeph><xref href="DROP_EXTENSION.xml#topic1">DROP
+                    EXTENSION</xref></codeph></p>
         </section>
     </body>
 </topic>
