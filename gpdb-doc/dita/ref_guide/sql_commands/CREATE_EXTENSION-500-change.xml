@@ -9,7 +9,7 @@
                     format="html" scope="external">CREATE EXTENSION -9.6</xref> - Also ported <xref
                     href="https://www.postgresql.org/docs/9.6/static/extend-extensions.html"
                     format="html" scope="external">Section 36.15</xref> in <xref
-                    href="../../admin_guide/1-package-extension-5000-change.xml#topic1"/></p><p>TODO
+                    href="../../admin_guide/1-package-extension-500-change.xml#topic1"/></p><p>TODO
                 Add xrefs to related commands and system table, views</p><p>DONE -- edit,
                 formatting, and postgres -> GPDB</p></draft-comment>
         <p id="sql_command_desc">Registers an extension in a Greenplum database.</p>
