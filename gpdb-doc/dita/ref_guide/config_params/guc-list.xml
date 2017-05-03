@@ -185,9 +185,6 @@
               <xref href="#gp_command_count"/>
             </li>
             <li>
-              <xref href="#gp_connectemc_mode"/>
-            </li>
-            <li>
               <xref href="#gp_connection_send_timeout"/>
             </li>
             <li>
@@ -648,9 +645,6 @@
             </li>
             <li>
               <xref href="#password_hash_algorithm"/>
-            </li>
-            <li>
-              <xref href="#pgcrypto.fips"/>
             </li>
             <li>
               <xref href="#pgstat_track_activity_query_size"/>
@@ -2542,41 +2536,6 @@
               <entry colname="col1">integer &gt; 0</entry>
               <entry colname="col2">1</entry>
               <entry colname="col3">read only</entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="gp_connectemc_mode">
-    <title>gp_connectemc_mode</title>
-    <body>
-      <p>Controls the ConnectEMC event logging and dial-home capabilities of Greenplum Command
-        Center on the EMC Greenplum Data Computing Appliance (DCA). ConnectEMC must be installed in
-        order to generate events. Allowed values are:</p>
-      <p><codeph>on</codeph> (the default) - log events to the <codeph>gpperfmon</codeph> database
-        and send dial-home notifications to Dell EMC Support</p>
-      <p><codeph>off</codeph> - turns off ConnectEMC event logging and dial-home capabilities</p>
-      <p><codeph>local</codeph> - log events to the <codeph>gpperfmon</codeph> database only</p>
-      <p><codeph>remote</codeph> - sends dial-home notifications to Pivotal Support (does not log
-        events to the <codeph>gpperfmon</codeph> database)</p>
-      <table id="gp_connectemc_mode_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">on, off, local, remote</entry>
-              <entry colname="col2">on</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -7279,68 +7238,6 @@
               <entry colname="col1">MD5<p>SHA-256</p><p>SHA-256-FIPS</p></entry>
               <entry colname="col2">MD5</entry>
               <entry colname="col3">master<p>session</p><p>reload</p><p>superuser</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="pgcrypto.fips">
-    <title>pgcrypto.fips</title>
-    <body>
-      <p>Enables support for <cite>Federal Information Processing Standard</cite> (FIPS) 140-2. For
-        information about FIPS, see <xref
-          href="https://www.nist.gov/itl/popular-links/federal-information-processing-standards-fips"
-          format="html" scope="external"
-          >https://www.nist.gov/itl/popular-links/federal-information-processing-standards-fips</xref></p>
-      <p>To enable FIPS 140-2 support for Greenplum Database, the following are required.<ul
-          id="ul_flj_nyl_zp">
-          <li>The Greenplum Database pgcrypto package version 1.2 or later must be installed.</li>
-          <li>If the value of <codeph>pgcrypto.fips</codeph> is set to <codeph>on</codeph>, the
-            value of the parameter <codeph>custom_variable_classes</codeph> must contain
-              <codeph>pgcrypto</codeph>.</li>
-        </ul></p>
-      <p>When FIPS 140-2 support is enabled, these pgcrypto changes occur:<ul id="ul_dmj_nyl_zp">
-          <li>FIPS mode is initialized in the OpenSSL library</li>
-          <li>The functions <cmdname>digest()</cmdname> and <cmdname>hmac()</cmdname> allow only the
-            SHA encryption algorithm (MD5 is not allowed)</li>
-          <li>The functions for crypt and gen_salt algorithms are disabled</li>
-          <li>PGP encryption and decryption functions support only AES and 3DES encryption
-            algorithms (other algorithms such as blowfish are not allowed)</li>
-          <li>RAW encryption and decryption functions support only AES and 3DES (other algorithms
-            such as blowfish are not allowed)</li>
-        </ul></p>
-      <p>These <cmdname>gpconfig</cmdname> commands set the parameters to enable FIPS 140-2
-        support.<codeblock>$ gpconfig -c custom_variable_classes -v pgcrypto --masteronly
-$ gpconfig -c pgcrypto.fips -v on --masteronly</codeblock></p>
-      <p>The value of the <codeph>custom_variable_classes</codeph> parameter is a comma separated
-        list of classes. For more than one class, the list is inclosed in single quotes. To check
-        the value of the parameter use <cmdname>gpconfig</cmdname> with the <cmdname>-s</cmdname>
-        option to show the current
-        value.<codeblock>$ gpconfig -s custom_variable_classes</codeblock></p>
-      <p>If the parameter is already set with custom classes, you can add <codeph>pgcrypto</codeph>.
-        For example, if the value of <codeph>custom_variable_classes</codeph> is
-          <codeph>plr</codeph>, this command adds <codeph>pgcrypto</codeph>.
-        <codeblock>$ gpconfig -c custom_variable_classes -v \'plr,pgcrypto\' --masteronly  
-   --skipvalidation</codeblock></p>
-      <p>In the command, use a backslash (\) to escape the single quotes. </p>
-      <table id="table_dnj_nyl_zp">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>Boolean </entry>
-              <entry colname="col2">off</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
         </tgroup>

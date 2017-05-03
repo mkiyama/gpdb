@@ -1509,7 +1509,7 @@ apr_status_t gpdb_check_partitions(mmon_options_t *opt)
 {
 	// health is not a full table and needs to be added to the list
 
-	apr_status_t r1, r2, r3, r4;
+	apr_status_t r1, r3, r4;
 
 	// open a connection
 	PGconn* conn = NULL;
@@ -1528,8 +1528,6 @@ apr_status_t gpdb_check_partitions(mmon_options_t *opt)
 
 	r1 = check_partition("health", NULL, conn, opt);
 
-	r2 = check_partition("emcconnect", NULL, conn, opt);
-
 	r3 = call_for_each_table_with_opt(check_partition, NULL, conn, opt);
 
 	r4 = check_partition("log_alert", NULL, conn, opt);
@@ -1540,10 +1538,6 @@ apr_status_t gpdb_check_partitions(mmon_options_t *opt)
 	if (r1 != APR_SUCCESS)
 	{
 		return r1;
-	}
-	else if (r2 != APR_SUCCESS)
-	{
-		return r2;
 	}
 	else if (r3 != APR_SUCCESS)
 	{
