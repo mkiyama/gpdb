@@ -874,9 +874,8 @@
     <topic id="topic36" xml:lang="en">
       <title>Greenplum Command Center Agent</title>
       <body>
-        <p>The following parameters configure the data collection agents for Greenplum Command
-          Center.</p>
-        <simpletable id="kh171891" frame="none">
+        <p>The following parameters configure the data collection agents that populate the <codeph>gpperfmon</codeph> database for Greenplum Command Center.</p>
+         <simpletable id="kh171891" frame="none">
           <strow>
             <stentry>
               <p>
@@ -1359,10 +1358,8 @@
             </stentry>
           </strow>
         </simpletable>
-        <note>The Greenplum Database interconnect types TCP and UDP are deprecated. In the next
-          major release, only the UDPIFC interconnect type will be supported by Greenplum Database.
-          The server configuration parameter <xref href="guc-list.xml#gp_interconnect_type"
-            type="section">gp_interconnect_type</xref> controls the interconnect type.</note>
+        <note>Greenplum Database supports only the UDPIFC (default) and TCP interconnect
+          types.</note>
       </body>
     </topic>
     <topic id="topic51" xml:lang="en">
