@@ -358,6 +358,7 @@ int			gp_resqueue_priority_grouping_timeout;
 double		gp_resqueue_priority_cpucores_per_segment;
 char	   *gp_resqueue_priority_default_value;
 bool		gp_debug_resqueue_priority = false;
+double		gp_resource_group_cpu_limit;
 
 /* Perfmon segment GUCs */
 int			gp_perfmon_segment_interval;
@@ -509,6 +510,9 @@ bool		optimizer_enable_partial_index;
 bool		optimizer_enable_dml_triggers;
 bool		optimizer_enable_dml_constraints;
 bool		optimizer_enable_master_only_queries;
+bool		optimizer_enable_hashjoin;
+bool		optimizer_enable_dynamictablescan;
+bool		optimizer_enable_indexscan;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -2785,6 +2789,36 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_enable_hashjoin", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's use of hash join plans."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_hashjoin,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_dynamictablescan", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's use of plans with dynamic table scan."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_dynamictablescan,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_indexscan", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's use of plans with index scan."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_indexscan,
+		true, NULL, NULL
+	},
+
+	{
 		{"optimizer_multilevel_partitioning", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable optimization of queries on multilevel partitioned tables."),
 			NULL,
@@ -4722,6 +4756,15 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&gp_resqueue_priority_cpucores_per_segment,
 		4.0, 0.1, 512.0, NULL, NULL
+	},
+
+	{
+		{"gp_resource_group_cpu_limit", PGC_POSTMASTER, RESOURCES,
+			gettext_noop("Maximum percentage of CPU resources assigned to a cluster."),
+			NULL
+		},
+		&gp_resource_group_cpu_limit,
+		0.9, 0.1, 1.0, NULL, NULL
 	},
 
 	{
