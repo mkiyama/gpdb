@@ -117,7 +117,7 @@ Some configure options are nominally optional, but required to pass
 all regression tests. The minimum set of options for running the
 regression tests successfully is:
 
-`./configure --with-perl --with-python --with-libxml --enable-mapreduce`
+`./configure --with-perl --with-python --with-libxml`
 
 ### Build GPDB with Planner
 
@@ -126,7 +126,7 @@ regression tests successfully is:
 make distclean
 
 # Configure build environment to install at /usr/local/gpdb
-./configure --with-perl --with-python --with-libxml --enable-mapreduce --prefix=/usr/local/gpdb
+./configure --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
 
 # Compile and install
 make
@@ -158,7 +158,7 @@ DATADIRS=/tmp/gpdb-cluster MASTER_PORT=15432 PORT_BASE=25432 make cluster
 The TCP port for the regression test can be changed on the fly:
 
 ```
-PGPORT=15432 make installcheck-good
+PGPORT=15432 make installcheck-world
 ```
 
 
@@ -175,7 +175,7 @@ Next, change your `configure` command to have the additional option `--enable-or
 # Build with perl module (PL/Perl)
 # Build with python module (PL/Python)
 # Build with XML support
-./configure --with-perl --with-python --with-libxml --enable-mapreduce --enable-orca --prefix=/usr/local/gpdb
+./configure --with-perl --with-python --with-libxml --enable-orca --prefix=/usr/local/gpdb
 ```
 
 Once build and started, run `psql` and check the GPOPT (e.g. GPORCA) version:
@@ -197,7 +197,7 @@ your system.
 ```
 # Configure build environment to install at /usr/local/gpdb
 # Enable CODEGEN
-./configure --with-perl --with-python --with-libxml ---enable-mapreduce --enable-codegen --prefix=/usr/local/gpdb --with-codegen-prefix="/path/to/llvm;/path/to/clang"
+./configure --with-perl --with-python --with-libxml --enable-codegen --prefix=/usr/local/gpdb --with-codegen-prefix="/path/to/llvm;/path/to/clang"
 ```
 
 ### Build GPDB with gpperfmon enabled
@@ -215,19 +215,24 @@ gpperfmon is dependent on several libraries like apr, apu, and libsigar
 * The default regression tests
 
 ```
-make installcheck-good
+make installcheck-world
 ```
+
+* The top-level target __installcheck-world__ will run all regression
+  tests in GPDB against the running cluster. For testing individual
+  parts, the respective targets can be run separately.
 
 * The PostgreSQL __check__ target does not work. Setting up a
   Greenplum cluster is more complicated than a single-node PostgreSQL
   installation, and no-one's done the work to have __make check__
   create a cluster. Create a cluster manually or use gpAux/gpdemo/
-  (example below) and run __make installcheck-good__ against
-  that. Patches are welcome!
+  (example below) and run the toplevel __make installcheck-world__
+  against that. Patches are welcome!
 
 * The PostgreSQL __installcheck__ target does not work either, because
   some tests are known to fail with Greenplum. The
-  __installcheck-good__ schedule excludes those tests.
+  __installcheck-good__ schedule in __src/test/regress__ excludes those
+  tests.
 
 * When adding a new test, please add it to one of the GPDB-specific tests,
   in greenplum_schedule, rather than the PostgreSQL tests inherited from the
@@ -244,7 +249,7 @@ image is currently under heavy development.
 A quickstart guide to Docker can be found on the [Pivotal Engineering Journal](http://engineering.pivotal.io/post/docker-gpdb/).
 
 Known issues:
-* The `installcheck-good` make target has at least 4 failures, some of which
+* The `installcheck-world` make target has at least 4 failures, some of which
   are non-deterministic
 
 ### Running regression tests with Docker
@@ -270,11 +275,11 @@ Known issues:
     docker run -it beefc4f3
     ```
 
-1. As `gpadmin` user run `installcheck-good`
+1. As `gpadmin` user run `installcheck-world`
     ```bash
     su gpadmin
     cd /workspace/gpdb
-    make installcheck-good
+    make installcheck-world
     ```
 
 ### Caveats

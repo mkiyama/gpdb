@@ -35,7 +35,6 @@ alter table orca.s add column c int;
 alter table orca.s add column d int;
 insert into orca.s select i, i/2 from generate_series(1,30) i;
 set optimizer_log=on;
-set optimizer=on;
 set optimizer_enable_indexjoin=on;
 set optimizer_trace_fallback = on;
 -- expected fall back to the planner
@@ -2148,7 +2147,6 @@ select 129::bigint, 5623::int, 45::smallint from orca.r;
 (20 rows)
 
 --  distributed tables
-set optimizer=off;
 create table orca.foo (x1 int, x2 int, x3 int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -2157,7 +2155,6 @@ create table orca.bar2 (x1 int, x2 int, x3 int) distributed randomly;
 insert into orca.foo select i,i+1,i+2 from generate_series(1,10) i;
 insert into orca.bar1 select i,i+1,i+2 from generate_series(1,20) i;
 insert into orca.bar2 select i,i+1,i+2 from generate_series(1,30) i;
-set optimizer=on;
 -- produces result node
 select x2 from orca.foo where x1 in (select x2 from orca.bar1);
  x2 
@@ -2389,7 +2386,6 @@ select count(*) from orca.foo x where x.x1 > (select count(*)+1 from orca.bar1 y
      8
 (1 row)
 
-set optimizer=off;
 drop table orca.r cascade;
 create table orca.r(a int, b int) distributed by (a);
 create unique index r_a on orca.r(a);
@@ -2400,7 +2396,6 @@ create table orca.s(c int, d int) distributed by (c);
 insert into orca.s select i%7, i%2 from generate_series(1,30) i;
 analyze orca.r;
 analyze orca.s;
-set optimizer=on;
 select * from orca.r, orca.s where r.a=s.c;
  a | b | c | d 
 ---+---+---+---
@@ -3144,7 +3139,6 @@ select r.* from orca.r, orca.s where s.c=2;
  19 | 1
 (100 rows)
 
-set optimizer=off;
 create table orca.m();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 alter table orca.m add column a int;
@@ -3156,7 +3150,6 @@ alter table orca.m1 add column b int;
 insert into orca.m select i-1, i%2 from generate_series(1,35) i;
 insert into orca.m1 select i-2, i%3 from generate_series(1,25) i;
 insert into orca.r values (null, 1);
-set optimizer=on;
 -- join types
 select r.a, s.c from orca.r left outer join orca.s on(r.a=s.c);
  a  | c 
@@ -3582,9 +3575,7 @@ select * from ((select a as x from orca.r) union (select 1 as x )) as foo order 
    
 (21 rows)
 
-set optimizer=off;
 insert into orca.m values (1,-1), (1,2), (1,1);
-set optimizer=on;
 -- computed columns
 select a,a,a+b from orca.m;
  a  | a  | ?column? 
@@ -4510,7 +4501,6 @@ SELECT a from orca.m UNION ALL select b from orca.m UNION ALL select a+b from or
  35
 (96 rows)
 
-set optimizer=off;
 drop table if exists orca.foo;
 create table orca.foo(a int, b int, c int, d int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -4522,7 +4512,6 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.foo select i, i%2, i%4, i-1 from generate_series(1,40)i;
 insert into orca.bar select i, i%3, i%2 from generate_series(1,30)i;
-set optimizer=on;
 -- distinct operation
 SELECT distinct a, b from orca.foo;
  a  | b 
@@ -6637,15 +6626,12 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
  20 | 2
 (18 rows)
 
-set optimizer=off;
 drop table if exists orca.rcte;
 NOTICE:  table "rcte" does not exist, skipping
 create table orca.rcte(a int, b int, c int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.rcte select i, i%2, i%3 from generate_series(1,40)i;
--- select disable_xform('CXformInlineCTEConsumer');
-set optimizer=on;
 with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  a | b | c | a | b | c 
 ---+---+---+---+---+---
@@ -7910,7 +7896,6 @@ with v as (select a,b from orca.r, orca.s where a=c)  select c from orca.s group
  6
 (7 rows)
 
-set optimizer=off;
 CREATE TABLE orca.onek (
 unique1 int4,
 unique2 int4,
@@ -7938,7 +7923,6 @@ insert into orca.onek values (883,4,1,3,3,3,3,83,83,383,883,6,7,'ZHAAAA','EAAAAA
 insert into orca.onek values (439,5,1,3,9,19,9,39,39,439,439,18,19,'XQAAAA','FAAAAA','HHHHxx');
 insert into orca.onek values (670,6,0,2,0,10,0,70,70,170,670,0,1,'UZAAAA','GAAAAA','OOOOxx');
 insert into orca.onek values (543,7,1,3,3,3,3,43,143,43,543,6,7,'XUAAAA','HAAAAA','VVVVxx');
-set optimizer=on;
 select ten, sum(distinct four) from orca.onek a
 group by ten 
 having exists (select 1 from orca.onek b where sum(distinct a.four) = b.four);
@@ -8334,12 +8318,7 @@ insert into orca.t_employee values('01-06-2012'::date,2,'tag1','(2, ''foo'')'::o
 insert into orca.t_employee values('01-07-2012'::date,1,'tag1','(1, ''foo'')'::orca.employee);
 insert into orca.t_employee values('01-08-2012'::date,2,'tag1','(2, ''foo'')'::orca.employee);
 set optimizer_enable_constant_expression_evaluation=on;
-select disable_xform('CXformDynamicGet2DynamicTableScan');
-                 disable_xform                 
------------------------------------------------
- CXformDynamicGet2DynamicTableScan is disabled
-(1 row)
-
+set optimizer_enable_dynamictablescan = off;
 explain select * from orca.t_employee where user_id = 2;
                                                 QUERY PLAN                                                
 ----------------------------------------------------------------------------------------------------------
@@ -8361,12 +8340,7 @@ select * from orca.t_employee where user_id = 2;
  01-04-2012 |       2 | tag1  | (2," 'foo'")
 (3 rows)
 
-select enable_xform('CXformDynamicGet2DynamicTableScan');
-                 enable_xform                 
-----------------------------------------------
- CXformDynamicGet2DynamicTableScan is enabled
-(1 row)
-
+reset optimizer_enable_dynamictablescan;
 reset optimizer_enable_constant_expression_evaluation;
 reset optimizer_enable_partial_index;
 -- test that constant expression evaluation works with integers
@@ -8862,12 +8836,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp22453 values (1, '2012-01-01'), (2, '2012-01-02'), (3, '2012-12-31');
 create index mpp22453_idx on mpp22453(d);
-select disable_xform('CXformGet2TableScan');
-          disable_xform          
----------------------------------
- CXformGet2TableScan is disabled
-(1 row)
-
+set optimizer_enable_tablescan = off;
 select * from mpp22453 where d > date '2012-01-31' + interval '1 day' ;
  a |     d      
 ---+------------
@@ -8880,12 +8849,7 @@ select * from mpp22453 where d > '2012-02-01';
  3 | 12-31-2012
 (1 row)
 
-select enable_xform('CXformGet2TableScan');
-          enable_xform          
---------------------------------
- CXformGet2TableScan is enabled
-(1 row)
-
+reset optimizer_enable_tablescan;
 -- MPP-22791: SIGSEGV when querying a table with default partition only
 create table mpp22791(a int, b int) partition by range(b) (default partition d);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -9267,12 +9231,7 @@ alter table orca.bm_dyn_test_onepart add partition part5 values(5);
 NOTICE:  CREATE TABLE will create partition "bm_dyn_test_onepart_1_prt_part5" for table "bm_dyn_test_onepart"
 insert into orca.bm_dyn_test_onepart values(2, 5, '2');
 set optimizer_enable_bitmapscan=on;
-select disable_xform('CXformDynamicGet2DynamicTableScan');
-                 disable_xform                 
------------------------------------------------
- CXformDynamicGet2DynamicTableScan is disabled
-(1 row)
-
+set optimizer_enable_dynamictablescan = off;
 -- gather on 1 segment because of direct dispatch
 explain select * from orca.bm_dyn_test_onepart where i=2 and t='2';
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -9313,12 +9272,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
  2 | 5 | 2
 (11 rows)
 
-select enable_xform('CXformDynamicGet2DynamicTableScan');
-                 enable_xform                 
-----------------------------------------------
- CXformDynamicGet2DynamicTableScan is enabled
-(1 row)
-
+reset optimizer_enable_dynamictablescan;
 reset optimizer_enable_bitmapscan;
 -- More BitmapTableScan & BitmapIndexScan tests
 set optimizer_enable_bitmapscan=on;
@@ -9570,18 +9524,7 @@ NOTICE:  CREATE TABLE will create implicit sequence "outer_tab_id_seq" for seria
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm.outer_tab select i % 10, i % 5, i % 2 from generate_series(1, 100) i;
-select disable_xform('CXformInnerJoin2HashJoin');
-            disable_xform             
---------------------------------------
- CXformInnerJoin2HashJoin is disabled
-(1 row)
-
-select disable_xform('CXformLeftSemiJoin2HashJoin');
-              disable_xform              
------------------------------------------
- CXformLeftSemiJoin2HashJoin is disabled
-(1 row)
-
+set optimizer_enable_hashjoin = off;
 select count(1) from bm.outer_tab;
  count 
 -------
@@ -9656,18 +9599,7 @@ NOTICE:  drop cascades to constraint hom_bm_heap_1_prt_part1_check on table bm.h
 NOTICE:  drop cascades to table bm.hom_bm_heap_1_prt_part0
 NOTICE:  drop cascades to constraint hom_bm_heap_1_prt_part0_check on table bm.hom_bm_heap_1_prt_part0
 NOTICE:  drop cascades to table bm.hom_bm_heap
-select enable_xform('CXformInnerJoin2HashJoin');
-            enable_xform             
--------------------------------------
- CXformInnerJoin2HashJoin is enabled
-(1 row)
-
-select enable_xform('CXformLeftSemiJoin2HashJoin');
-              enable_xform              
-----------------------------------------
- CXformLeftSemiJoin2HashJoin is enabled
-(1 row)
-
+reset optimizer_enable_hashjoin;
 reset optimizer_enable_bitmapscan;
 -- End of BitmapTableScan & BitmapIndexScan tests
 set optimizer_enable_constant_expression_evaluation=on;
@@ -9695,6 +9627,7 @@ BEGIN
     SELECT $1 + 1;
 END;
 $$ LANGUAGE plpgsql volatile;
+-- start_ignore
 select disable_xform('CXformInnerJoin2DynamicIndexGetApply');
                   disable_xform                   
 --------------------------------------------------
@@ -9719,6 +9652,7 @@ select disable_xform('CXformInnerJoin2NLJoin');
  CXformInnerJoin2NLJoin is disabled
 (1 row)
 
+-- end_ignore
 set optimizer_enable_partial_index=on;
 set optimizer_enable_indexjoin=on;
 -- force_explain
@@ -9775,6 +9709,7 @@ reset optimizer_segments;
 reset optimizer_enable_constant_expression_evaluation;
 reset optimizer_enable_indexjoin;
 reset optimizer_enable_partial_index;
+-- start_ignore
 select enable_xform('CXformInnerJoin2DynamicIndexGetApply');
                   enable_xform                   
 -------------------------------------------------
@@ -9799,6 +9734,7 @@ select enable_xform('CXformInnerJoin2NLJoin');
  CXformInnerJoin2NLJoin is enabled
 (1 row)
 
+-- end_ignore
 -- MPP-25661: IndexScan crashing for qual with reference to outer tuple
 drop table if exists idxscan_outer;
 NOTICE:  table "idxscan_outer" does not exist, skipping
@@ -9836,18 +9772,7 @@ insert into idxscan_inner values (24, 2, 'yyyy');
 insert into idxscan_inner values (13, 3, 'zzzz');
 analyze idxscan_outer;
 analyze idxscan_inner;
-select disable_xform('CXformInnerJoin2HashJoin');
-            disable_xform             
---------------------------------------
- CXformInnerJoin2HashJoin is disabled
-(1 row)
-
-select disable_xform('CXformLeftSemiJoin2HashJoin');
-              disable_xform              
------------------------------------------
- CXformLeftSemiJoin2HashJoin is disabled
-(1 row)
-
+set optimizer_enable_hashjoin = off;
 explain select id, comment from idxscan_outer as o join idxscan_inner as i on o.id = i.productid
 where ordernum between 10 and 20;
                                                  QUERY PLAN                                                 
@@ -9872,18 +9797,7 @@ where ordernum between 10 and 20;
   3 | zzzz
 (2 rows)
 
-select enable_xform('CXformInnerJoin2HashJoin');
-            enable_xform             
--------------------------------------
- CXformInnerJoin2HashJoin is enabled
-(1 row)
-
-select enable_xform('CXformLeftSemiJoin2HashJoin');
-              enable_xform              
-----------------------------------------
- CXformLeftSemiJoin2HashJoin is enabled
-(1 row)
-
+reset optimizer_enable_hashjoin;
 drop table idxscan_outer;
 drop table idxscan_inner;
 drop table if exists ggg;

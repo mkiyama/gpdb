@@ -6531,7 +6531,7 @@
         well. For more information about limiting concurrent connections, see "Configuring Client
         Authentication" in the <i>Greenplum Database Administrator Guide</i>.</p>
       <p>Increasing this parameter may cause Greenplum Database to request more shared
-        memory.Increasing this parameter might cause Greenplum Database to request more shared
+        memory. Increasing this parameter might cause Greenplum Database to request more shared
         memory. See <xref href="#shared_buffers" format="dita"/> for information about Greenplum
         server instance shared memory buffers.</p>
       <table id="max_connections_table">
@@ -8169,7 +8169,7 @@
           <tbody>
             <row>
               <entry colname="col1">string</entry>
-              <entry colname="col2">8.2.15</entry>
+              <entry colname="col2">8.3.23</entry>
               <entry colname="col3">read only</entry>
             </row>
           </tbody>
@@ -8197,7 +8197,7 @@
           <tbody>
             <row>
               <entry colname="col1">integer</entry>
-              <entry colname="col2">80215</entry>
+              <entry colname="col2">80323</entry>
               <entry colname="col3">read only</entry>
             </row>
           </tbody>

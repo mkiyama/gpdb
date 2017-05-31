@@ -104,7 +104,7 @@ For PDF, the connectivity tools ditamap requires the pdf-note transform -->
               height="306px"/></li>
           <li id="ok156261">For the driver, <b>PostgreSQL Unicode</b> is the recommended choice.
             Unicode (UTF-8) is the default database encoding for Greenplum Database. There is also a
-              <b>PostgeSQL ANSI</b> driver which can handle some multi-byte character sets and LATIN
+              <b>PostgreSQL ANSI</b> driver which can handle some multi-byte character sets and LATIN
             character sets.<image href="images/win_0005.png" placement="break" width="414px"
               height="282px"/></li>
           <li id="ok157005">Fill in the connection information for your database (on the Greenplum
@@ -238,7 +238,7 @@ For PDF, the connectivity tools ditamap requires the pdf-note transform -->
         <body>
           <ul>
             <li id="ok158726">The Kerberos <codeph>kinit</codeph> utility is required on the client
-              machine. he <codeph>kinit.exe</codeph> utility is available with Kerberos for Windows.
+              machine. The <codeph>kinit.exe</codeph> utility is available with Kerberos for Windows.
               Greenplum Database supports Kerberos for Windows version 3.2.2. Kerberos for Windows
               is available from the Kerberos web site <xref href="http://web.mit.edu/kerberos/"
                 scope="external" format="html">http://web.mit.edu/kerberos/</xref>. When you install

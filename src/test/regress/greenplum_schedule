@@ -67,7 +67,7 @@ test: sreh
 # ERROR:  parameter "gp_interconnect_type" cannot be set after connection start
 
 ignore: gp_portal_error
-test: external_table external_table_create_privs column_compression eagerfree mapred gpdtm_plpgsql alter_table_aocs alter_table_aocs2 alter_distribution_policy ic aoco_privileges aocs
+test: external_table external_table_create_privs column_compression eagerfree gpdtm_plpgsql alter_table_aocs alter_table_aocs2 alter_distribution_policy ic aoco_privileges aocs
 test: alter_table_gp alter_table_ao ao_create_alter_valid_table subtransaction_limit oid_consistency udf_exception_blocks
 ignore: icudp_full
 
@@ -98,7 +98,7 @@ test: direct_dispatch bfv_dd bfv_dd_multicolumn bfv_dd_types
 # (https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=e5550d5fec66aa74caad1f79b79826ec64898688)
 test: catalog
 
-test: bfv_catalog bfv_index bfv_olap bfv_aggregate bfv_partition DML_over_joins gp_optimizer bfv_statistic
+test: bfv_catalog bfv_index bfv_olap bfv_aggregate bfv_partition DML_over_joins gporca bfv_statistic
  
 test: aggregate_with_groupingsets 
 
