@@ -610,3 +610,21 @@ create table bar(a int, b int) distributed by (a);
 with CT as (select a from foo except select a from bar)
 select * from foo
 where exists (select 1 from CT where CT.a = foo.a);
+--
+-- Multiple SUBPLAN nodes must not refer to same plan_id
+--
+CREATE TABLE bar_s (c integer, d character varying(10));
+INSERT INTO bar_s VALUES (9,9);
+SELECT * FROM bar_s T1 WHERE c = (SELECT max(c) FROM bar_s T2 WHERE T2.d = T1.d GROUP BY c) AND c < 10;
+CREATE TABLE foo_s (a integer, b integer)  PARTITION BY RANGE(b)
+    (PARTITION sub_one START (1) END (10),
+     PARTITION sub_two START (11) END (22));
+INSERT INTO foo_s VALUES (9,9);
+INSERT INTO foo_s VALUES (2,9);
+SELECT bar_s.c from bar_s, foo_s WHERE foo_s.a=2 AND foo_s.b = (SELECT max(b) FROM foo_s WHERE bar_s.c = 9);
+CREATE TABLE baz_s (i int4);
+INSERT INTO baz_s VALUES (9);
+SELECT bar_s.c FROM bar_s, foo_s WHERE foo_s.b = (SELECT max(i) FROM baz_s WHERE bar_s.c = 9) AND foo_s.b = bar_s.d::int4;
+DROP TABLE bar_s;
+DROP TABLE foo_s;
+DROP TABLE baz_s;
