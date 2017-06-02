@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+  PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="topic1">
+  <title id="af20945">Resource Groups</title>
+  <body>
+    <draft-comment author="msk">Resource groups for 5.x - DRAFT<p>work is being tracked in GPDB MPP
+        Engine <xref href="https://www.pivotaltracker.com/n/projects/784255" format="html"
+          scope="external">tracker project 784255</xref> see label resource
+      group</p></draft-comment>
+    <p><b>working notes on resource groups</b></p>
+    <p id="sql_command_desc">create/alter/drop resource groups to manage queries running in a
+      Greenplum Database system. Similar to GPDB resource queues. </p>
+    <p>There is are default resource groups (the default resource group, ‘default_group’ (oid =
+      6437), would be used for non-superuser, while ‘admin_group’ (oid = 6438) would be used for
+      superuser.)</p>
+    <p>resource groups uses linux cgroups (control groups) for CPU, not memory or I/O <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2346" format="html" scope="external"
+        >gpdb/pull/2346</xref></p>
+    <p>Red Hat <xref
+        href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Resource_Management_Guide/ch01.html"
+        format="html" scope="external">Introduction to Control Groups (Cgroups)</xref></p>
+    <p>==============</p>
+    <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
+        (<xref href="https://github.com/greenplum-db/gpdb/pull/1777/" format="html" scope="external"
+        >gpdb/pull/1777</xref>):</p>
+    <ul id="ul_ecj_pkb_c1b">
+      <li>pg_catalog.pg_resgroup</li>
+      <li>pg_catalog.pg_resgroupcapability</li>
+    </ul>
+    <p>resource group catalog changes are in 5.0 resource group views <xref
+        href="https://github.com/greenplum-db/gpdb/pull/1852" format="html" scope="external"
+        >gpdb/pull/1852</xref></p>
+    <p>
+      <ul id="ul_o43_tfb_c1b">
+        <li>gp_toolkit.gp_resgroup_config provides the resgroup config information;</li>
+        <li>gp_toolkit.gp_resgroup_status provides the resgroup runtime statistics information;</li>
+        <li>added 3 new columns to pg_catalog.pg_stat_activity for resgroup per activity statistics
+          information;<codeblock> rsgid            | oid 
+ rsgname          | text 
+ rsgqueueduration | interval</codeblock></li>
+      </ul>
+    </p>
+    <p>CREATE/DROP RESOUCE GROUP <xref href="https://github.com/greenplum-db/gpdb/pull/1944"
+        format="html" scope="external">gpdb/pull/1944</xref></p>
+    <p>ALTER RESOURCE GROUP SET CONCURRENCY N <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2290" format="html" scope="external"
+        >gpdb/pull/2290</xref></p>
+    <p>CREATE/ALTER ROLE RESOURCE GROUP <xref href="https://github.com/greenplum-db/gpdb/pull/1904"
+        format="html" scope="external">gpdb/pull/1904</xref></p>
+    <p>=============</p>
+    <p>Assign a resource group to a GPDB role</p>
+    <p dir="ltr" id="docs-internal-guid-222e4659-6598-cd6d-71af-20edeb0ccf78">CREATE ROLE name
+      [RESOURCE GROUP {group_name | NONE}] </p>
+    <p dir="ltr">ALTER ROLE name RESOURCE GROUP {group_name | NONE}</p>
+    <p>===============</p>
+    <p>GUC to control the enable of debug printing in resource group <xref
+        href="https://www.pivotaltracker.com/story/show/140906431" format="html" scope="external"
+        >GUC to control the enable of debug printing</xref></p>
+    <p>GUC <codeph>gp_resource_manager</codeph> to switch between resource queue and resource group
+      take effect, a restart of cluster is needed<xref
+        href="https://github.com/greenplum-db/gpdb/pull/1878" format="html" scope="external"
+        >gpdb/pull/1878</xref></p>
+    <p dir="ltr" id="docs-internal-guid-7a459a38-659a-cede-20e6-ef388fb72ac9">We use existing GUC
+      “resource_scheduler” to control the on/off of Resource Manager, and we define a new GUC named
+      “gp_resource_manager” to control the switch between Resource Group and Resource Queue. When
+      it’s set to ‘group’, we check the permission and availabilities of CGroups on all
+      segments.</p>
+    <p>See comments in this story for resource_scheduler and other GUCs <xref
+        href="https://www.pivotaltracker.com/story/show/107415732" format="html" scope="external"
+        >#107415732</xref>
+      <xref href="https://github.com/greenplum-db/gpdb/pull/120" format="html" scope="external"
+        >gpdb/pull/120</xref> (PR not merged)</p>
+    <p>Note: gp_resource_manager is an existing, undocumented GUC. </p>
+    <p>==============</p>
+    <p>Record memory usage for resource group <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2494" format="html" scope="external"
+        >gpdb/pull/2494</xref></p>
+    <p>resource group cpu rate limitation. <xref
+        href="https://github.com/greenplum-db/gpdb/commit/2650f728ee9338158098180cb26b7e31406101a"
+        format="html" scope="external">gpdb/commit/2650f728</xref></p>
+    <p>google doc <xref
+        href="https://docs.google.com/a/pivotal.io/document/d/1eEqjClqmsYroMSa8Lq6NbgX7S-Nr7r7yOLVV25IBg60/edit?usp=sharing_eil&amp;ts=58b64ba5"
+        format="html" scope="external">Resource Group MVP</xref>
+    </p>
+    <p>google doc<xref
+        href="https://docs.google.com/document/d/1fpvFsJxV9bynd1iDASjm72LZciw3vZRY_wQnN6JFvEY/edit"
+        format="html" scope="external">Resource group memory management proposal</xref></p>
+    <p>google sheet resource queue customer requirements <xref
+        href="https://docs.google.com/spreadsheets/d/1txeUw0pgvbK6a20M-ZpAfU31bNBBNdOsrMOfUr6GTqQ/edit#gid=2032570237"
+        format="html" scope="external"> resource queue customer requirements</xref></p>
+    <p>==============</p>
+    <p>doc stories with links</p>
+    <p>doc story Placeholder: GPDB resource groups<xref
+        href="https://www.pivotaltracker.com/story/show/132796483" format="html" scope="external"
+        >#132796483</xref></p>
+    <p>doc story Placeholder: Placeholder: resource queue changes <xref
+        href="https://www.pivotaltracker.com/story/show/115065283" format="html" scope="external"
+        >#115065283</xref></p>
+  </body>
+  <topic id="topic_fhg_j51_c1b">
+    <title>CREATE RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT</draft-comment>
+      <p>Creates a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock>CREATE RESOURCE GROUP name WITH (option [...])
+        where option can be:
+          CPU_RATE_LIMIT cpu_rate_limit [, ...]
+        | MEMORY_LIMIT memory_limit [, ...]
+            | [ MAX_CONCURRENCY concurrency [, ...] ]
+    | [ MEMORY_REDZONE_LIMIT redzone ]</codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB?
+        </draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>CREATE ROLE, ALTER ROLE</p>
+      </section>
+    </body>
+  </topic>
+  <topic id="topic_cvb_x51_c1b">
+    <title>ALTER RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT</draft-comment>
+      <p>Alters a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock>TBD</codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB?
+        </draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>???</p>
+      </section>
+    </body>
+  </topic>
+  <topic id="topic_r4f_x51_c1b">
+    <title>DROP RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT<p>IF EXISTS clause <xref
+            href="https://www.pivotaltracker.com/story/show/146426295" format="html"
+            scope="external">#146426295</xref></p></draft-comment>
+      <p>Drops a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock><b>DROP RESOURCE GROUP [IF EXISTS] &lt;resgroup></b></codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB? <p>Are all
+            anonymous blocks executed as VOLTILE? </p></draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>???</p>
+      </section>
+    </body>
+  </topic>
+</topic>
