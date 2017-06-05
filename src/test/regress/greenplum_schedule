@@ -15,7 +15,7 @@
 #   hitting max_connections limit on segments.
 #
 
-test: gp_metadata variadic_parameters default_parameters function_extensions spi
+test: gp_metadata variadic_parameters default_parameters function_extensions spi gp_xml
 
 test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp notin percentile join_gp union_gp gpcopy gp_create_table
 test: filter gpctas gpdist matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var gp_explain
@@ -68,7 +68,7 @@ test: sreh
 
 ignore: gp_portal_error
 test: external_table external_table_create_privs column_compression eagerfree gpdtm_plpgsql alter_table_aocs alter_table_aocs2 alter_distribution_policy ic aoco_privileges aocs
-test: alter_table_gp alter_table_ao ao_create_alter_valid_table subtransaction_limit oid_consistency udf_exception_blocks
+test: alter_table_gp alter_table_ao ao_create_alter_valid_table subtransaction_visibility oid_consistency udf_exception_blocks
 ignore: icudp_full
 
 test: resource_queue
