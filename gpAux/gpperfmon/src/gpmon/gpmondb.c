@@ -58,7 +58,7 @@ static const bool gpdb_exec_ddl(PGconn* conn, const char* ddl_query)
 	return errmsg == NULL;
 }
 
-
+// creates a connection and then runs the query
 static const char* gpdb_exec(PGconn** pconn, PGresult** pres, const char* query)
 {
 	const char *connstr = "dbname='" GPMON_DB "' user='" GPMON_DBUSER
@@ -66,10 +66,11 @@ static const char* gpdb_exec(PGconn** pconn, PGresult** pres, const char* query)
 	PGconn *conn = NULL;
 
 	conn = PQconnectdb(connstr);
+	// early assignment to pconn guarantees connection available to get freed by the caller
+	*pconn = conn;
+
 	if (PQstatus(conn) != CONNECTION_OK)
 		return PQerrorMessage(conn);
-
-	*pconn = conn;
 
 	return gpdb_exec_only(conn, pres, query);
 }
@@ -903,34 +904,13 @@ static apr_status_t harvest(const char* tbl, apr_pool_t* pool, PGconn* conN)
 {
 	PGconn* conn = 0;
 	PGresult* result = 0;
-	const int QRYBUFSIZ = 1792;
+	const int QRYBUFSIZ = 255;
 	char qrybuf[QRYBUFSIZ];
 	const char* QRYFMT = "insert into %s_history select * from _%s_tail;";
 	const char* errmsg;
 	apr_status_t res = APR_SUCCESS;
 
-	if (strcmp(tbl, "iterators") == 0)
-	{ //this is to leave the cpu percentage out of iterators history
-		const char* ITERQRYFMT = "insert into %s_history (ctime, tmid, ssid, ccnt, segid, pid, nid, pnid, hostname, ntype, nstatus, tstart, "
-		"tduration, pmemsize, pmemmax, memsize, memresid, memshare, cpu_elapsed, cpu_currpct, phase, rows_out, rows_out_est, m0_name, m0_unit, m0_val, "
-		"m0_est, m1_name, m1_unit, m1_val, m1_est, m2_name, m2_unit, m2_val, m2_est, m3_name, m3_unit, m3_val, m3_est, m4_name, m4_unit, "
-		"m4_val, m4_est, m5_name, m5_unit, m5_val, m5_est, m6_name, m6_unit, m6_val, m6_est, m7_name, m7_unit, m7_val, m7_est, m8_name, "
-		"m8_unit, m8_val, m8_est, m9_name, m9_unit, m9_val, m9_est, m10_name, m10_unit, m10_val, m10_est, m11_name, m11_unit, m11_val, "
-		"m11_est, m12_name, m12_unit, m12_val, m12_est, m13_name, m13_unit, m13_val, m13_est, m14_name, m14_unit, m14_val, m14_est, m15_name, "
-		"m15_unit, m15_val, m15_est, t0_name, t0_val) select ctime, tmid, ssid, ccnt, segid, pid, nid, pnid, hostname, ntype, nstatus, tstart, "
-		"tduration, pmemsize, pmemmax, memsize, memresid, memshare, cpu_elapsed, 0, phase, rows_out, rows_out_est, m0_name, m0_unit, m0_val, "
-		"m0_est, m1_name, m1_unit, m1_val, m1_est, m2_name, m2_unit, m2_val, m2_est, m3_name, m3_unit, m3_val, m3_est, m4_name, m4_unit, "
-		"m4_val, m4_est, m5_name, m5_unit, m5_val, m5_est, m6_name, m6_unit, m6_val, m6_est, m7_name, m7_unit, m7_val, m7_est, m8_name, "
-		"m8_unit, m8_val, m8_est, m9_name, m9_unit, m9_val, m9_est, m10_name, m10_unit, m10_val, m10_est, m11_name, m11_unit, m11_val, "
-		"m11_est, m12_name, m12_unit, m12_val, m12_est, m13_name, m13_unit, m13_val, m13_est, m14_name, m14_unit, m14_val, m14_est, "
-		"m15_name, m15_unit, m15_val, m15_est, t0_name, t0_val from _%s_tail;";
-
-		snprintf(qrybuf, QRYBUFSIZ, ITERQRYFMT, tbl, tbl);
-	}
-	else
-	{
-		snprintf(qrybuf, QRYBUFSIZ, QRYFMT, tbl, tbl);
-	}
+	snprintf(qrybuf, QRYBUFSIZ, QRYFMT, tbl, tbl);
 
 	errmsg = gpdb_exec(&conn, &result, qrybuf);
 	if (errmsg)
@@ -1067,7 +1047,7 @@ apr_status_t call_for_each_table(eachtablefunc, apr_pool_t*, PGconn*);
 apr_status_t call_for_each_table_with_opt(eachtablefuncwithopt, apr_pool_t*, PGconn*, mmon_options_t*);
 
 
-char* all_tables[] = { "system", "queries", "iterators", "database", "segment", "diskspace" };
+char* all_tables[] = { "system", "queries", "database", "segment", "diskspace" };
 
 apr_status_t call_for_each_table(eachtablefunc func, apr_pool_t* pool, PGconn* conn)
 {
@@ -1313,35 +1293,34 @@ void gpdb_import_alert_log(apr_pool_t *pool)
 /* insert _tail data into history table */
 apr_status_t gpdb_check_partitions(mmon_options_t *opt)
 {
-	apr_status_t r3, r4;
+	apr_status_t result;
 
-	// open a connection
-	PGconn* conn = NULL;
+	PGconn *conn = NULL;
 	conn = PQconnectdb(GPDB_CONNECTION_STRING);
 
-	if (PQstatus(conn) != CONNECTION_OK)
-	{
+	if (PQstatus(conn) != CONNECTION_OK) {
 		gpmon_warning(
-			FLINE,
-			"error creating GPDB client connection to dynamically "
-			"check/create gpperfmon partitions: %s",
-		PQerrorMessage(conn));
+				FLINE,
+				"error creating GPDB client connection to dynamically "
+						"check/create gpperfmon partitions: %s",
+				PQerrorMessage(conn));
+		result = APR_EINVAL;
+	} else {
+		result = call_for_each_table_with_opt(check_partition, NULL, conn, opt);
 
-		return APR_EINVAL;
+		// make sure to run check_partition even if we just got a failure from the previous call
+		apr_status_t temp_result;
+		temp_result = check_partition("log_alert", NULL, conn, opt);
+
+		// use the first error that occurred, if any
+		if (result == APR_SUCCESS) {
+			result = temp_result;
+		}
 	}
-
-	r3 = call_for_each_table_with_opt(check_partition, NULL, conn, opt);
-
-	r4 = check_partition("log_alert", NULL, conn, opt);
 
 	// close connection
 	PQfinish(conn);
-
-	if (r3 != APR_SUCCESS)
-	{
-		return r3;
-	}
-	return r4;
+	return result;
 }
 
 static void convert_tuples_to_hash(PGresult *result, apr_hash_t *hash, apr_pool_t *pool)

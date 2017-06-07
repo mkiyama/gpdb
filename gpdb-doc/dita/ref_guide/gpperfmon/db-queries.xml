@@ -139,9 +139,8 @@
                         primary segments in the database system.</p>
                      <p>Note that the value is logged as 0 if the query runtime
                         is shorter than the value for the quantum. This occurs even if the query
-                        runtime is greater than the values for <codeph>min_query_time</codeph> and
-                           <codeph>min_detailed_query</codeph>, and these values are lower than the
-                        value for the quantum.</p>
+                        runtime is greater than the value for <codeph>min_query_time</codeph>,
+                        and this value is lower than the value for the quantum.</p>
                   </entry>
                </row>
                <row>
@@ -165,7 +164,7 @@
                      <p>Displays the amount of processing skew in the system for this query.
                         Processing/CPU skew occurs when one segment performs a disproportionate
                         amount of processing for a query. This value is the coefficient of variation
-                        in the CPU% metric of all iterators across all segments for this query,
+                        in the CPU% metric across all segments for this query,
                         multiplied by 100. For example, a value of .95 is shown as 95.</p>
                   </entry>
                </row>
@@ -176,8 +175,8 @@
                   <entry>float</entry>
                   <entry>Displays the amount of row skew in the system. Row skew occurs when one
                      segment produces a disproportionate number of rows for a query. This value is
-                     the coefficient of variation for the <codeph>rows_in</codeph> metric of all
-                     iterators across all segments for this query, multiplied by 100. For example, a
+                     the coefficient of variation for the <codeph>rows_in</codeph> metric 
+                     across all segments for this query, multiplied by 100. For example, a
                      value of .95 is shown as 95.</entry>
                </row>
                <row>

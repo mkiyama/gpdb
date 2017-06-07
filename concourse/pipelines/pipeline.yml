@@ -16,9 +16,9 @@ resources:
 - name: gpdb_src_binary_swap
   type: git
   source:
-    branch: {{gpdb-binary_swap-git-tag}}
+    branch: {{gpdb-binary-swap-git-tag}}
     private_key: {{gpdb-git-key}}
-    uri: {{gpdb-git-remote}}
+    uri: {{gpdb-binary-swap-git-remote}}
     ignore_paths:
     - gpdb-doc/*
     - README*
@@ -551,6 +551,25 @@ jobs:
       BLDWRAP_POSTGRES_CONF_ADDONS: "fsync=off"
       TEST_OS: sles
 
+- name: icw_planner_ictcp_centos6
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      passed: [compile_gpdb_centos6]
+    - get: bin_gpdb
+      resource: bin_gpdb_centos6
+      passed: [compile_gpdb_centos6]
+      trigger: true
+    - get: centos-gpdb-dev-6
+  - task: ic_gpdb
+    file: gpdb_src/concourse/tasks/ic_gpdb.yml
+    image: centos-gpdb-dev-6
+    params:
+        MAKE_TEST_COMMAND: PGOPTIONS='-c gp_interconnect_type=tcp -c optimizer=off' installcheck-world
+      BLDWRAP_POSTGRES_CONF_ADDONS: "fsync=off"
+      TEST_OS: centos
+
+
 - name: MU_check_centos
   plan:
   - aggregate:
@@ -566,26 +585,6 @@ jobs:
     image: centos-gpdb-dev-6
     params:
       TEST_OS: centos
-
-- name: regression_tests_resource_group
-  plan:
-  - aggregate:
-    - get: gpdb_src
-      passed: [compile_gpdb_centos6]
-    - get: bin_gpdb
-      resource: bin_gpdb_centos6
-      passed: [compile_gpdb_centos6]
-      trigger: true
-    - get: centos-gpdb-dev-6
-  - task: ic_gpdb_resgroup
-    file: gpdb_src/concourse/tasks/ic_gpdb_resgroup.yml
-    privileged: true
-    image: centos-gpdb-dev-6
-    params:
-      MAKE_TEST_COMMAND: PGOPTIONS='-c optimizer=off -c codegen=off' installcheck-resgroup
-      BLDWRAP_POSTGRES_CONF_ADDONS: "fsync=off"
-      TEST_OS: centos
-
 
 - name: regression_tests_gpcloud_centos
   plan:
@@ -626,6 +625,28 @@ jobs:
     params:
       BEHAVE_TAGS: gpperfmon
       BLDWRAP_POSTGRES_CONF_ADDONS: ""
+
+- name: MM_gpcheck
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      params:
+        submodules:
+        - gpMgmt/bin/pythonSrc/ext
+      passed: [compile_gpdb_centos6]
+    - get: bin_gpdb
+      resource: bin_gpdb_centos6
+      passed: [compile_gpdb_centos6]
+      trigger: true
+    - get: centos-gpdb-dev-6
+  - aggregate:
+    - task: gpcheck_as_gpadmin
+      file: gpdb_src/concourse/tasks/behave_gpdb.yml
+      image: centos-gpdb-dev-6
+      params:
+        BEHAVE_TAGS: gpcheck_as_gpadmin
+        BLDWRAP_POSTGRES_CONF_ADDONS: ""
+        GPCHECK_SETUP: true
 
 - name: MM_pt-rebuild
   plan:

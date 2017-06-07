@@ -127,8 +127,7 @@ typedef struct mmon_options_t
 	int max_fd; /* this is the max fd value we ever seen */
 	int v;
 	int q;
-	int m;
-	int d;
+	int min_query_time;
 	int qamode;
 	int harvest_interval;
 	apr_uint64_t tail_buffer_max;
@@ -137,9 +136,7 @@ typedef struct mmon_options_t
 	int error_disk_space_percentage;
 	time_t disk_space_interval; // interval in seconds
 	unsigned int max_disk_space_messages_per_interval;
-	int iterator_aggregate;
-	int partition_age;  		// in month 
-	bool ignore_qexec_packet;
+	int partition_age;  		// in month
 } mmon_options_t;
 
 typedef struct addressinfo_holder_t addressinfo_holder_t;
@@ -206,14 +203,11 @@ typedef struct qexec_packet_data_t
 	apr_uint64_t 		rowsout;
 	apr_uint64_t		_cpu_elapsed; /* CPU elapsed for iter */
 	apr_uint64_t 		measures_rows_in;
-	apr_uint16_t		size_of_line; //the size of the string plus the null terminator
 } qexec_packet_data_t;
 
 typedef struct qexec_packet_t
 {
 	qexec_packet_data_t data;
-	char* 				line;
-
 } qexec_packet_t;
 
 typedef struct gp_smon_to_mmon_header_t {
@@ -246,11 +240,6 @@ double subtractTimeOfDay(struct timeval* begin, struct timeval* end);
 /* Set header*/
 extern void gp_smon_to_mmon_set_header(gp_smon_to_mmon_packet_t* pkt, apr_int16_t pkttype);
 
-unsigned int gpdb_getnode_number_metrics(PerfmonNodeType type);
-const char* gpdb_getnodename(PerfmonNodeType type);
-const char* gpdb_getnodestatus(PerfmonNodeStatus status);
-apr_status_t gpdb_getnode_metricinfo(PerfmonNodeType type, apr_byte_t metricnum, const char** name, const char** unit);
-apr_status_t gpdb_debug_string_lookup_table(void);
 apr_status_t apr_pool_create_alloc(apr_pool_t ** newpool, apr_pool_t *parent);
 void gpdb_get_single_string_from_query(const char* QUERY, char** resultstring, apr_pool_t* pool);
 #endif /* GPMONLIB_H */
