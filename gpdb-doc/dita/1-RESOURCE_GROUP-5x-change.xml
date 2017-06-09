@@ -9,6 +9,7 @@
           scope="external">tracker project 784255</xref> see label resource
       group</p></draft-comment>
     <p><b>working notes on resource groups</b></p>
+    <p/>
     <p id="sql_command_desc">create/alter/drop resource groups to manage queries running in a
       Greenplum Database system. Similar to GPDB resource queues. </p>
     <p>There is are default resource groups (the default resource group, ‘default_group’ (oid =
@@ -17,9 +18,16 @@
     <p>resource groups uses linux cgroups (control groups) for CPU, not memory or I/O <xref
         href="https://github.com/greenplum-db/gpdb/pull/2346" format="html" scope="external"
         >gpdb/pull/2346</xref></p>
+    <p>cgroups support hierarchy (nesting) - is this a GPDB feature? Any additional OS requirements
+      or folder permissions?</p>
     <p>Red Hat <xref
         href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Resource_Management_Guide/ch01.html"
         format="html" scope="external">Introduction to Control Groups (Cgroups)</xref></p>
+    <p>How resource group handles memory limit decrease <xref
+        href="https://www.pivotaltracker.com/story/show/140217165" format="html" scope="external"
+        >140217165</xref></p>
+    <p><b>Other features</b></p>
+    <p/>
     <p>==============</p>
     <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
         (<xref href="https://github.com/greenplum-db/gpdb/pull/1777/" format="html" scope="external"
@@ -54,6 +62,9 @@
       [RESOURCE GROUP {group_name | NONE}] </p>
     <p dir="ltr">ALTER ROLE name RESOURCE GROUP {group_name | NONE}</p>
     <p>===============</p>
+    <p>GUC set memory_spill_limit for a resource group <xref
+        href="https://www.pivotaltracker.com/story/show/146606405" format="html" scope="external"
+        >146606405</xref></p>
     <p>GUC to control the enable of debug printing in resource group <xref
         href="https://www.pivotaltracker.com/story/show/140906431" format="html" scope="external"
         >GUC to control the enable of debug printing</xref></p>
@@ -71,7 +82,7 @@
         >#107415732</xref>
       <xref href="https://github.com/greenplum-db/gpdb/pull/120" format="html" scope="external"
         >gpdb/pull/120</xref> (PR not merged)</p>
-    <p>Note: gp_resource_manager is an existing, undocumented GUC. </p>
+    <p><b>Note:</b> gp_resource_manager is an existing, undocumented GUC. </p>
     <p>==============</p>
     <p>Record memory usage for resource group <xref
         href="https://github.com/greenplum-db/gpdb/pull/2494" format="html" scope="external"
