@@ -411,6 +411,9 @@ static apr_status_t agg_put_qexec(agg_t* agg, const qexec_packet_t* qexec_packet
 	}
 	else {
 		/* not found, make new hash entry */
+		if (! (mmon_qexec_existing = apr_palloc(agg->pool, sizeof(mmon_qexec_t))))
+			return APR_ENOMEM;		
+
 		memcpy(&mmon_qexec_existing->key, &qexec_packet->data.key, sizeof(gpmon_qexeckey_t));
 		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
 		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
@@ -638,7 +641,6 @@ apr_status_t agg_dump(agg_t* agg)
 	apr_hash_index_t *hi;
 	bloom_t bloom;
 	char nowstr[GPMON_DATE_BUF_SIZE];
-	int e = 0;
 	FILE* fp_queries_now = 0;
 	FILE* fp_queries_tail = 0;
 
@@ -687,10 +689,7 @@ apr_status_t agg_dump(agg_t* agg)
 	incremement_tail_bytes(temp_bytes_written);
 
 	if (! (fp_queries_tail = fopen(GPMON_DIR "queries_tail.dat", "a")))
-	{
-		e = APR_FROM_OS_ERROR(errno);
-		goto bail;
-	}
+		return APR_FROM_OS_ERROR(errno);
 
 	/* loop through queries */
 	for (hi = apr_hash_first(0, agg->qtab); hi; hi = apr_hash_next(hi))
@@ -740,10 +739,7 @@ apr_status_t agg_dump(agg_t* agg)
 	incremement_tail_bytes(temp_bytes_written);
 
 	if (! (fp_queries_now = fopen(GPMON_DIR "_queries_now.dat", "w")))
-	{
-		e = APR_FROM_OS_ERROR(errno);
-		goto bail;
-	}
+		return APR_FROM_OS_ERROR(errno);
 
 	for (hi = apr_hash_first(0, agg->qtab); hi; hi = apr_hash_next(hi))
 	{
@@ -788,11 +784,6 @@ apr_status_t agg_dump(agg_t* agg)
 	delete_old_files(&bloom);
 
 	return 0;
-
-	bail:
-	if (fp_queries_now) fclose(fp_queries_now);
-	if (fp_queries_tail) fclose(fp_queries_tail);
-	return e;
 }
 
 extern int gpmmon_quantum(void);
