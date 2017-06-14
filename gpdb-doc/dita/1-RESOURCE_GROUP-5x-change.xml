@@ -26,8 +26,14 @@
     <p>How resource group handles memory limit decrease <xref
         href="https://www.pivotaltracker.com/story/show/140217165" format="html" scope="external"
         >140217165</xref></p>
+    <p>google doc <xref
+        href="https://docs.google.com/document/d/1H2K96u2KUA_TiveWby-dl57TsNIdskhdwMXaL53yUKY/edit?ts=5930d1ba"
+        format="html" scope="external">Copy of Resource Queue Notes/Stories</xref></p>
     <p><b>Other features</b></p>
-    <p/>
+    <p>Set memory_spill_limit GUC for resource group <xref
+        href="https://www.pivotaltracker.com/story/show/146606405" format="html" scope="external"
+        >146606405</xref>
+    </p>
     <p>==============</p>
     <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
         (<xref href="https://github.com/greenplum-db/gpdb/pull/1777/" format="html" scope="external"
@@ -54,6 +60,11 @@
     <p>ALTER RESOURCE GROUP SET CONCURRENCY N <xref
         href="https://github.com/greenplum-db/gpdb/pull/2290" format="html" scope="external"
         >gpdb/pull/2290</xref></p>
+    <p>ALTER RESOURCE GROUP SET CPU_RATE_LIMIT syntax. <xref
+        href="https://www.pivotaltracker.com/story/show/143112591" format="html" scope="external"
+        >#143112591</xref>
+      <xref href="https://github.com/greenplum-db/gpdb/pull/2591" format="html" scope="external"
+        >gpdb/pull/2591</xref></p>
     <p>CREATE/ALTER ROLE RESOURCE GROUP <xref href="https://github.com/greenplum-db/gpdb/pull/1904"
         format="html" scope="external">gpdb/pull/1904</xref></p>
     <p>=============</p>
