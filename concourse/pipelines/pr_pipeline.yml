@@ -14,21 +14,18 @@ resources:
     source:
       repo: greenplum-db/gpdb
       access_token: {{gpdb-git-access-token}}
-      private_key: {{gpdb-git-key}}
 
   - name: centos-gpdb-dev-6
     type: docker-image
     source:
       repository: pivotaldata/centos-gpdb-dev
       tag: '6-gcc6.2-llvm3.7'
-      username: {{docker_username}}
-      password: {{docker_password}}
 
   - name: gpaddon_src
     type: git
     source:
       branch: {{gpaddon-git-branch}}
-      private_key: {{gpdb-git-key}}
+      private_key: {{gpaddon-git-key}}
       uri: {{gpaddon-git-remote}}
 
 jobs:
