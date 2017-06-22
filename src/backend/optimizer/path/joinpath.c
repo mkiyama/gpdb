@@ -562,6 +562,10 @@ match_unsorted_outer(PlannerInfo *root,
 		if (useallclauses && list_length(mergeclauses) != list_length(mergeclause_list))
 			continue;
 
+		/* The merge join executor code doesn't support LASJ_NOTIN */
+		if (jointype == JOIN_LASJ_NOTIN)
+			continue;
+
 		/* Compute the required ordering of the inner path */
 		innersortkeys = make_inner_pathkeys_for_merge(root,
 													  mergeclauses,
@@ -756,6 +760,17 @@ hashclauses_for_join(List *restrictlist,
 		if (!restrictinfo->can_join ||
 			restrictinfo->hashjoinoperator == InvalidOid)
 			continue;			/* not hashjoinable */
+
+		/*
+		 * A qual like "(a = b) IS NOT FALSE" is treated as hashable in
+		 * check_hashjoinable(), for the benefit of LASJ joins. It will be
+		 * hashed like "a = b", but the special LASJ handlng in the hash join
+		 * executor node will ensure that NULLs are treated correctly. For
+		 * other kinds of joins, we cannot use "(a = b) IS NOT FALSE" as a
+		 * hash qual.
+		 */
+		if (jointype != JOIN_LASJ_NOTIN && IsA(restrictinfo->clause, BooleanTest))
+			continue;
 
 		/*
 		 * If processing an outer join, only use its own join clauses for
