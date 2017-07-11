@@ -47,45 +47,33 @@
                <p>
                   <codeph>gp_enable_agg_distinct</codeph>
                </p>
-            </stentry>
-            <stentry>
                <p>
                   <codeph>gp_enable_agg_distinct_pruning</codeph>
                </p>
-               <p>
-                  <codeph>gp_enable_direct_dispatch</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_fallback_plan</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_fast_sri</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_groupext_distinct_ gather</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_groupext_distinct_ pruning</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_multiphase_agg</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_predicate_ propagation</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_preunique</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_sequential_window_ plans</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_sort_distinct</codeph>
-               </p>
-               <p>
-                  <codeph>gp_enable_sort_limit</codeph>
-               </p>
             </stentry>
+            <stentry><p>
+                  <codeph>gp_enable_direct_dispatch</codeph>
+               </p><p>
+                  <codeph>gp_enable_fallback_plan</codeph>
+               </p><p>
+                  <codeph>gp_enable_fast_sri</codeph>
+               </p><p>
+                  <codeph>gp_enable_groupext_distinct_ gather</codeph>
+               </p><p>
+                  <codeph>gp_enable_groupext_distinct_ pruning</codeph>
+               </p><p>
+                  <codeph>gp_enable_multiphase_agg</codeph>
+               </p><p>
+                  <codeph>gp_enable_predicate_ propagation</codeph>
+               </p><p>
+                  <codeph>gp_enable_preunique</codeph>
+               </p><codeph>gp_enable_relsize_collection</codeph><p>
+                  <codeph>gp_enable_sequential_window_ plans</codeph>
+               </p><p>
+                  <codeph>gp_enable_sort_distinct</codeph>
+               </p><p>
+                  <codeph>gp_enable_sort_limit</codeph>
+               </p><p><codeph>gp_inline_simple_cte</codeph></p></stentry>
          </strow>
       </simpletable>
    </body>
