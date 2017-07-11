@@ -9,15 +9,27 @@
           scope="external">tracker project 784255</xref> see label resource
       group</p></draft-comment>
     <p><b>working notes on resource groups</b></p>
-    <p/>
+    <p>With current design and implementation, we ask admin to manually create gpdb cgroup
+      directories and grant gpadmin write permission.</p>
+    <p>This has a big problem when the cluster is restarted. Once it is restarted, the parent
+      directory /sys/fs/cgroup/ will reset and all previous directories and permission are gone.
+      Admin has to recreate them before start gpdb. see <xref
+        href="https://www.pivotaltracker.com/story/show/147491519" format="html" scope="external"
+        >147491519</xref></p>
     <p id="sql_command_desc">create/alter/drop resource groups to manage queries running in a
       Greenplum Database system. Similar to GPDB resource queues. </p>
-    <p>There is are default resource groups (the default resource group, ‘default_group’ (oid =
-      6437), would be used for non-superuser, while ‘admin_group’ (oid = 6438) would be used for
+    <p>There is are default resource groups (the default resource group, 'default_group' (oid =
+      6437), would be used for non-superuser, while 'admin_group' (oid = 6438) would be used for
       superuser.)</p>
     <p>resource groups uses linux cgroups (control groups) for CPU, not memory or I/O <xref
         href="https://github.com/greenplum-db/gpdb/pull/2346" format="html" scope="external"
         >gpdb/pull/2346</xref></p>
+    <p>resouce groups might require OS services, utilities <xref
+        href="https://www.pivotaltracker.com/story/show/147491519/comments/175409585" format="html"
+        scope="external">147491519/comments/175409585</xref></p>
+    <p>Redhat 6 is using cgconfig service while Redhat 7 is using cgroup tools. <xref
+        href="https://www.pivotaltracker.com/story/show/147491519/comments/175488239" format="html"
+        scope="external">147491519/comments/175488239</xref></p>
     <p>cgroups support hierarchy (nesting) - is this a GPDB feature? Any additional OS requirements
       or folder permissions?</p>
     <p>Red Hat <xref
@@ -30,10 +42,35 @@
         href="https://docs.google.com/document/d/1H2K96u2KUA_TiveWby-dl57TsNIdskhdwMXaL53yUKY/edit?ts=5930d1ba"
         format="html" scope="external">Copy of Resource Queue Notes/Stories</xref></p>
     <p><b>Other features</b></p>
+    <p>additional catalog changes possibly in 5.0.0 -- <xref
+        href="https://www.pivotaltracker.com/story/show/147729923" format="html" scope="external"
+        >#147729923</xref> doc story - see comment <xref
+        href="https://www.pivotaltracker.com/story/show/147727513" format="html" scope="external"
+        >#147727513</xref></p>
+    <p>==============</p>
     <p>Set memory_spill_limit GUC for resource group <xref
         href="https://www.pivotaltracker.com/story/show/146606405" format="html" scope="external"
         >146606405</xref>
     </p>
+    <p>==============</p>
+    <p>Resgroup memory limit. <xref
+        href="https://www.pivotaltracker.com/story/show/140216027/comments/170504597" format="html"
+        scope="external">170504597</xref>
+      <xref href="https://github.com/greenplum-db/gpdb/pull/2669" format="html" scope="external"
+        >gpdb/pull/2669</xref></p>
+    <p>In a resgroup we divide the memory into several slots, the number depends on the concurrency
+      setting in the resgroup. Each slot has a reserved quota of memory, all the slots also share
+      some shared memory which can be acquired preemptively.</p>
+    <p>Some GUCs and resgroup options are defined to adjust the exact allocation policy:</p>
+    <p>resgroup options:</p>
+    <ul id="ul_egd_q3w_h1b">
+      <li>memory_shared_quota</li>
+      <li>memory_spill_ratio INT</li>
+    </ul>
+    <p>GUC</p>
+    <ul id="ul_fgd_q3w_h1b">
+      <li>gp_resource_group_memory_limit</li>
+    </ul>
     <p>==============</p>
     <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
         (<xref href="https://github.com/greenplum-db/gpdb/pull/1777/" format="html" scope="external"
