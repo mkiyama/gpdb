@@ -148,7 +148,7 @@
             <codeblock>[gpssh]
 delaybeforesend = 0.05
 prompt_validation_timeout = 1.0
-sync_retry = 5</codeblock>
+sync_retries = 5</codeblock>
             <p>These are the <codeph>gpssh.conf</codeph> parameters.</p>
             <parml>
                 <plentry>
@@ -168,7 +168,7 @@ sync_retry = 5</codeblock>
                             <codeph>-t</codeph> option overrides this parameter.</pd>
                 </plentry>
                 <plentry>
-                    <pt>sync_retry = <varname>attempts</varname></pt>
+                    <pt>sync_retries = <varname>attempts</varname></pt>
                     <pd>A non-negative integer that specifies the maximum number of times that
                             <codeph>gpssh</codeph> attempts to connect to a remote Greenplum
                         Database host. The default is 3. If the value is 0, <codeph>gpssh</codeph>
