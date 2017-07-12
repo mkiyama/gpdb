@@ -266,9 +266,10 @@
     <topic id="topic19" xml:lang="en">
       <title>Cost-Based Vacuum Delay Parameters</title>
       <body>
-        <note type="warning">Do not use cost-based vacuum delay because it runs asynchronously among
-          the segment instances. The vacuum cost limit and delay is invoked at the segment level
-          without taking into account the state of the entire Greenplum Database array</note>
+        <note type="warning">Do not use cost-based vacuum delay because it runs
+          asynchronously among the segment instances. The vacuum cost limit and delay is invoked at
+          the segment level without taking into account the state of the entire Greenplum Database
+          array</note>
         <p>You can configure the execution cost of <codeph>VACUUM</codeph> and
             <codeph>ANALYZE</codeph> commands to reduce the I/O impact on concurrent database
           activity. When the accumulated cost of I/O operations reaches the limit, the process
@@ -388,36 +389,51 @@
           plan types.</p>
         <simpletable id="kh158625" frame="none">
           <strow>
-            <stentry><p>
+            <stentry>
+              <p>
                 <xref href="guc-list.xml#enable_bitmapscan" type="section">enable_bitmapscan</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_groupagg" type="section">enable_groupagg</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_hashagg" type="section">enable_hashagg</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_hashjoin" type="section">enable_hashjoin</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_indexscan" type="section">enable_indexscan</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_mergejoin" type="section">enable_mergejoin</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_nestloop" type="section">enable_nestloop</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_seqscan" type="section">enable_seqscan</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_sort" type="section">enable_sort</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#enable_tidscan" type="section">enable_tidscan</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#gp_enable_adaptive_nestloop" type="section"
                   >gp_enable_adaptive_nestloop</xref>
-              </p><p>
+              </p>
+              <p>
                 <xref href="guc-list.xml#gp_enable_agg_distinct" type="section"
                   >gp_enable_agg_distinct</xref>
-              </p><xref href="guc-list.xml#gp_enable_agg_distinct_pruning" type="section"
-                >gp_enable_agg_distinct_pruning</xref>
+              </p>
             </stentry>
             <stentry>
+              <p>
+                <xref href="guc-list.xml#gp_enable_agg_distinct_pruning" type="section"
+                  >gp_enable_agg_distinct_pruning</xref>
+              </p>
               <p>
                 <xref href="guc-list.xml#gp_enable_direct_dispatch" type="section"
                   >gp_enable_direct_dispatch</xref>
@@ -464,7 +480,6 @@
                 <xref href="guc-list.xml#gp_enable_sort_limit" type="section"
                   >gp_enable_sort_limit</xref>
               </p>
-              <p><xref href="guc-list.xml#gp_inline_simple_cte">gp_inline_simple_cte</xref></p>
             </stentry>
           </strow>
         </simpletable>
@@ -1188,7 +1203,7 @@
           </stentry>
           <stentry>
             <p>
-              <xref href="guc-list.xml#gp_initial_bad_row_limit" type="section"
+              <xref href="guc-list.xml#topic_lvm_ttc_3p" type="section"
                 >gp_initial_bad_row_limit</xref>
             </p>
             <p>
