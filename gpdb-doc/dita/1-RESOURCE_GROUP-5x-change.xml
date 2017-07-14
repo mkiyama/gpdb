@@ -70,6 +70,9 @@
     <p>GUC</p>
     <ul id="ul_fgd_q3w_h1b">
       <li>gp_resource_group_memory_limit</li>
+      <li>gp_resource_group_cg_path - specify cgroup path <xref
+          href="https://www.pivotaltracker.com/story/show/148819531" format="html" scope="external"
+          >#148819531</xref></li>
     </ul>
     <p>==============</p>
     <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
