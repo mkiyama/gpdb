@@ -539,8 +539,16 @@ CTranslatorDXLToPlStmt::MapLocationsFdist
 
 	if (ulLocations > ulParticipatingSegments)
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtExternalScanError,
-				GPOS_WSZ_LIT("There are more external files (URLs) than primary segments that can read them"));
+		// This should match the same error in createplan.c
+		char msgbuf[200];
+
+		snprintf(msgbuf, sizeof(msgbuf),
+				 "There are more external files (URLs) than primary segments that can read them. Found %d URLs and %d primary segments.",
+				 ulLocations, ulParticipatingSegments);
+
+		RaiseGpdbError(ERRCODE_INVALID_TABLE_DEFINITION, // errcode
+					   msgbuf, // errmsg
+					   NULL);  // errhint
 	}
 
 	BOOL fDone = false;
@@ -4355,9 +4363,11 @@ CTranslatorDXLToPlStmt::PplanDML
 		gpdb::GPDBFree(plTargetListDML);
 		plTargetListDML = plTargetListWithDroppedCols;
 	}
-	
-	// add ctid, action and oid columns to target list
-	pdml->oidColIdx = UlAddTargetEntryForColId(&plTargetListDML, &dxltrctxChild, pdxlop->UlOid(), true /*fResjunk*/);
+
+	// Extract column numbers of the action and ctid columns from the
+	// target list. ORCA also includes a third similar column for
+	// partition Oid to the target list, but we don't use it for anything
+	// in GPDB.
 	pdml->actionColIdx = UlAddTargetEntryForColId(&plTargetListDML, &dxltrctxChild, pdxlop->UlAction(), true /*fResjunk*/);
 	pdml->ctidColIdx = UlAddTargetEntryForColId(&plTargetListDML, &dxltrctxChild, pdxlop->UlCtid(), true /*fResjunk*/);
 	if (pdxlop->FPreserveOids())
@@ -4370,7 +4380,6 @@ CTranslatorDXLToPlStmt::PplanDML
 	}
 
 	GPOS_ASSERT(0 != pdml->actionColIdx);
-	GPOS_ASSERT(0 != pdml->oidColIdx);
 
 	pplan->targetlist = plTargetListDML;
 	
