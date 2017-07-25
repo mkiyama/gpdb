@@ -24,12 +24,6 @@
     <p>resource groups uses linux cgroups (control groups) for CPU, not memory or I/O <xref
         href="https://github.com/greenplum-db/gpdb/pull/2346" format="html" scope="external"
         >gpdb/pull/2346</xref></p>
-    <p>resouce groups might require OS services, utilities <xref
-        href="https://www.pivotaltracker.com/story/show/147491519/comments/175409585" format="html"
-        scope="external">147491519/comments/175409585</xref></p>
-    <p>Redhat 6 is using cgconfig service while Redhat 7 is using cgroup tools. <xref
-        href="https://www.pivotaltracker.com/story/show/147491519/comments/175488239" format="html"
-        scope="external">147491519/comments/175488239</xref></p>
     <p>cgroups support hierarchy (nesting) - is this a GPDB feature? Any additional OS requirements
       or folder permissions?</p>
     <p>Red Hat <xref
@@ -41,6 +35,20 @@
     <p>google doc <xref
         href="https://docs.google.com/document/d/1H2K96u2KUA_TiveWby-dl57TsNIdskhdwMXaL53yUKY/edit?ts=5930d1ba"
         format="html" scope="external">Copy of Resource Queue Notes/Stories</xref></p>
+    <p><b>OS issues</b></p>
+    <p>resource groups might require OS services, utilities <xref
+        href="https://www.pivotaltracker.com/story/show/147491519/comments/175409585" format="html"
+        scope="external">147491519/comments/175409585</xref></p>
+    <p>Possible OS limitation <xref
+        href="https://www.pivotaltracker.com/story/show/148119917/comments/176665255" format="html"
+        scope="external">#148119917/comments/176665255</xref></p>
+    <p>Redhat 6 is using cgconfig service while Redhat 7 is using cgroup tools. <xref
+        href="https://www.pivotaltracker.com/story/show/147491519/comments/175488239" format="html"
+        scope="external">147491519/comments/175488239</xref></p>
+    <p>Detect cgroup mount point at runtime (non-default location) <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2790" format="html" scope="external"
+        >gpdb/pull/2790</xref></p>
+    <p>===========</p>
     <p><b>Other features</b></p>
     <p>additional catalog changes possibly in 5.0.0 -- <xref
         href="https://www.pivotaltracker.com/story/show/147729923" format="html" scope="external"
@@ -66,13 +74,22 @@
     <ul id="ul_egd_q3w_h1b">
       <li>memory_shared_quota</li>
       <li>memory_spill_ratio INT</li>
+      <li>memory_spill_policy is this in? gp_resmanager_memory_policy?</li>
     </ul>
     <p>GUC</p>
+    <p>changes to GUC names? <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2773/files#diff-1d31a8ab20708b2458a6e6a22da59f4a"
+        format="html" scope="external">guc_gp.c</xref> in this PR <xref
+        href="https://github.com/greenplum-db/gpdb/pull/2773" format="html" scope="external"
+        >gpdb/pull/2773</xref></p>
     <ul id="ul_fgd_q3w_h1b">
       <li>gp_resource_group_memory_limit</li>
       <li>gp_resource_group_cg_path - specify cgroup path <xref
           href="https://www.pivotaltracker.com/story/show/148819531" format="html" scope="external"
           >#148819531</xref></li>
+      <li>gp_resmanager_memory_policy - <xref href="https://github.com/greenplum-db/gpdb/pull/2773"
+          format="html" scope="external">gpdb/pull/2773</xref> Sets the policy for memory allocation
+        of queries Valid values are NONE, AUTO, EAGER_FREE. </li>
     </ul>
     <p>==============</p>
     <p dir="ltr" id="docs-internal-guid-239a84ea-659f-073c-7e75-33e441f1e122"> two catalog tables
@@ -95,6 +112,15 @@
  rsgqueueduration | interval</codeblock></li>
       </ul>
     </p>
+    <p>Information in GPDB issue <xref
+        href="https://github.com/greenplum-db/gpdb/issues/2798#issuecomment-316261802" format="html"
+        scope="external">gpdb/issues/2798</xref>
+      <ul id="ul_mly_zmm_p1b">
+        <li>gp_toolkiot.gp_resqueue_status, gp_rsq_activity views. "stats_queue_level" is turned
+          on</li>
+        <li>resource queue do have memory usage for a resource queue named 'rsqmemoryvalue' in
+          gp_toolkit.gp_resqueue_status</li>
+      </ul></p>
     <p>CREATE/DROP RESOUCE GROUP <xref href="https://github.com/greenplum-db/gpdb/pull/1944"
         format="html" scope="external">gpdb/pull/1944</xref></p>
     <p>ALTER RESOURCE GROUP SET CONCURRENCY N <xref
