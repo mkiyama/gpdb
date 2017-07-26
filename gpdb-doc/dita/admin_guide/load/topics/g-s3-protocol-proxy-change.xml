@@ -241,18 +241,18 @@ s3://s3-us-west-2.amazonaws.com/test1/abcdefff</codeblock>
             segment to download a file from the S3 location. In contrast, if the location contained
             only 1 or 2 files, only 1 or 2 segments download data.</p>
       </section>
-      <section id="s3_serversideencrypt">
-         <title>s3 Protocol AWS Server-Side Encryption Support</title>
-         <p>Greenplum Database supports server-side encryption using Amazon S3-managed keys (SSE-S3)
-            for AWS S3 files you access with readable and writable external tables created using the
-               <codeph>s3</codeph> protocol. SSE-S3 encrypts your object data as it writes to disk,
-            and transparently decrypts the data for you when you access it. </p><note>The
-               <codeph>s3</codeph> protocol supports SSE-S3 only for Amazon Web Services S3 files.
-            SS3-SE is not supported when accessing files in S3 compatible services. </note><p> Your
-            S3 <codeph>accessid</codeph> and <codeph>secret</codeph> permissions govern your access
-            to all S3 bucket objects, whether the data is encrypted or not. However, you must
-            configure your client to use S3-managed keys for accessing encrypted data. </p><p>Refer
-            to <xref href="http://docs.aws.amazon.com/AmazonS3/latest/dev/serv-side-encryption.html"
+      <section id="s3_serversideencrypt"><title>s3 Protocol AWS Server-Side Encryption
+            Support</title><p>Greenplum Database supports server-side encryption using Amazon
+            S3-managed keys (SSE-S3) for AWS S3 files you access with readable and writable external
+            tables created using the <codeph>s3</codeph> protocol. SSE-S3 encrypts your object data
+            as it writes to disk, and transparently decrypts the data for you when you access it.
+            </p><note>The <codeph>s3</codeph> protocol supports SSE-S3 only for Amazon Web Services
+            S3 files. SS3-SE is not supported when accessing files in S3 compatible services.
+            </note><p> Your S3 <codeph>accessid</codeph> and <codeph>secret</codeph> permissions
+            govern your access to all S3 bucket objects, whether the data is encrypted or not.
+            However, you must configure your client to use S3-managed keys for accessing encrypted
+            data. </p><p>Refer to <xref
+               href="http://docs.aws.amazon.com/AmazonS3/latest/dev/serv-side-encryption.html"
                format="html" scope="external">Protecting Data Using Server-Side Encryption</xref> in
             the AWS documentation for additional information about AWS Server-Side Encryption. </p><sectiondiv>
             <p><b>Configuring S3 Server-Side Encryption</b></p>
@@ -280,23 +280,30 @@ s3://s3-us-west-2.amazonaws.com/test1/abcdefff</codeblock>
                   format="html" scope="external">Protecting Data Using Server-Side Encryption with
                   Amazon S3-Managed Encryption Keys (SSE-S3)</xref> AWS documentation.</p>
          </sectiondiv></section>
-      <draft-comment author="msk">5.0.0 DRAFT - proxy setting.</draft-comment>
-      <section>
+      <section id="s3_proxy">
          <title>s3 Protocol Proxy Support </title>
-         <p>You can specify a proxy that S3 uses. You can specify a proxy with the S3 protocol
-            configuration parameter <codeph>proxy</codeph> or an environment variable. Greenplum
-            Database uses the environment variable the curl environment proxy setting if there is no
-            'proxy' in s3.conf file or 'proxy' is set to empty. Detail curl proxy description is
-            here <xref href="https://curl.haxx.se/libcurl/c/CURLOPT_PROXY.html" format="html"
-               scope="external">https://curl.haxx.se/libcurl/c/CURLOPT_PROXY.html</xref>.</p>
-         <p>libcurl respects the proxy environment variables named http_proxy, ftp_proxy, sftp_proxy
-            etc. If set, libcurl will use the specified proxy for that URL scheme. So for a "FTP://"
-            URL, the ftp_proxy is considered. all_proxy is used if no protocol specific proxy was
-            set. </p>
-         <p/>
+         <draft-comment author="msk">5.0.0 DRAFT - proxy setting. </draft-comment>
+         <p>You can specify a URL that is the proxy that S3 uses to connect to a data source. S3
+            supports these protocols: HTTP, HTTPS, and SOCKS (4, 4a, 5, 5h).</p>
+         <p>You can specify a proxy with the S3 protocol configuration parameter
+               <codeph>proxy</codeph> or an environment variable. If the configuration parameter is
+            set the environment variables are ignored. </p>
+         <p>If you specify proxy with an environment variable, you set the environment variable a
+            based on the protocol: <codeph>http_proxy</codeph>, <codeph>https_proxy</codeph>,
+               <codeph>socks_proxy</codeph>. S3 also supports these environment variables.<ul
+               id="ul_cy3_km2_r1b">
+               <li><codeph>all_proxy</codeph> specifies the proxy URL that is used if an environment
+                  variable for specific protocol is not set. </li>
+               <li><codeph>no_proxy</codeph> specifies a list of host names that do not use a proxy
+                  even if an environment variable.</li>
+            </ul></p>
+         <p>The environment variables must be set must be accessible to Greenplum Database on all
+            Greenplum Database hosts.</p>
+         <p>For information about the configuration parameter <codeph>proxy</codeph>, see <xref
+               href="#amazon-emr/s3_config_file" format="dita"/></p>
       </section>
       <section id="s3_config_param">
-         <title>About the S3 Protocol config Parameter</title>
+         <title>About the s3 Protocol config Parameter</title>
          <!--conref in CREATE EXTERNAL TABLE-->
          <p>The optional <codeph>config</codeph> parameter specifies the location of the required
                <codeph>s3</codeph> protocol configuration file. The file contains Amazon Web
@@ -419,29 +426,19 @@ chunksize = 67108864</codeblock></p>
                </plentry>
                <plentry>
                   <pt>proxy</pt>
-                  <pd>
-                     <draft-comment author="msk">Q: can multiple proxy's be set. FPT, HTTP
-                        ...</draft-comment>
-                     <p>Specify a URL that is used as the proxy to connect to a data source. The
-                        default is no URL, no proxy. This is the format for the
-                        parameter.<codeblock>proxy = <varname>protocol</varname>://[<varname>user</varname>:<varname>password</varname>@]<varname>proxyhost</varname>[:<varname>port</varname>]</codeblock></p>
-                  </pd>
-                  <pd>The utility supports these protocols: http, https, and socks (4, 4a, 5,
-                     5h).</pd>
-                  <pd>
-                     <p>If this configuration is not set, Greenplum Database uses the environment
-                        variable the curl environment proxy setting if there is no 'proxy' in
-                        s3.conf file or 'proxy' is set to empty. Detail curl proxy description is
-                        here <xref href="https://curl.haxx.se/libcurl/c/CURLOPT_PROXY.html"
-                           format="html" scope="external"
-                           >https://curl.haxx.se/libcurl/c/CURLOPT_PROXY.html</xref>.</p>
-                     <p>libcurl respects the proxy environment variables named http_proxy,
-                        ftp_proxy, sftp_proxy etc. If set, libcurl will use the specified proxy for
-                        that URL scheme. So for a "FTP://" URL, the ftp_proxy is considered.
-                        all_proxy is used if no protocol specific proxy was set. </p>
-                     <p>If customer want to use the environment for proxy, he need to change the
-                        environment for all segments.</p>
-                  </pd>
+                  <pd><draft-comment author="msk"><b>Q:</b> can multiple proxy's be set. Different
+                        proxy for HTTP, SOCKS?</draft-comment>specify a URL that is the proxy that
+                     S3 uses to connect to a data source. S3 supports these protocols: HTTP, HTTPS,
+                     and SOCKS (4, 4a, 5, 5h). The default is no proxy, connect directly to the data
+                     source. This is the format for the
+                     parameter.<codeblock>proxy = <varname>protocol</varname>://[<varname>user</varname>:<varname>password</varname>@]<varname>proxyhost</varname>[:<varname>port</varname>]</codeblock></pd>
+                  <pd>If this parameter is not set or is an empty string (<codeph>""</codeph>), S3
+                     uses the proxy specified by the environment variable
+                        <codeph>http_proxy</codeph>, <codeph>https_proxy</codeph>, or
+                        <codeph>socks_proxy</codeph>. The environment variable that S3 uses depends
+                     on the protocol. For information about the environment variables, see <xref
+                        href="../../../admin_guide/load/topics/g-s3-protocol-proxy-change.xml#amazon-emr/s3_proxy"
+                        format="dita" scope="peer">s3 Protocol Proxy Support</xref>.</pd>
                </plentry>
                <plentry>
                   <pt>server_side_encryption</pt>
