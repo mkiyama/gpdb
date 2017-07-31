@@ -282,20 +282,22 @@ s3://s3-us-west-2.amazonaws.com/test1/abcdefff</codeblock>
          </sectiondiv></section>
       <section id="s3_proxy">
          <title>s3 Protocol Proxy Support </title>
-         <draft-comment author="msk">5.0.0 DRAFT - proxy setting. </draft-comment>
+         <draft-comment author="msk">5.0.0 DRAFT - proxy setting. <p><b>Q:</b> What happens if
+               config file proxy = "": are environment variables ignored?</p><p><b>Q:</b> For
+               no_proxy, do you have an example of mutliple hosts?</p></draft-comment>
          <p>You can specify a URL that is the proxy that S3 uses to connect to a data source. S3
             supports these protocols: HTTP, HTTPS, and SOCKS (4, 4a, 5, 5h).</p>
          <p>You can specify a proxy with the S3 protocol configuration parameter
                <codeph>proxy</codeph> or an environment variable. If the configuration parameter is
-            set the environment variables are ignored. </p>
-         <p>If you specify proxy with an environment variable, you set the environment variable a
-            based on the protocol: <codeph>http_proxy</codeph>, <codeph>https_proxy</codeph>,
+            set, the environment variables are ignored. </p>
+         <p>To specify proxy with an environment variable, you set the environment variable a based
+            on the protocol: <codeph>http_proxy</codeph>, <codeph>https_proxy</codeph>,
                <codeph>socks_proxy</codeph>. S3 also supports these environment variables.<ul
                id="ul_cy3_km2_r1b">
                <li><codeph>all_proxy</codeph> specifies the proxy URL that is used if an environment
-                  variable for specific protocol is not set. </li>
-               <li><codeph>no_proxy</codeph> specifies a list of host names that do not use a proxy
-                  even if an environment variable.</li>
+                  variable for a specific protocol is not set. </li>
+               <li><codeph>no_proxy</codeph> specifies a comma-separated list of hosts names that do
+                  not use a proxy. even if an environment variable is set.</li>
             </ul></p>
          <p>The environment variables must be set must be accessible to Greenplum Database on all
             Greenplum Database hosts.</p>
