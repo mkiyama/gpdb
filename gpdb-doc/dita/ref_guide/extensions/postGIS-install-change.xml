@@ -123,7 +123,8 @@
             <codeph>install/postgis_comments.sql</codeph>, and
             <codeph>install/raster_comments.sql</codeph>.</p>
         <p dir="ltr">The postGIS package installation adds these lines to the
-            <codeph>greenplum_path.sh</codeph> file for PostGIS Raster support. </p>
+            <codeph>greenplum_path.sh</codeph> file for PostGIS Raster support on the master and
+          segment hosts. </p>
         <codeblock>export GDAL_DATA=$GPHOME/share/gdal
 export POSTGIS_ENABLE_OUTDB_RASTERS=0
 export POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL</codeblock>
@@ -398,8 +399,8 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL</codeblock>
           <codeblock>gppkg -r postgis-ossv2.1.5_pv2.1_gpdb5.0</codeblock></p>
         <p>Restart Greenplum Database after removing the package.</p>
         <codeblock>gpstop -r</codeblock>
-        <p dir="ltr">Ensure that these lines for PostGIS Raster support are removed from the
-            <codeph>greenplum_path.sh</codeph> file.</p>
+        <p>Ensure that these lines for PostGIS Raster support are removed from the
+            <codeph>greenplum_path.sh</codeph> file on the master and segment hosts.</p>
         <codeblock>export GDAL_DATA=$GPHOME/share/gdal
 export POSTGIS_ENABLE_OUTDB_RASTERS=0
 export POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL</codeblock>

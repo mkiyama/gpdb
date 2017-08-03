@@ -939,10 +939,10 @@ GROUP BY sub_part
       <p>For some queries, using <codeph>UNION</codeph> instead of <codeph>UNION ALL</codeph> can
         ensure that the recursive part of the query eventually returns no tuples by discarding rows
         that duplicate previous output rows. However, often a cycle does not involve output rows
-        that are completely duplicate: it might be necessary to check just one or a few fields to
-        see if the same point has been reached before. The standard method for handling such
-        situations is to compute an array of the visited values. For example, consider the following
-        query that searches a table graph using a link field:</p>
+        that are complete duplicates: it might sufficient to check just one or a few fields to see
+        if the same point has been reached before. The standard method for handling such situations
+        is to compute an array of the visited values. For example, consider the following query that
+        searches a table graph using a link field:</p>
       <codeblock>WITH RECURSIVE search_graph(id, link, data, depth) AS (
         SELECT g.id, g.link, g.data, 1
         FROM graph g
@@ -992,9 +992,9 @@ SELECT * FROM search_graph;
 )
 SELECT * FROM search_graph;
 </codeblock>
-      <note type="tip">Omit the <codeph>ROW()</codeph> syntax in the common case where only one
-        field needs to be checked to recognize a cycle. This allows a simple array rather than a
-        composite-type array to be used, gaining efficiency.</note>
+      <note type="tip">Omit the <codeph>ROW()</codeph> syntax in the case where only one field needs
+        to be checked to recognize a cycle. This uses a simple array rather than a composite-type
+        array to be used, gaining efficiency.</note>
       <note type="tip">The recursive query evaluation algorithm produces its output in breadth-first
         search order. You can display the results in depth-first search order by making the outer
         query <codeph>ORDER BY</codeph> a path column constructed in this way.</note>

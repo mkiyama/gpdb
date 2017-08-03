@@ -67,6 +67,11 @@
         status file for SQL execution errors and displays a warning if an error is found. The
         default location of the backup status files are in the
             <codeph>db_dumps/<varname>date</varname>/</codeph> directory.</p>
+      <p>If you specify an option that includes or excludes tables or schemas, such as
+          <codeph>-t</codeph>, <codeph>-T</codeph>, <codeph>-s</codeph>, or <codeph>-S</codeph>, the
+        schema qualified names of the tables that are backed up are listed in the file
+            <codeph>gp_dump_<varname>timestamp</varname>_table</codeph>. The file is stored in the
+        backup directory of the master segment. </p>
       <p><codeph>gpcrondump</codeph> allows you to schedule routine backups of a Greenplum database
         using <codeph>cron</codeph> (a scheduling utility for UNIX operating systems). Cron jobs
         that call <codeph>gpcrondump</codeph> should be scheduled on the master host.</p>
@@ -97,8 +102,9 @@
       <p><codeblock><varname>prefix_</varname>gp_dump_<varname>content</varname>_<varname>dbid</varname>_<varname>timestamp</varname></codeblock>The
           <codeph>content</codeph> and <codeph>dbid</codeph> are identifiers for the Greenplum
         Database segment instances that are assigned by Greenplum Database. For information about
-        the identifiers, see the Greenplum Database system catalog table <i>gp_id</i> in the
-          <cite>Greenplum Database Reference Guide</cite>. </p>
+        the identifiers, see the Greenplum Database system catalog table
+          <i>gp_segment_configuration</i> in the <cite>Greenplum Database Reference Guide</cite>.
+      </p>
     </section>
     <section id="ddboost"><b>Using Data Domain Boost</b><p>The <codeph>gpcrondump</codeph> utility
         is used to schedule Data Domain Boost (DD Boost) backup operations. The utility is also used
