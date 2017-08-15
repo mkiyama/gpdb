@@ -24,6 +24,10 @@
 #include <signal.h>
 #include <unistd.h>
 
+#ifdef __linux__
+#include <mntent.h>
+#endif
+
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -80,10 +84,12 @@ char	   *inputdir = ".";
 char	   *outputdir = ".";
 char	   *psqldir = PGBINDIR;
 bool 		optimizer_enabled = false;
+bool 		resgroup_enabled = false;
 static _stringlist *loadlanguage = NULL;
 static int	max_connections = 0;
 static char *encoding = NULL;
 static _stringlist *schedulelist = NULL;
+static _stringlist *exclude_tests = NULL;
 static _stringlist *extra_tests = NULL;
 static char *temp_install = NULL;
 static char *temp_config = NULL;
@@ -97,6 +103,7 @@ static char *srcdir = NULL;
 static _stringlist *extraroles = NULL;
 static char *initfile = NULL;
 static char *aodir = NULL;
+static char *resgroupdir = NULL;
 
 /* internal variables */
 static const char *progname;
@@ -122,6 +129,8 @@ static void drop_database_if_exists(const char *dbname);
 static int
 run_diff(const char *cmd, const char *filename);
 
+static bool should_exclude_test(char *test);
+
 static void
 header(const char *fmt,...)
 /* This extension allows gcc to check the format string for consistency with
@@ -144,6 +153,8 @@ typedef BOOL (WINAPI * __CreateRestrictedToken) (HANDLE, DWORD, DWORD, PSID_AND_
 /* Windows API define missing from MingW headers */
 #define DISABLE_MAX_PRIVILEGE	0x1
 #endif
+
+static bool detectCgroupMountPoint(char *cgdir, int len);
 
 /*
  * allow core files if possible.
@@ -417,11 +428,51 @@ typedef struct replacements
 	char *dlsuffix;
 	char *bindir;
 	char *orientation;
+	char *cgroup_mnt_point;
 } replacements;
+
+/* Internal helper function to detect cgroup mount point at runtime.*/
+static bool
+detectCgroupMountPoint(char *cgdir, int len)
+{
+#ifdef __linux__
+	struct mntent *me;
+	FILE *fp;
+	bool ret = false;
+
+	fp = setmntent("/proc/self/mounts", "r");
+	if (fp == NULL)
+		return ret;
+
+	while ((me = getmntent(fp)))
+	{
+		char *p;
+
+		if (strcmp(me->mnt_type, "cgroup"))
+			continue;
+
+		strncpy(cgdir, me->mnt_dir, len);
+
+		p = strrchr(cgdir, '/');
+		if (p != NULL)
+		{
+			*p = 0;
+			ret = true;
+		}
+		break;
+	}
+
+	endmntent(fp);
+	return ret;
+#else
+	return false;
+#endif
+}
 
 static void
 convert_line(char *line, replacements *repls)
 {
+	replace_string(line, "@cgroup_mnt_point@", repls->cgroup_mnt_point);
 	replace_string(line, "@abs_srcdir@", repls->abs_srcdir);
 	replace_string(line, "@abs_builddir@", repls->abs_builddir);
 	replace_string(line, "@testtablespace@", repls->testtablespace);
@@ -584,13 +635,14 @@ generate_uao_sourcefiles(char *src_dir, char *dest_dir, char *suffix, replacemen
  * in the "dest" directory, replacing the ".source" prefix in their names with
  * the given suffix.
  */
-static void
+static int
 convert_sourcefiles_in(char *source, char * dest_dir, char *dest, char *suffix)
 {
 	char		abs_srcdir[MAXPGPATH];
 	char		abs_builddir[MAXPGPATH];
 	char		testtablespace[MAXPGPATH];
 	char		indir[MAXPGPATH];
+	char		cgroup_mnt_point[MAXPGPATH];
 	replacements repls;
 	struct stat st;
 	int			ret;
@@ -628,7 +680,7 @@ convert_sourcefiles_in(char *source, char * dest_dir, char *dest, char *suffix)
 		 * No warning, to avoid noise in tests that do not have
 		 * these directories; for example, ecpg, contrib and src/pl.
 		 */
-		return;
+		return count;
 	}
 
 	names = pgfnames(indir);
@@ -674,12 +726,18 @@ convert_sourcefiles_in(char *source, char * dest_dir, char *dest, char *suffix)
 	make_directory(testtablespace);
 #endif
 
+	memset(cgroup_mnt_point, 0, sizeof(cgroup_mnt_point));
+	if (!detectCgroupMountPoint(cgroup_mnt_point,
+								sizeof(cgroup_mnt_point) - 1))
+		strcpy(cgroup_mnt_point, "/sys/fs/cgroup");
+
 	memset(&repls, 0, sizeof(repls));
 	repls.abs_srcdir = abs_srcdir;
 	repls.abs_builddir = abs_builddir;
 	repls.testtablespace = testtablespace;
 	repls.dlsuffix = DLSUFFIX;
 	repls.bindir = bindir;
+	repls.cgroup_mnt_point = cgroup_mnt_point;
 
 	/* finally loop on each file and do the replacement */
 	for (name = names; *name; name++)
@@ -692,12 +750,22 @@ convert_sourcefiles_in(char *source, char * dest_dir, char *dest, char *suffix)
 		char		line[1024];
 		bool		has_tokens = false;
 
+
 		if (aodir && strncmp(*name, aodir, strlen(aodir)) == 0 &&
 			(strlen(*name) < 8 || strcmp(*name + strlen(*name) - 7, ".source") != 0))
 		{
 			snprintf(srcfile, MAXPGPATH, "%s/%s",  indir, *name);
 			snprintf(destfile, MAXPGPATH, "%s/%s/%s", dest_dir, dest, *name);
 			count += generate_uao_sourcefiles(srcfile, destfile, suffix, &repls);
+			continue;
+		}
+
+		if (resgroupdir && strncmp(*name, resgroupdir, strlen(resgroupdir)) == 0 &&
+			(strlen(*name) < 8 || strcmp(*name + strlen(*name) - 7, ".source") != 0))
+		{
+			snprintf(srcfile, MAXPGPATH, "%s/%s", source, *name);
+			snprintf(destfile, MAXPGPATH, "%s/%s/%s", dest_dir, dest, *name);
+			count += convert_sourcefiles_in(srcfile, dest_dir, destfile, suffix);
 			continue;
 		}
 
@@ -770,6 +838,8 @@ convert_sourcefiles_in(char *source, char * dest_dir, char *dest, char *suffix)
 	}
 
 	pgfnames_cleanup(names);
+
+	return count;
 }
 
 /* Create the .sql, .out and .yml files from the .source files, if any */
@@ -1823,10 +1893,24 @@ run_schedule(const char *schedule, test_function tfunc)
 							schedule, line_num);
 					exit_nicely(2);
 				}
+
+				if (num_tests - 1 >= 0 && should_exclude_test(tests[num_tests - 1]))
+					num_tests--;
+
 				tests[num_tests] = c;
 				num_tests++;
 				inword = true;
 			}
+		}
+
+		/* The last test in the line needs to be checked for exclusion */
+		if (num_tests - 1 >= 0 && should_exclude_test(tests[num_tests - 1]))
+		{
+			num_tests--;
+
+			/* All tests in this line are to be excluded, so go to the next line */
+			if (num_tests == 0)
+				continue;
 		}
 
 		if (num_tests == 0)
@@ -2218,17 +2302,35 @@ trim_white_space(char *str)
 }
 
 /*
+ * Should the test be excluded from running
+ */
+static bool
+should_exclude_test(char *test)
+{
+	_stringlist *sl;
+	for (sl = exclude_tests; sl != NULL; sl = sl->next)
+	{
+		if (strcmp(test, sl->str) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+/*
  * @brief Check whether a feature (i.e., optimizer or codegen) is on or off.
  * If the input feature is optimizer, then set the global
  * variable "optimizer_enabled" accordingly.
  *
  * @param feature_name Name of the feature to be checked (i.e., optimizer or codegen)
+ * @param feature_value Expected value when the feature is enabled (i.e., on or group)
  * @param on_msg Message to be printed when the feature is enabled
  * @param off_msg Message to be printed when the feature is disabled
  * @return true if the feature is enabled; false otherwise
  */
 static bool
-check_feature_status(const char *feature_name, const char *on_msg, const char *off_msg)
+check_feature_status(const char *feature_name, const char *feature_value,
+					 const char *on_msg, const char *off_msg)
 {
 	char psql_cmd[MAXPGPATH];
 	char statusfilename[MAXPGPATH];
@@ -2264,19 +2366,16 @@ check_feature_status(const char *feature_name, const char *on_msg, const char *o
 	while (fgets(line, sizeof(line), statusfile))
 	{
 		char *trimmed = trim_white_space(line);
-		if (strncmp(trimmed, "on", 2) == 0)
+		if (strcmp(trimmed, feature_value) == 0)
 		{
 			status(_("%s"), on_msg);
 			isEnabled = true;
 			break;
 		}
-
-		if (strncmp(trimmed, "off", 3) == 0)
-		{
-			status(_("%s"), off_msg);
-			break;
-		}
 	}
+	if (!isEnabled)
+		status(_("%s"), off_msg);
+
 	status_end();
 	fclose(statusfile);
 	unlink(statusfilename);
@@ -2303,11 +2402,13 @@ help(void)
 	printf(_("  --outputdir=DIR           place output files in DIR (default \".\")\n"));
 	printf(_("  --schedule=FILE           use test ordering schedule from FILE\n"));
 	printf(_("                            (can be used multiple times to concatenate)\n"));
+	printf(_("  --exclude-tests=TEST      command or space delimited tests to exclude from running\n"));
 	printf(_("  --srcdir=DIR              absolute path to source directory (for VPATH builds)\n"));
 	printf(_("  --temp-install=DIR        create a temporary installation in DIR\n"));
     printf(_(" --init-file=GPD_INIT_FILE  init file to be used for gpdiff\n"));
 	printf(_("  --ao-dir=DIR              directory name prefix containing generic\n"));
 	printf(_("                            UAO row and column tests\n"));
+	printf(_("  --resgroup-dir=DIR        directory name prefix containing resgroup tests\n"));
 	printf(_("\n"));
 	printf(_("Options for \"temp-install\" mode:\n"));
 	printf(_("  --no-locale               use C locale\n"));
@@ -2360,6 +2461,8 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
 		{"temp-config", required_argument, NULL, 19},
         {"init-file", required_argument, NULL, 20},
         {"ao-dir", required_argument, NULL, 21},
+        {"resgroup-dir", required_argument, NULL, 22},
+        {"exclude-tests", required_argument, NULL, 23},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -2463,6 +2566,12 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
                 break;
             case 21:
                 aodir = strdup(optarg);
+                break;
+            case 22:
+                resgroupdir = strdup(optarg);
+                break;
+            case 23:
+                split_to_stringlist(strdup(optarg), ", ", &exclude_tests);
                 break;
 			default:
 				/* getopt_long already emitted a complaint */
@@ -2678,14 +2787,21 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
 	/*
 	 * Find out if optimizer is on or off
 	 */
-	optimizer_enabled = check_feature_status("optimizer",
+	optimizer_enabled = check_feature_status("optimizer", "on",
 			"Optimizer enabled. Using optimizer answer files whenever possible",
 			"Optimizer disabled. Using planner answer files");
 
 	/*
+	 * Find out if gp_resource_manager is group or not
+	 */
+	resgroup_enabled = check_feature_status("gp_resource_manager", "group",
+			"Resource group enabled. Using resource group answer files whenever possible",
+			"Resource group disabled. Using default answer files");
+
+	/*
 	 * Find out if codegen is on or off
 	 */
-	check_feature_status("codegen", "Codegen enabled", "Codegen disabled");
+	check_feature_status("codegen", "on", "Codegen enabled", "Codegen disabled");
 
 	/*
 	 * Ready to run the tests

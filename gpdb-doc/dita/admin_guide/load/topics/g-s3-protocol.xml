@@ -259,8 +259,9 @@ s3://s3-us-west-2.amazonaws.com/test1/abcdefff</codeblock>
                Database <codeph>s3</codeph> protocol, you must set the
                   <codeph>server_side_encryption</codeph> configuration parameter in your
                   <codeph>s3</codeph> configuration file to the value <codeph>sse-s3</codeph>:</p>
-            <p>
-               <codeblock>server_side_encryption = sse-s3</codeblock>
+            <p><codeblock>
+server_side_encryption = sse-s3
+</codeblock>
             </p>
             <p>When the configuration file you provide to a <codeph>CREATE WRITABLE EXTERNAL
                   TABLE</codeph> call using the <codeph>s3</codeph> protocol includes the

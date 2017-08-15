@@ -26,8 +26,6 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
-#include "access/relscan.h"
-#include "access/sysattr.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "bootstrap/bootstrap.h"
@@ -46,12 +44,10 @@
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbpersistentfilesysobj.h"
-#include "catalog/aoblkdir.h"
 #include "commands/tablecmds.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
 #include "optimizer/clauses.h"
-#include "optimizer/var.h"
 #include "parser/parse_expr.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
@@ -1532,7 +1528,17 @@ setNewRelfilenode(Relation relation, TransactionId freezeXid)
 	rd_rel->relfilenode = newrelfilenode;
 	rd_rel->relpages = 0;		/* it's empty until further notice */
 	rd_rel->reltuples = 0;
-	rd_rel->relfrozenxid = freezeXid;
+	if (should_have_valid_relfrozenxid(HeapTupleGetOid(tuple),
+									   rd_rel->relkind,
+									   rd_rel->relstorage))
+	{
+		rd_rel->relfrozenxid = freezeXid;
+	}
+	else
+	{
+		rd_rel->relfrozenxid = InvalidTransactionId;
+	}
+
 	simple_heap_update(pg_class, &tuple->t_self, tuple);
 	CatalogUpdateIndexes(pg_class, tuple);
 

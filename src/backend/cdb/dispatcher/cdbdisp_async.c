@@ -25,6 +25,8 @@
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbdisp_async.h"
 #include "cdb/cdbdispatchresult.h"
+#include "gp-libpq-fe.h"
+#include "gp-libpq-int.h"
 #include "cdb/cdbfts.h"
 #include "cdb/cdbgang.h"
 #include "cdb/cdbvars.h"
@@ -846,6 +848,12 @@ processResults(CdbDispatchResult * dispatchResult)
 			 */
 			if (pRes->numRejected > 0)
 				dispatchResult->numrowsrejected += pRes->numRejected;
+
+			/*
+			 * COPY FROM ON SEGMENT - get the number of rows completed by QE if any
+			 */
+			if (pRes->numCompleted > 0)
+				dispatchResult->numrowscompleted += pRes->numCompleted;
 
 			if (resultStatus == PGRES_COPY_IN ||
 				resultStatus == PGRES_COPY_OUT)

@@ -9,27 +9,43 @@
                 <codeph>gpinitsystem_config</codeph> file.</p>
         <section id="section2">
             <title>Synopsis</title>
-            <codeblock><b>gpinitsystem</b> <b>-c</b> <varname>gpinitsystem_config</varname>
+            <codeblock><b>gpinitsystem</b> <b>-c</b> <varname>cluster_configuration_file</varname> 
             [<b>-h</b> <varname>hostfile_gpinitsystem</varname>]
             [<b>-B</b> <varname>parallel_processes</varname>] 
             [<b>-p</b> <varname>postgresql_conf_param_file</varname>]
-            [<b>-s</b> <varname>standby_master_host</varname>]
-            [<b>--max_connections</b>=<varname>number</varname>] [<b>--shared_buffers</b>=<varname>size</varname>]
-            [<b>--locale</b>=<varname>locale</varname>] [<b>--lc-collate</b>=<varname>locale</varname>] 
+            [<b>-s</b> <varname>standby_master_host</varname> [<b>-P</b> <varname>standby_master_port</varname>][<b>-F</b> <varname>standby_master_filespaces</varname>]]
+            [<b>-m</b> <varname>number</varname> | <b>--max_connections</b>=<varname>number</varname>] [<b>-b</b> <varname>size</varname> | <b>--shared_buffers</b>=<varname>size</varname>]
+            [<b>-n <varname>locale</varname> | --locale</b>=<varname>locale</varname>] [<b>--lc-collate</b>=<varname>locale</varname>] 
             [<b>--lc-ctype</b>=<varname>locale</varname>] [<b>--lc-messages</b>=<varname>locale</varname>] 
             [<b>--lc-monetary</b>=<varname>locale</varname>] [<b>--lc-numeric</b>=<varname>locale</varname>] 
-            [<b>--lc-time</b>=<varname>locale</varname>] [<b>--su_password</b>=<varname>password</varname>] 
+            [<b>--lc-time</b>=<varname>locale</varname>] [<b>-e</b> <varname>password</varname> | <b>--su_password</b>=<varname>password</varname>] 
             [<b>-S</b>] [<b>-a</b>] [<b>-q</b>] [<b>-l</b> <varname>logfile_directory</varname>] [<b>-D</b>]
+            [<b>-I</b> <varname>input_configuration_file</varname>]
+            [<b>-O</b> <varname>output_configuration_file</varname>]
 
 <b>gpinitsystem</b> <b>-v</b></codeblock>
         </section>
         <section id="section3">
             <title>Description</title>
-            <p>The <codeph>gpinitsystem</codeph> utility will create a Greenplum Database instance
-                using the values defined in a configuration file. See <xref href="#topic1/section5"
-                    type="section" format="dita"/> for more information about this configuration
-                file. Before running this utility, make sure that you have installed the Greenplum
-                Database software on all the hosts in the array.</p>
+            <p>The <codeph>gpinitsystem</codeph> utility creates a Greenplum Database instance or
+                writes an input configuration file using the values defined in a cluster
+                configuration file and any command-line options that you provide. See <xref
+                    href="#topic1/section5" type="section" format="dita"/> for more information
+                about the configuration file. Before running this utility, make sure that you have
+                installed the Greenplum Database software on all the hosts in the array.</p>
+            <p>With the <codeph>-O <varname>output_configuration_file</varname></codeph> option,
+                    <codeph>gpinitsystem</codeph> does not create a new database instance but
+                instead writes all provided configuration information to the specified output file.
+                This file uses the <codeph>QD_PRIMARY_ARRAY</codeph> and
+                    <codeph>PRIMARY_ARRAY</codeph> parameters to define each member using its
+                hostname, port, data directory, segment prefix, segment ID, and content ID. Details
+                of the array configuration can be modified as necessary to match values available in
+                a Greenplum Database backup, or can simply be used to recreate the same cluster
+                configuration at a later time. Configuration files that use
+                    <codeph>QD_PRIMARY_ARRAY</codeph> and <codeph>PRIMARY_ARRAY</codeph> must be
+                passed into <codeph>gpinitsystem</codeph> using the <codeph>-I
+                        <varname>input_configuration_file</varname></codeph> option. See <xref
+                    href="#topic1/section5" type="section" format="dita"/> for more information.</p>
             <p>In a Greenplum Database DBMS, each database instance (the master and all segments)
                 must be initialized across all of the hosts in the system in such a way that they
                 can all work together as a unified DBMS. The <codeph>gpinitsystem</codeph> utility
@@ -71,11 +87,14 @@
                         will start up to 4 parallel processes at a time.</pd>
                 </plentry>
                 <plentry>
-                    <pt>-c <varname>gpinitsystem_config</varname></pt>
+                    <pt>-c <varname>cluster_configuration_file</varname></pt>
                     <pd>Required. The full path and filename of the configuration file, which
                         contains all of the defined parameters to configure and initialize a new
                         Greenplum Database system. See <xref href="#topic1/section5" type="section"
-                            format="dita"/> for a description of this file.</pd>
+                            format="dita"/> for a description of this file. You must provide either
+                        the <codeph>-c <varname>cluster_configuration_file</varname></codeph> option
+                        or the <codeph>-I <varname>input_configuration_file</varname></codeph>
+                        option to <codeph>gpinitsystem</codeph>. </pd>
                 </plentry>
                 <plentry>
                     <pt>-D</pt>
@@ -87,6 +106,19 @@
                         addresses of your segment hosts. If not specified on the command line, you
                         can specify the host file using the MACHINE_LIST_FILE parameter in the
                             <varname>gpinitsystem_config</varname> file.</pd>
+                </plentry>
+                <plentry>
+                    <pt>-I <varname>input_configuration_file</varname></pt>
+                    <pd>The full path and filename of an input configuration file, which defines the
+                        Greenplum Database members and segments using the
+                            <codeph>QD_PRIMARY_ARRAY</codeph> and <codeph>PRIMARY_ARRAY</codeph>
+                        parameters. The input configuration file is typically created by using
+                        gpinitsystem with the <codeph>-O
+                                <varname>output_configuration_file</varname></codeph> option. You
+                        must provide either the <codeph>-c
+                                <varname>cluster_configuration_file</varname></codeph> option or the
+                            <codeph>-I <varname>input_configuration_file</varname></codeph> option
+                        to <codeph>gpinitsystem</codeph>. </pd>
                 </plentry>
                 <plentry>
                     <pt>--locale=<varname>locale</varname> | -n <varname>locale</varname></pt>
@@ -158,6 +190,18 @@
                         default is 250.</pd>
                 </plentry>
                 <plentry>
+                    <pt>-O <varname>output_configuration_file</varname></pt>
+                    <pd>When used with the <codeph>-O</codeph> option, <codeph>gpinitsystem</codeph>
+                        does not create a new Greenplum Database cluster but instead writes the
+                        supplied cluster configuration information to the specified
+                                <codeph><varname>output_configuration_file</varname></codeph>. This
+                        file defines Greenplum Database members and segments using the
+                            <codeph>QD_PRIMARY_ARRAY</codeph> and <codeph>PRIMARY_ARRAY</codeph>
+                        parameters, and can be later used with <codeph>-I
+                                <varname>input_configuration_file</varname></codeph> to initialize a
+                        new cluster.</pd>
+                </plentry>
+                <plentry>
                     <pt>-p <varname>postgresql_conf_param_file</varname></pt>
                     <pd>Optional. The name of a file that contains <codeph>postgresql.conf</codeph>
                         parameter settings that you want to set for Greenplum Database. These
@@ -181,6 +225,28 @@
                     <pd>Optional. If you wish to configure a backup master host, specify the host
                         name using this option. The Greenplum Database software must already be
                         installed and configured on this host.</pd>
+                </plentry>
+                <plentry>
+                    <pt>-P <varname>standby_master_port</varname></pt>
+                    <pd>Optional. If you configure a standby master host, specify its port number
+                        using this option. The Greenplum Database software must already be installed
+                        and configured on this host.</pd>
+                </plentry>
+                <plentry>
+                    <pt>-F <varname>standby_master_filespaces</varname></pt>
+                    <pd>Optional. If you configure a standby master host, specify a list of
+                        filespace names and the associated locations using this option. Each
+                        filespace name and its location is separated by a colon. If there is more
+                        than one file space name, each pair (name and location) is separated by a
+                        comma. For example: </pd>
+                    <pd>
+                        <codeblock>filespace1_name:fs1_location,filespace2_name:fs2_location</codeblock>
+                    </pd>
+                    <pd>If this option is not specified, <codeph>gpinitstandby</codeph> prompts the
+                        user for the filespace names and locations.</pd>
+                    <pd>If the list is not formatted correctly or number of filespaces do not match
+                        the number of filespaces already created in the system,
+                            <codeph>gpinitstandby</codeph> returns an error.</pd>
                 </plentry>
                 <plentry>
                     <pt>--su_password=<varname>superuser_password</varname> | -e
@@ -218,9 +284,9 @@
         </section>
         <section id="section5">
             <title id="it148051">Initialization Configuration File Format</title>
-            <p><codeph>gpinitsystem</codeph> requires a configuration file with the following
-                parameters defined. An example initialization configuration file can be found in
-                    <codeph>$GPHOME/docs/cli_help/gpconfigs/gpinitsystem_config</codeph>.</p>
+            <p><codeph>gpinitsystem</codeph> requires a cluster configuration file with the
+                following parameters defined. An example initialization configuration file can be
+                found in <codeph>$GPHOME/docs/cli_help/gpconfigs/gpinitsystem_config</codeph>.</p>
             <p>To avoid port conflicts between Greenplum Database and other applications, the
                 Greenplum Database port numbers should not be in the range specified by the
                 operating system parameter <codeph>net.ipv4.ip_local_port_range</codeph>. For
@@ -382,12 +448,52 @@ MIRROR_REPLICATION_PORT_BASE = 9000</codeblock>
 /data2/mirror)</codeblock>
                     </pd>
                 </plentry>
+                <plentry>
+                    <pt>QD_PRIMARY_ARRAY, PRIMARY_ARRAY</pt>
+                    <pd>These parameters can only be provided using an input configuration file,
+                        with the <codeph>gpinitsystem</codeph>
+                        <codeph>-I <varname>input_configuration_file</varname></codeph> option.
+                            <codeph>QD_PRIMARY_ARRAY</codeph> and <codeph>PRIMARY_ARRAY</codeph>
+                        define the Greenplum Database master and segment hosts, respectively, using
+                        the format:
+                        <codeblock><varname>host</varname>~<varname>port</varname>~<varname>data_directory</varname>/<varname>seg_prefix&lt;segment_id></varname>~<varname>dbid</varname>~<varname>content_id</varname>~<varname>replication_port</varname></codeblock>The
+                        Greenplum Database master always uses the value -1 for the segment ID and
+                        content ID. For
+                        example:<codeblock>QD_PRIMARY_ARRAY=127.0.0.1~5432~/gpmaster/gpsne-1~1~-1~0
+declare -a PRIMARY_ARRAY=(
+127.0.0.1~40000~/gpdata1/gpsne0~2~0~6000
+127.0.0.1~40001~/gpdata2/gpsne1~3~1~6001
+)</codeblock></pd>
+                    <pd>You can use the <codeph>gpinitsystem</codeph>
+                        <codeph>-O <varname>output_configuration_file</varname></codeph> to populate
+                            <codeph>QD_PRIMARY_ARRAY</codeph> and <codeph>PRIMARY_ARRAY</codeph>
+                        using the hosts, data directories, segment prefix, and base port values that
+                        you provide to the command. For recovery purposes, you can edit the segment
+                        and content IDs to match the values of an existing Greenplum Database
+                        backup.</pd>
+                </plentry>
+                <plentry>
+                    <pt>HEAP_CHECKSUM</pt>
+                    <pd><b>Optional.</b> This parameter specifies if checksums are enabled for heap
+                        data. When enabled, checksums are calculated for heap storage in all
+                        databases, enabling Greenplum Database to detect corruption in the I/O
+                        system. This option is set when the system is initialized and cannot be
+                        changed later.</pd>
+                    <pd>The <codeph>HEAP_CHECKSUM</codeph> option is on by default and turning it
+                        off is strongly discouraged. If you set this option to off, data corruption
+                        in storage can go undetected and make recovery much more difficult.</pd>
+                    <pd>To determine if heap checksums are enabled in a Greenplum Database system,
+                        you can query the <codeph>data_checksums</codeph> server configuration
+                        parameter with the <codeph>gpconfig</codeph> management
+                        utility:<codeblock>$ gpconfig -s data_checksums</codeblock>
+                    </pd>
+                </plentry>
             </parml>
         </section>
         <section id="section6">
             <title>Examples</title>
-            <p>Initialize a Greenplum Database array by supplying a configuration file and a segment
-                host address file, and set up a spread mirroring (<codeph>-S</codeph>)
+            <p>Initialize a Greenplum Database array by supplying a cluster configuration file and a
+                segment host address file, and set up a spread mirroring (<codeph>-S</codeph>)
                 configuration:</p>
             <codeblock>$ gpinitsystem -c gpinitsystem_config -h 
 hostfile_gpinitsystem -S</codeblock>
@@ -397,6 +503,16 @@ hostfile_gpinitsystem --su-password=mypassword</codeblock>
             <p>Initialize a Greenplum Database array with an optional standby master host:</p>
             <codeblock>$ gpinitsystem -c gpinitsystem_config -h 
 hostfile_gpinitsystem -s host09</codeblock>
+            <p>Instead of initializing a Greenplum Database array, write the provided configuration
+                to an output file. The output file uses the <codeph>QD_PRIMARY_ARRAY</codeph> and
+                    <codeph>PRIMARY_ARRAY</codeph> parameters to define master and segment
+                hosts:</p>
+            <codeblock>$ gpinitsystem -c gpinitsystem_config -h 
+hostfile_gpinitsystem -S -O cluster_init.config</codeblock>
+            <p>Initialize a Greenplum Database using an input configuration file (a file that
+                defines the Greenplum Database array using <codeph>QD_PRIMARY_ARRAY</codeph> and
+                    <codeph>PRIMARY_ARRAY</codeph> parameters:</p>
+            <codeblock>$ gpinitsystem -I cluster_init.config</codeblock>
         </section>
         <section id="section7">
             <title>See Also</title>

@@ -20,12 +20,10 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "catalog/heap.h"
-#include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
-#include "catalog/gp_persistent.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_conversion.h"
 #include "catalog/pg_database.h"
@@ -42,20 +40,18 @@
 #include "catalog/pg_type.h"
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_dict.h"
-#include "cdb/cdbpartition.h"
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
-#include "optimizer/prep.h"
 #include "parser/parse_func.h"
 #include "utils/acl.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 #include "utils/syscache.h"
-#include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
+#include "cdb/cdbpartition.h"
+#include "cdb/cdbvars.h"
 
 
 static void ExecGrant_Relation(InternalGrant *grantStmt);
@@ -751,7 +747,6 @@ ExecGrant_Relation(InternalGrant *istmt)
 		}
 		else
 		{
-
 			/* 
 			 * Adjust the default permissions based on whether it is a 
 			 * sequence
@@ -812,7 +807,7 @@ ExecGrant_Relation(InternalGrant *istmt)
 					}
 				}
 			}
-	
+
 			/*
 			 * Get owner ID and working copy of existing ACL. If
 			 * there's no ACL, substitute the proper default.
@@ -826,7 +821,7 @@ ExecGrant_Relation(InternalGrant *istmt)
 									 ownerId);
 			else
 				old_acl = DatumGetAclPCopy(aclDatum);
-	
+
 			/* Determine ID to do the grant as, and available grant options */
 			select_best_grantor(GetUserId(), this_privileges,
 								old_acl, ownerId,
@@ -2041,6 +2036,7 @@ pg_class_aclmask(Oid table_oid, Oid roleid,
 			}
 		}
 	}
+
 	/*
 	 * Otherwise, superusers bypass all permission-checking.
 	 */
