@@ -660,6 +660,11 @@ customer_id=123;</codeblock>
           named pipe to a single reader. An error is returned if a second reader attempts to access
           the named pipe. </li>
       </ul>
+      <p>When multiple Greenplum Database external tables are defined with the
+          <codeph>gpfdist</codeph>, <codeph>gpfdists</codeph>, or <codeph>file</codeph> protocol and
+        access the same named pipe a Linux system, Greenplum Database restricts access to the named
+        pipe to a single reader. An error is returned if a second reader attempts to access the
+        named pipe. </p>
     </section>
     <section id="section9"><title>HDFS File Format Support for the gphdfs Protocol</title><p>If you
         specify <codeph>gphdfs</codeph> protocol to read or write file to a Hadoop file system
