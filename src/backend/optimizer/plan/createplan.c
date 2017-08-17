@@ -2021,7 +2021,7 @@ create_indexscan_plan(PlannerInfo *root,
 			if (best_path->indexinfo->indpred)
 			{
 				if (baserelid != root->parse->resultRelation &&
-					!list_member_int(root->parse->rowMarks, baserelid))
+					get_rowmark(root->parse, baserelid) == NULL)
 					if (predicate_implied_by(clausel,
 											 best_path->indexinfo->indpred))
 						continue;
@@ -4171,7 +4171,7 @@ make_valuesscan(List *qptlist,
 	return node;
 }
 
-static CteScan * pg_attribute_unused()
+static pg_attribute_unused() CteScan *
 make_ctescan(List *qptlist,
 			 List *qpqual,
 			 Index scanrelid,
