@@ -3881,7 +3881,7 @@ opt_column_list:
 			'(' columnList ')'						{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
-		
+
 columnList:
 			columnElem								{ $$ = list_make1($1); }
 			| columnList ',' columnElem				{ $$ = lappend($1, $3); }
@@ -7034,8 +7034,7 @@ CreateFunctionStmt:
 					$$ = (Node *)n;
 				}
 			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			  RETURNS TABLE '(' table_func_column_list ')' 
-              createfunc_opt_list opt_definition
+			  RETURNS TABLE '(' table_func_column_list ')' createfunc_opt_list opt_definition
 				{
 					CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
 					n->replace = $2;
@@ -11408,11 +11407,11 @@ c_expr:		columnref								{ $$ = $1; }
 			| ARRAY array_expr
 				{	$$ = $2;	}
             | TABLE '(' table_value_select_clause ')'
-				{	
+				{
 					TableValueExpr *n = makeNode(TableValueExpr);
 					n->subquery = $3;
 					n->location = @1;
-					$$ = (Node*) n;
+					$$ = (Node *)n;
 				}
 			| row
 				{
@@ -12238,6 +12237,7 @@ xmlexists_argument:
 				}
 		;
 
+
 /*
  * Supporting nonterminals for expressions.
  */
@@ -12340,6 +12340,7 @@ array_expr: '[' expr_list ']'
 array_expr_list: array_expr							{ $$ = list_make1($1); }
 			| array_expr_list ',' array_expr		{ $$ = lappend($1, $3); }
 		;
+
 
 extract_list:
 			extract_arg FROM a_expr
@@ -12671,11 +12672,10 @@ target_el:	a_expr AS ColLabel
 			 * as an infix expression, which we accomplish by assigning
 			 * IDENT a precedence higher than POSTFIXOP.
 			 *
-			 * In GPDB, we extent this to allow most
-			 * unreserved_keywords by also assigning them a
-			 * precedence.  There are certain keywords that can't work
-			 * without the as: reserved_keywords, the date modifier
-			 * suffixes (DAY, MONTH, YEAR, etc) and a few other
+			 * In GPDB, we extend this to allow most unreserved_keywords by
+			 * also assigning them a precedence.  There are certain keywords
+			 * that can't work without the as: reserved_keywords, the date
+			 * modifier suffixes (DAY, MONTH, YEAR, etc) and a few other
 			 * obscure cases.
 			 */
 			| a_expr IDENT
@@ -14224,7 +14224,7 @@ doNegateFloat(Value *v)
 	}
 }
 
-static Node*
+static Node *
 makeAArrayExpr(List *elements, int location)
 {
 	A_ArrayExpr *n = makeNode(A_ArrayExpr);
