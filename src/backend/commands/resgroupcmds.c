@@ -424,6 +424,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	int			concurrency;
 	int			cpuRateLimitNew;
 	int			memSharedQuotaNew;
+	int			memSpillRatioNew;
 	int			memLimitNew;
 	DefElem		*defel;
 	ResGroupLimitType	limitType;
@@ -501,6 +502,20 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 								RESGROUP_MAX_MEMORY_LIMIT)));
 			/* overall limit will be verified later after groupid is known */
 			break;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
+			memSpillRatioNew = defGetInt64(defel);
+			if (memSpillRatioNew < RESGROUP_MIN_MEMORY_SPILL_RATIO)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_LIMIT_VALUE),
+						 errmsg("memory spill ratio must be greater than %d",
+								RESGROUP_MIN_MEMORY_SPILL_RATIO)));
+			if (memSpillRatioNew > RESGROUP_MAX_MEMORY_SPILL_RATIO)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_LIMIT_VALUE),
+						 errmsg("memory spill ratio must be less than %d",
+								RESGROUP_MAX_MEMORY_SPILL_RATIO)));
+			/* sum of shared and spill will be verified later after groupid is known */
+			break;
 
 		default:
 			ereport(ERROR,
@@ -542,11 +557,11 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	/*
 	 * In validateCapabilities() we scan all the resource groups
 	 * to check whether the total cpu_rate_limit exceed 100 or not.
-	 * We need to use ExclusiveLock here to prevent concurrent
+	 * We need to use AccessExclusiveLock here to prevent concurrent
 	 * increase on different resource group.
 	 */
 	pg_resgroupcapability_rel = heap_open(ResGroupCapabilityRelationId,
-										  ExclusiveLock);
+										  AccessExclusiveLock);
 
 	/* Load currency resource group capabilities */
 	GetResGroupCapabilities(groupid, &caps);
@@ -594,6 +609,17 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 									 groupid, &opts, false);
 
 			ResGroupDecideMemoryCaps(groupid, &caps, &opts);
+			break;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
+			if (caps.memSharedQuota.proposed + memSpillRatioNew > RESGROUP_MAX_MEMORY_LIMIT)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("The sum of memory_shared_quota (%d) and memory_spill_ratio (%d) exceeds %d",
+								caps.memSharedQuota.proposed, memSpillRatioNew,
+								RESGROUP_MAX_MEMORY_LIMIT)));
+
+			caps.memSpillRatio.value = memSpillRatioNew;
+			caps.memSpillRatio.proposed = memSpillRatioNew;
 			break;
 
 		default:
@@ -667,7 +693,7 @@ GetResGroupCapabilities(Oid groupId, ResGroupCaps *resgroupCaps)
 				ObjectIdGetDatum(groupId));
 
 	sscan = systable_beginscan(relResGroupCapability,
-							   ResGroupCapabilityResgroupidResLimittypeIndexId,
+							   ResGroupCapabilityResgroupidIndexId,
 							   true,
 							   SnapshotNow, 1, &key);
 
@@ -1127,7 +1153,7 @@ updateResgroupCapabilities(Oid groupid, const ResGroupCaps *resgroupCaps)
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(groupid));
 
-	sscan = systable_beginscan(resgroupCapabilityRel, ResGroupCapabilityResgroupidResLimittypeIndexId, true,
+	sscan = systable_beginscan(resgroupCapabilityRel, ResGroupCapabilityResgroupidIndexId, true,
 							   SnapshotNow, 1, &scankey);
 
 	MemSet(values, 0, sizeof(values));
