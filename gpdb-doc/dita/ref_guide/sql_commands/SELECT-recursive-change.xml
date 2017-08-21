@@ -120,12 +120,14 @@ with_query_name</varname> [ [AS] <varname>alias</varname> [( <varname>column_ali
           specified; if the list of column names is omitted, the names are inferred from the
           subquery. The primary query and the <codeph>WITH</codeph> queries are all (notionally)
           executed at the same time. </p><draft-comment author="msk">Is "evaluated only once per
-          execution" correct?</draft-comment><p>A useful property of <codeph>WITH</codeph> queries
-          is that they are evaluated only once per execution of the primary query, even if the
-          primary query refers to them more than once.</p><draft-comment author="msk">DRAFT -
-          RECURSIVE</draft-comment><p>If <codeph>RECURSIVE</codeph> is specified, it allows a
-          subquery to reference itself by name. Such a subquery, the <varname>select</varname>
-          portion of the <varname>with_query</varname> , must have the
+          execution" NO - GPDB support inlining WITH subqueries <xref
+            href="https://www.pivotaltracker.com/story/show/150235456" format="html"
+            scope="external">#150235456</xref></draft-comment><p>A useful property of
+            <codeph>WITH</codeph> queries is that they are evaluated only once per execution of the
+          primary query, even if the primary query refers to them more than once.</p><draft-comment
+          author="msk">DRAFT - RECURSIVE</draft-comment><p>If <codeph>RECURSIVE</codeph> is
+          specified, it allows a subquery to reference itself by name. Such a subquery, the
+            <varname>select</varname> portion of the <varname>with_query</varname> , must have the
           form</p><codeblock><varname>non_recursive_term</varname> UNION [ALL] <varname>recursive_term</varname></codeblock><p>The
           recursive self-reference must appear on the right-hand side of the <codeph>UNION
             [ALL]</codeph>. Only one recursive self-reference is permitted per query. </p><p>If the
@@ -165,8 +167,8 @@ SELECT * FROM foo LIMIT 5;
 )
 SELECT * FROM foo LIMIT 5;
 </codeblock></p><p>See
-            <xref href="../../admin_guide/query/topics/CTE-query-500-change.xml#topic_zhs_r1s_w1b"/>
-          for additional information.</p>
+            <xref href="../../admin_guide/query/topics/CTE-query.xml#topic_zhs_r1s_w1b"/> for
+          additional information.</p>
       </sectiondiv><sectiondiv id="section5">
         <b>The SELECT List</b>
         <p>The <codeph>SELECT</codeph> list (between the key words <codeph>SELECT</codeph> and
@@ -793,6 +795,7 @@ GROUP BY region, product;
 </codeblock>
       <p>The example could have been written without the <codeph>WITH</codeph> clause but would have
         required two levels of nested sub-<codeph>SELECT</codeph> statements.</p>
+      <draft-comment author="mkiyama">5.0.0 DRAFT - WITH RECURSIVE example</draft-comment>
       <p>This example uses the <codeph>WITH RECURSIVE</codeph> clause to find all subordinates
         (direct or indirect) of the employee Mary, and their level of indirectness, from a table
         that shows only direct subordinates:</p>
@@ -810,7 +813,9 @@ SELECT distance, employee_name FROM employee_recursive;
       <p>The typical form of recursive queries: an initial condition, followed by <codeph>UNION
           [ALL]</codeph>, followed by the recursive part of the query. Be sure that the recursive
         part of the query will eventually return no tuples, or else the query will loop
-        indefinitely. See <xref href="#topic_dml_yqt_n1b" format="dita"/> for more examples.</p>
+        indefinitely. See <xref
+          href="../../admin_guide/query/topics/CTE-query.xml#topic_zhs_r1s_w1b"/> for more
+        examples.</p>
     </section>
     <section id="section19"><title>Compatibility</title><p>The <codeph>SELECT</codeph> statement is
         compatible with the SQL standard, but there are some extensions and some missing features.

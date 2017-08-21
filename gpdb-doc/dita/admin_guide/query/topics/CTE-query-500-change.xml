@@ -160,7 +160,10 @@ SELECT n FROM t LIMIT 100;
       Using this technique in production is not recommended, because other systems might work
       differently. Also, the technique might not work if the outer query sorts the recursive
         <codeph>WITH</codeph> results or join the results to another table.</p>
-    <draft-comment author="msk">Is the following paragraph true for GPDB?</draft-comment>
+    <draft-comment author="msk">Is the following paragraph true for GPDB? Is "evaluated only once
+      per execution" true - NO - GPDB support inlining WITH subqueries <xref
+        href="https://www.pivotaltracker.com/story/show/150235456" format="html" scope="external"
+        >#150235456</xref></draft-comment>
     <p>A useful property of <codeph>WITH</codeph> queries is that they are evaluated only once per
       execution of the parent query, even if they are referred to more than once by the parent query
       or sibling <codeph>WITH</codeph> queries. Thus, expensive calculations that are needed in

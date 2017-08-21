@@ -6,8 +6,8 @@
   <body>
     <draft-comment author="msk">Resource groups for 5.x - DRAFT<p>work is being tracked in GPDB MPP
         Engine <xref href="https://www.pivotaltracker.com/n/projects/784255" format="html"
-          scope="external">tracker project 784255</xref> see label resource
-      group</p></draft-comment>
+          scope="external">tracker project 784255</xref> see label resource group</p><p>Lisa is
+        working on resouce groups</p></draft-comment>
     <p><b>working notes on resource groups</b></p>
     <p>With current design and implementation, we ask admin to manually create gpdb cgroup
       directories and grant gpadmin write permission.</p>

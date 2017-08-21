@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+  PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="topic1">
+  <title id="af20945">WAL-rep</title>
+  <body>
+    <draft-comment author="msk">WAL replication - DRAFT<p>work is being tracked in <xref
+          href="https://www.pivotaltracker.com/n/projects/989808" format="html" scope="external"
+          >Catalog and Storage</xref> see label wal replication</p></draft-comment>
+    <p><b>working notes on WAL rep</b></p>
+    <p>Replaces file rep (segment mirroring technology)</p>
+    <p>Backport from postgres, with enhancements for MPP</p>
+    <p>gpdb dev thread <xref href="https://www.pivotaltracker.com/n/projects/989808" format="html"
+        scope="external">WAL consistency checking</xref></p>
+    <p>When the new GUC wal_consistency_checking is set to a non-empty value, it triggers recording
+      of additional full-page images, which are compared on the standby against the results of
+      applying the WAL record (without regard to those full-page images). Allowable differences such
+      as hints are masked out, and the resulting pages are compared; any difference results in a
+      FATAL error on the standby.</p>
+    <p><b>NOTE</b> This facility is intended to be committed for next major version of Greenplum
+      (post 5.0) as involves changing on-disk xlog format. Wish to get it reviewed now as the work
+      has been done and team wishes to leverage the facility to solidify the wal replication
+      feature, also being built for next major version of Greenplum.</p>
+    <p>dev notes</p>
+    <p><xref href="https://docs.google.com/document/d/1d8xZ6NamScQY8LvEbQ0K17-MfzqBhRb6ZLYpcMKKSMg"
+        format="html" scope="external">WALRep Failure Handling</xref> - google doc - states</p>
+    <p><xref href="https://github.com/greenplum-db/gpdb/pull/2655" format="html" scope="external"
+        >https://github.com/greenplum-db/gpdb/pull/2655</xref> baby steps note</p>
+    <p>It will continue to be under heavy revising as we keep working on WAL rep stories but it
+      currently gives a good idea of what happens. Let us know if you have any questions while
+      reading it.</p>
+    <p><xref href="https://www.postgresql.org/docs/current/static/warm-standby.html" format="html"
+        scope="external">https://www.postgresql.org/docs/current/static/warm-standby.html</xref>
+    </p>
+    <p><xref
+        href="https://docs.google.com/a/pivotal.io/document/d/1Af3oTnQyP4rZTQgafhr_nccJgMfNNlb4uIY6QOJNJ2Q/edit?usp=sharing"
+        format="html" scope="external">Postgres replication history</xref> google doc</p>
+    <p>requires a catlog change</p>
+  </body>
+  <topic id="topic_fhg_j51_c1b">
+    <title>CREATE RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT</draft-comment>
+      <p>Creates a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock>CREATE RESOURCE GROUP name WITH (option [...])
+        where option can be:
+          CPU_RATE_LIMIT cpu_rate_limit [, ...]
+        | MEMORY_LIMIT memory_limit [, ...]
+            | [ MAX_CONCURRENCY concurrency [, ...] ]
+    | [ MEMORY_REDZONE_LIMIT redzone ]</codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB?
+        </draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>CREATE ROLE, ALTER ROLE</p>
+      </section>
+    </body>
+  </topic>
+  <topic id="topic_cvb_x51_c1b">
+    <title>ALTER RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT</draft-comment>
+      <p>Alters a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock>TBD</codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB?
+        </draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>???</p>
+      </section>
+    </body>
+  </topic>
+  <topic id="topic_r4f_x51_c1b">
+    <title>DROP RESOURCE GROUP</title>
+    <body>
+      <draft-comment author="msk">Resource groups for 5.x - DRAFT<p>IF EXISTS clause <xref
+            href="https://www.pivotaltracker.com/story/show/146426295" format="html"
+            scope="external">#146426295</xref></p></draft-comment>
+      <p>Drops a resource group</p>
+      <section>
+        <title>Synopsis</title>
+        <codeblock><b>DROP RESOURCE GROUP [IF EXISTS] &lt;resgroup></b></codeblock>
+      </section>
+      <section><title>Description</title>TBD</section>
+      <section>
+        <title>Parameters</title>
+        <parml>
+          <plentry>
+            <pt> TBD </pt>
+            <pd>TBD</pd>
+          </plentry>
+          <plentry>
+            <pt> TBD</pt>
+            <pd>TBD.</pd>
+          </plentry>
+        </parml>
+      </section>
+      <section><title>Notes</title><draft-comment author="msk">LIMITATIONS in GPDB? <p>Are all
+            anonymous blocks executed as VOLTILE? </p></draft-comment>TBD</section>
+      <section>
+        <title>Examples</title>
+        <p>TBD</p>
+      </section>
+      <section>
+        <title>Compatibility</title>
+        <p>There is no <codeph>CREATE RESOURCE GROUP</codeph> statement in the SQL standard.</p>
+      </section>
+      <section>
+        <title>See Also</title>
+        <p>???</p>
+      </section>
+    </body>
+  </topic>
+</topic>

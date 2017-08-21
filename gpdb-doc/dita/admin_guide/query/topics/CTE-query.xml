@@ -150,23 +150,11 @@ SELECT * FROM search_graph;
   UNION ALL
     SELECT n+1 FROM t
 )
-SELECT n FROM t LIMIT 100;
-</codeblock>
+SELECT n FROM t LIMIT 100;</codeblock>
     <p>The technique works because the recursvie <codeph>WITH</codeph> implementation evaluates only
       as many rows of a <codeph>WITH</codeph> query as are actually fetched by the parent query.
       Using this technique in production is not recommended, because other systems might work
       differently. Also, the technique might not work if the outer query sorts the recursive
         <codeph>WITH</codeph> results or join the results to another table.</p>
-    <p>A useful property of <codeph>WITH</codeph> queries is that they are evaluated only once per
-      execution of the parent query, even if they are referred to more than once by the parent query
-      or sibling <codeph>WITH</codeph> queries. Thus, expensive calculations that are needed in
-      multiple places can be placed within a <codeph>WITH</codeph> query to avoid redundant work.
-      Another possible application is to prevent unwanted multiple evaluations of functions with
-      side-effects. However, the other side of this coin is that the optimizer is less able to push
-      restrictions from the parent query down into a <codeph>WITH</codeph> query than an ordinary
-      sub-query. The <codeph>WITH</codeph> query will generally be evaluated as stated, without
-      suppression of rows that the parent query might discard afterwards. (But, as mentioned above,
-      evaluation might stop early if the reference(s) to the query demand only a limited number of
-      rows.)</p>
   </body>
 </topic>
