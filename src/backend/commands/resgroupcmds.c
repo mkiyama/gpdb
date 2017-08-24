@@ -47,7 +47,6 @@
 #define RESGROUP_MAX_CPU_RATE_LIMIT	(100)
 
 #define RESGROUP_MIN_MEMORY_LIMIT	(1)
-#define RESGROUP_MAX_MEMORY_LIMIT	(100)
 
 #define RESGROUP_MIN_MEMORY_SHARED_QUOTA	(0)
 #define RESGROUP_MAX_MEMORY_SHARED_QUOTA	(100)
@@ -393,7 +392,7 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
-									NIL, /* FIXME */
+									NIL,
 									NULL);
 	}
 
@@ -638,7 +637,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
-									GetAssignedOidsForDispatch(), /* FIXME */
+									GetAssignedOidsForDispatch(),
 									NULL);
 	}
 
