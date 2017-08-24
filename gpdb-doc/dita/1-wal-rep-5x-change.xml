@@ -22,6 +22,9 @@
       has been done and team wishes to leverage the facility to solidify the wal replication
       feature, also being built for next major version of Greenplum.</p>
     <p>dev notes</p>
+    <p>WAL sender process should have Gp_role GP_ROLE_UTILITY <xref
+        href="https://github.com/greenplum-db/gpdb/pull/3012" format="html" scope="external"
+        >gpdb/pull/3012</xref></p>
     <p><xref href="https://docs.google.com/document/d/1d8xZ6NamScQY8LvEbQ0K17-MfzqBhRb6ZLYpcMKKSMg"
         format="html" scope="external">WALRep Failure Handling</xref> - google doc - states</p>
     <p><xref href="https://github.com/greenplum-db/gpdb/pull/2655" format="html" scope="external"
@@ -35,7 +38,7 @@
     <p><xref
         href="https://docs.google.com/a/pivotal.io/document/d/1Af3oTnQyP4rZTQgafhr_nccJgMfNNlb4uIY6QOJNJ2Q/edit?usp=sharing"
         format="html" scope="external">Postgres replication history</xref> google doc</p>
-    <p>requires a catlog change</p>
+    <p>catalog changes</p>
   </body>
   <topic id="topic_fhg_j51_c1b">
     <title>CREATE RESOURCE GROUP</title>
