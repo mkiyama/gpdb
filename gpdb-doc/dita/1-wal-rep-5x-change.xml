@@ -26,7 +26,8 @@
         href="https://github.com/greenplum-db/gpdb/pull/3012" format="html" scope="external"
         >gpdb/pull/3012</xref></p>
     <p><xref href="https://docs.google.com/document/d/1d8xZ6NamScQY8LvEbQ0K17-MfzqBhRb6ZLYpcMKKSMg"
-        format="html" scope="external">WALRep Failure Handling</xref> - google doc - states</p>
+        format="html" scope="external">WALRep Failure Handling</xref> - google doc - mirroring
+      states</p>
     <p><xref href="https://github.com/greenplum-db/gpdb/pull/2655" format="html" scope="external"
         >https://github.com/greenplum-db/gpdb/pull/2655</xref> baby steps note</p>
     <p>It will continue to be under heavy revising as we keep working on WAL rep stories but it
@@ -38,7 +39,44 @@
     <p><xref
         href="https://docs.google.com/a/pivotal.io/document/d/1Af3oTnQyP4rZTQgafhr_nccJgMfNNlb4uIY6QOJNJ2Q/edit?usp=sharing"
         format="html" scope="external">Postgres replication history</xref> google doc</p>
-    <p>catalog changes</p>
+    <p><b>possible catalog changes</b>. </p>
+    <p>gp_persistent_*</p>
+    <p>gp_segment_configuration </p>
+    <p>pg_stat_activity </p>
+    <note>Current FTS probe relies on file replication data structures mostly found in
+      pmModuleState. Commit <xref href="https://github.com/greenplum-db/gpdb/pull/3050"
+        format="html" scope="external">gpdb/pull/3050</xref>establishes an empty FTS probe response
+      packet that primaries using segment WAL replication can fill out later. We also introduce the
+      'w' fault_strategy (WAL replication) to replace the 'f' fault_strategy (file
+        replication).<p>**FTS** When mirror fails switch mirror to down and primary to 'not in sync'
+        (s vs. n) <xref href="https://www.pivotaltracker.com/story/show/150415768" format="html"
+          scope="external">#150415768</xref><ul id="ul_arg_bzr_1bb">
+          <li>PrimaryWalRepStatus [up|down]</li>
+          <li>PrimaryWalRepMode  [sync|nosync]</li>
+          <li>sendFTSProbeResponse(PrimaryWalRepMode primaryMode         [sync|nosync], FaultType_e
+            faulttype)</li>
+        </ul></p></note>
+    <p><b>GUCs</b></p>
+    <p>new guc</p>
+    <p>synchronous_standby_names <xref href="https://www.pivotaltracker.com/story/show/150415768"
+        format="html" scope="external">#150415768</xref></p>
+    <p>==Master mirroring==</p>
+    <p>keep_wal_segments </p>
+    <p>repl_catchup_within_range </p>
+    <p>replication_timeout </p>
+    <p>wal_receiver_status_interval </p>
+    <p>==filerep segments==</p>
+    <p>gp_fault_strategy- 'w' fault_strategy (WAL replication) to replace the 'f' fault_strategy
+      (file replication)</p>
+    <p>filerep_mirrorvalidation_during_resync </p>
+    <p>gp_filerep_tcp_keepalives_count </p>
+    <p>gp_filerep_tcp_keepalives_idle</p>
+    <p>gp_filerep_tcp_keepalives_interval </p>
+    <p>tcp_keepalives_count </p>
+    <p>tcp_keepalives_idle </p>
+    <p>tcp_keepalives_interval </p>
+    <p><b>gpperfmon</b></p>
+    <p>filrep_*</p>
   </body>
   <topic id="topic_fhg_j51_c1b">
     <title>CREATE RESOURCE GROUP</title>
