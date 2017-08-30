@@ -25,6 +25,7 @@
 #include "cdb/cdbutil.h"
 #include "miscadmin.h"
 #include "utils/guc.h"
+#include "utils/resowner.h"
 #include "utils/uri.h"
 
 /*
@@ -1254,7 +1255,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 				ereport(ERROR,
 						(errcode(errcode_for_file_access()),
 						 errmsg("could not open private key file \"%s\": %m",
-								extssl_cer_full)));
+								extssl_cas_full)));
 
 			CURL_EASY_SETOPT(file->curl->handle, CURLOPT_CAINFO, extssl_cas_full);
 		}
