@@ -47,13 +47,14 @@
       pmModuleState. Commit <xref href="https://github.com/greenplum-db/gpdb/pull/3050"
         format="html" scope="external">gpdb/pull/3050</xref>establishes an empty FTS probe response
       packet that primaries using segment WAL replication can fill out later. We also introduce the
-      'w' fault_strategy (WAL replication) to replace the 'f' fault_strategy (file
-        replication).<p>**FTS** When mirror fails switch mirror to down and primary to 'not in sync'
-        (s vs. n) <xref href="https://www.pivotaltracker.com/story/show/150415768" format="html"
-          scope="external">#150415768</xref><ul id="ul_arg_bzr_1bb">
+      'w' fault_strategy (WAL replication) to replace the 'f' fault_strategy (file replication).
+      values we expect to see 'f', 'n' and 'w'<p>**FTS** When mirror fails switch mirror to down and
+        primary to 'not in sync' (s vs. n) <xref
+          href="https://www.pivotaltracker.com/story/show/150415768" format="html" scope="external"
+          >#150415768</xref><ul id="ul_arg_bzr_1bb">
           <li>PrimaryWalRepStatus [up|down]</li>
-          <li>PrimaryWalRepMode  [sync|nosync]</li>
-          <li>sendFTSProbeResponse(PrimaryWalRepMode primaryMode         [sync|nosync], FaultType_e
+          <li>PrimaryWalRepMode [sync|nosync]</li>
+          <li>sendFTSProbeResponse(PrimaryWalRepMode primaryMode [sync|nosync], FaultType_e
             faulttype)</li>
         </ul></p></note>
     <p><b>GUCs</b></p>
