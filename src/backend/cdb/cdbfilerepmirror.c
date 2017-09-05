@@ -1,9 +1,15 @@
-/*
- *  cdbfilerepmirror.c
+/*-------------------------------------------------------------------------
+ *
+ * cdbfilerepmirror.c
  *  
+ * Portions Copyright (c) 2009-2010 Greenplum Inc. All rights reserved.
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  *
- *  Copyright 2009-2010 Greenplum Inc. All rights reserved.
  *
+ * IDENTIFICATION
+ *	    src/backend/cdb/cdbfilerepmirror.c
+ *
+ *-------------------------------------------------------------------------
  */
 
 /*
@@ -2468,8 +2474,7 @@ FileRepMirror_DropFilesFromDir(FileName fileName)
 			{
 				if (errno == EPERM)
 				{
-					stat(path, &st);
-					if (S_ISDIR(st.st_mode))
+					if ((stat(path, &st) >= 0) && (S_ISDIR(st.st_mode)))
 						continue;
 				}	
 

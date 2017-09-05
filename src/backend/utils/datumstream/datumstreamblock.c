@@ -1,7 +1,15 @@
-/*
- * DatumStreamBlock
+/*-------------------------------------------------------------------------
  *
- *	Copyright (c) 2011, EMC, Inc.
+ * datumstreamblock.c
+ *
+ * Portions Copyright (c) 2011, EMC, Inc.
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
+ *
+ *
+ * IDENTIFICATION
+ *	    src/backend/utils/datumstream/datumstreamblock.c
+ *
+ *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
@@ -3153,6 +3161,11 @@ DatumStreamBlockWrite_PutDense(
 				wasExtended = false;
 			}
 		}
+		else
+		{
+			dataLen = 0;
+			dataStart = NULL;
+		}
 
 		if (Debug_datumstream_write_print_small_varlena_info)
 		{
@@ -3190,7 +3203,7 @@ DatumStreamBlockWrite_PutDense(
 						 errdetail_datumstreamblockwrite(dsw),
 						 errcontext_datumstreamblockwrite(dsw)));
 			}
-			if (dataLen != dsw->rle_last_item_size)
+			if (dataLen != dsw->rle_last_item_size || !dataStart)
 			{
 				isEqual = false;
 			}

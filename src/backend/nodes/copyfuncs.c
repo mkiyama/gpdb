@@ -12,6 +12,7 @@
  *
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -2513,13 +2514,13 @@ _copyFuncCall(FuncCall *from)
 
 	COPY_NODE_FIELD(funcname);
 	COPY_NODE_FIELD(args);
-    COPY_NODE_FIELD(agg_order);
+	COPY_NODE_FIELD(agg_order);
+	COPY_NODE_FIELD(agg_filter);
 	COPY_SCALAR_FIELD(agg_star);
 	COPY_SCALAR_FIELD(agg_distinct);
 	COPY_SCALAR_FIELD(func_variadic);
 	COPY_NODE_FIELD(over);
 	COPY_SCALAR_FIELD(location);
-	COPY_NODE_FIELD(agg_filter);
 
 	return newnode;
 }
@@ -2825,7 +2826,7 @@ _copyQuery(Query *from)
 	COPY_SCALAR_FIELD(resultRelation);
 	COPY_NODE_FIELD(intoClause);
 	COPY_SCALAR_FIELD(hasAggs);
-	COPY_SCALAR_FIELD(hasWindFuncs);
+	COPY_SCALAR_FIELD(hasWindowFuncs);
 	COPY_SCALAR_FIELD(hasSubLinks);
 	COPY_SCALAR_FIELD(hasDynamicFunctions);
 	COPY_NODE_FIELD(rtable);

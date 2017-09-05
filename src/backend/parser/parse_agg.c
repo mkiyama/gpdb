@@ -88,7 +88,7 @@ check_call(ParseState *pstate, Node *call)
 					 parser_errposition(pstate,
 							   locate_agg_of_level((Node *) agg->args, 0))));
 
-		if (checkExprHasWindFuncs((Node *) agg->args))
+		if (checkExprHasWindowFuncs((Node *) agg->args))
 			ereport(ERROR,
 					(errcode(ERRCODE_GROUPING_ERROR),
 					 errmsg("window functions may not be used as arguments to aggregates")));
@@ -100,7 +100,7 @@ check_call(ParseState *pstate, Node *call)
 	 */
 	if (min_varlevel == 0 && !is_agg)
 	{
-		if (checkExprHasWindFuncs((Node *)((WindowRef *)call)->args))
+		if (checkExprHasWindowFuncs((Node *)((WindowRef *)call)->args))
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_GROUPING_ERROR),
@@ -121,7 +121,7 @@ check_call(ParseState *pstate, Node *call)
 	if (is_agg)
 		pstate->p_hasAggs = true;
 	else 
-		pstate->p_hasWindFuncs = true;
+		pstate->p_hasWindowFuncs = true;
 }
 
 /*
@@ -180,9 +180,39 @@ transformAggregateCall(ParseState *pstate, Aggref *agg, List *agg_order)
 }
 
 void
-transformWindowFuncCall(ParseState *pstate, WindowRef *wind)
+transformWindowFuncCall(ParseState *pstate, WindowRef *wind,
+						WindowSpec *over)
 {
+	int			winspec = 0;
+	ListCell   *over_lc;
+
+	transformWindowSpec(pstate, over);
+
+	/*
+	 * Find if this "over" clause has already existed. If so,
+	 * We let the "winspec" for this WindowRef point to
+	 * the existing "over" clause. In this way, we will be able
+	 * to determine if two WindowRef nodes are actually equal,
+	 * see MPP-4268.
+	 */
+	foreach (over_lc, pstate->p_win_clauses)
+	{
+		Node	   *over1 = lfirst(over_lc);
+
+		if (equal(over1, over))
+		{
+			break;
+		}
+		winspec++;
+	}
+
+	if (over_lc == NULL)
+		pstate->p_win_clauses = lappend(pstate->p_win_clauses, over);
+	wind->winspec = winspec;
+
 	check_call(pstate, (Node *)wind);
+
+	pstate->p_hasWindowFuncs = true;
 }
 
 /*
@@ -246,15 +276,15 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 				 parser_errposition(pstate,
 				 locate_agg_of_level((Node *) qry->jointree->fromlist, 0))));
 
-	if (checkExprHasWindFuncs(qry->jointree->quals))
+	if (checkExprHasWindowFuncs(qry->jointree->quals))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("window functions not allowed in WHERE clause")));
-	if (checkExprHasWindFuncs((Node *) qry->jointree->fromlist))
+	if (checkExprHasWindowFuncs((Node *) qry->jointree->fromlist))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("window functions not allowed in JOIN conditions")));
-	if (checkExprHasWindFuncs((Node *) qry->havingQual))
+	if (checkExprHasWindowFuncs((Node *) qry->havingQual))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("window functions not allowed in HAVING conditions")));
@@ -549,6 +579,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 	argp->paramid = -1;
 	argp->paramtype = agg_state_type;
 	argp->paramtypmod = -1;
+	argp->location = -1;
 
 	args = list_make1(argp);
 
@@ -559,6 +590,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 		argp->paramid = -1;
 		argp->paramtype = agg_input_types[i];
 		argp->paramtypmod = -1;
+		argp->location = -1;
 		args = lappend(args, argp);
 	}
 
@@ -569,7 +601,9 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 
 	/* see if we have a final function */
 	if (!OidIsValid(finalfn_oid))
+	{
 		*finalfnexpr = NULL;
+	}
 	else
 	{
 		/*
@@ -580,6 +614,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 		argp->paramid = -1;
 		argp->paramtype = agg_state_type;
 		argp->paramtypmod = -1;
+		argp->location = -1;
 		args = list_make1(argp);
 
 		*finalfnexpr = (Expr *) makeFuncExpr(finalfn_oid,
@@ -599,6 +634,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 		argp->paramid = -1;
 		argp->paramtype = agg_state_type;
 		argp->paramtypmod = -1;
+		argp->location = -1;
 		args = list_make1(argp);
 
 		/* XXX: is agg_state_type correct here? */
@@ -617,6 +653,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 		argp->paramid = -1;
 		argp->paramtype = agg_state_type;
 		argp->paramtypmod = -1;
+		argp->location = -1;
 		args = list_make1(argp);
 
 		*invtransfnexpr = (Expr *) makeFuncExpr(invtransfn_oid,
@@ -635,6 +672,7 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 		argp->paramid = -1;
 		argp->paramtype = agg_state_type;
 		argp->paramtypmod = -1;
+		argp->location = -1;
 		args = list_make1(argp);
 
 		*invprelimfnexpr = (Expr *) makeFuncExpr(invprelimfn_oid,
@@ -642,7 +680,6 @@ build_aggregate_fnexprs(Oid *agg_input_types,
 											 args,
 											 COERCE_DONTCARE);
 	}
-	
 }
 
 /*
@@ -735,7 +772,7 @@ check_aggregate_ingroup(Node *grpcl, ParseState *pstate, List *targetList, List 
 					(errcode(ERRCODE_GROUPING_ERROR),
 					 errmsg("grouping() or group_id() not allowed in GROUP BY clause")));
 
-		if (checkExprHasWindFuncs(expr))
+		if (checkExprHasWindowFuncs(expr))
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg("window functions not allowed in GROUP BY clause")));
@@ -743,92 +780,6 @@ check_aggregate_ingroup(Node *grpcl, ParseState *pstate, List *targetList, List 
 	}
 
 	return result;
-}
-
-static bool
-checkExprHasWindFuncs_walker(Node *node, void *context)
-{
-	if (node == NULL)
-		return false;
-	if (IsA(node, WindowRef))
-	{
-		return true;		/* abort the tree traversal and return true */
-	}
-	else if (IsA(node, SortBy))
-	{
-		SortBy *s = (SortBy *)node;
-		return checkExprHasWindFuncs_walker(s->node, context);
-	}
-	else if (IsA(node, WindowFrame))
-	{
-		WindowFrame *f = (WindowFrame *)node;
-		if (checkExprHasWindFuncs_walker((Node *)f->trail, context))
-			return true;
-		if (checkExprHasWindFuncs_walker((Node *)f->lead, context))
-			return true;
-	}
-	else if (IsA(node, WindowFrameEdge))
-	{
-		WindowFrameEdge *e = (WindowFrameEdge *)node;
-
-		return checkExprHasWindFuncs_walker(e->val, context);
-	}
-	else if (IsA(node, Query))
-	{
-		/* Recurse into subselects */
-		return query_tree_walker((Query *) node,
-								 checkExprHasWindFuncs_walker,
-								 (void *) context, 0);
-	}
-	else if(IsA(node, A_Expr))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-	else if(IsA(node, ColumnRef))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-
-	else if (IsA(node, A_Const))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-
-	else if (IsA(node, TypeCast))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-	
-	return expression_tree_walker(node, checkExprHasWindFuncs_walker,
-								  (void *) context);
-}
-
-/*
- * checkExprHasWindFuncs -
- *	Check if an expression contains a window function call.
- *
- * The objective of this routine is to detect whether there are window functions
- * belonging to the initial query level. Window functions belonging to 
- * subqueries or outer queries do NOT cause a true result.  We must recurse into
- * subqueries to detect outer-reference window functions that logically belong 
- * to the initial query level.
- *
- * Compare this function to checkExprHasAggs().
- */
-bool
-checkExprHasWindFuncs(Node *node)
-{
-	/*
-	 * Must be prepared to start with a Query or a bare expression tree; if
-	 * it's a Query, we don't want to increment sublevels_up.
-	 */
-	return query_or_expression_tree_walker(node,
-										   checkExprHasWindFuncs_walker,
-										   NULL, 0);
 }
 
 static bool
@@ -965,7 +916,7 @@ void
 parseProcessWindFuncs(ParseState *pstate, Query *qry)
 {
 	/* This should only be called if we found window functions */
-	Assert(pstate->p_hasWindFuncs);
+	Assert(pstate->p_hasWindowFuncs);
 
 	/*
 	 * Window functions must never appear in WHERE or 
@@ -977,12 +928,12 @@ parseProcessWindFuncs(ParseState *pstate, Query *qry)
 	 * problem is in WHERE.)
 	 */
 
-	if (checkExprHasWindFuncs(qry->jointree->quals))
+	if (checkExprHasWindowFuncs(qry->jointree->quals))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("window functions not allowed in WHERE clause")));
 /*	if (checkExprHasAggs((Node *) qry->jointree->fromlist)) */
-	if (checkExprHasWindFuncs((Node *) qry->jointree->fromlist))
+	if (checkExprHasWindowFuncs((Node *) qry->jointree->fromlist))
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("window functions not allowed in JOIN conditions")));

@@ -4,6 +4,7 @@
  *	  Planning routines for subselects and parameters.
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -39,6 +40,7 @@
 #include "cdb/cdbsubselect.h"
 #include "cdb/cdbvars.h"
 
+extern bool is_simple_subquery(PlannerInfo *root, Query *subquery);
 
 typedef struct convert_testexpr_context
 {
@@ -1104,13 +1106,7 @@ convert_IN_to_join(PlannerInfo *root, List **rtrlist_inout, SubLink *sublink)
 		/*
 		 * Under certain conditions, we cannot pull up the subquery as a join.
 		 */
-    	if (subselect->hasAggs
-    			|| (subselect->jointree->fromlist == NULL)
-    			|| subselect->havingQual
-    			|| subselect->groupClause
-    			|| subselect->hasWindFuncs
-    			|| subselect->distinctClause
-    			|| subselect->setOperations)
+    	if (!is_simple_subquery(root, subselect))
     		return (Node *) sublink;
     	
 		/*

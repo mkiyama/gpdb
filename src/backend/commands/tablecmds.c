@@ -4,6 +4,7 @@
  *	  Commands for creating and altering table structures and settings
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -8130,7 +8131,7 @@ ATPrepAlterColumnType(List **wqueue,
 			ereport(ERROR,
 					(errcode(ERRCODE_GROUPING_ERROR),
 			errmsg("cannot use aggregate function in transform expression")));
-		if (pstate->p_hasWindFuncs)
+		if (pstate->p_hasWindowFuncs)
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 			errmsg("cannot use window function in transform expression")));

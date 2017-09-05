@@ -15,6 +15,7 @@
  *
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -25,45 +26,29 @@
 
 #include "postgres.h"
 
-#include "access/reloptions.h"
-#include "catalog/gp_policy.h"
-#include "catalog/heap.h"
-#include "catalog/indexing.h"
-#include "catalog/pg_compression.h"
 #include "catalog/pg_type.h"
-#include "catalog/pg_type_encoding.h"
-#include "cdb/cdbpartition.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
-#include "optimizer/plancat.h"
-#include "optimizer/tlist.h"
 #include "optimizer/var.h"
 #include "parser/analyze.h"
 #include "parser/parse_agg.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_expr.h"
-#include "parser/parse_func.h"
 #include "parser/parse_cte.h"
 #include "parser/parse_oper.h"
-#include "parser/parse_partition.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_target.h"
-#include "parser/parse_type.h"
-#include "parser/parse_utilcmd.h"
 #include "parser/parsetree.h"
-
-#include "utils/builtins.h"
 #include "rewrite/rewriteManip.h"
-#include "commands/defrem.h"
-#include "commands/tablecmds.h"
-#include "utils/lsyscache.h"
 
 #include "cdb/cdbvars.h"
-#include "cdb/cdbhash.h"
-#include "cdb/cdbsreh.h"
+#include "catalog/gp_policy.h"
+#include "optimizer/tlist.h"
+#include "parser/parse_func.h"
+#include "utils/lsyscache.h"
 
 
 /* Context for transformGroupedWindows() which mutates components
@@ -808,10 +793,12 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 				 errmsg("cannot use aggregate function in VALUES"),
 				 parser_errposition(pstate,
 									locate_agg_of_level((Node *) qry, 0))));
-	if (pstate->p_hasWindFuncs)
+	if (pstate->p_hasWindowFuncs)
 		ereport(ERROR,
 				(errcode(ERRCODE_WINDOWING_ERROR),
-				 errmsg("cannot use window function in VALUES")));
+				 errmsg("cannot use window function in VALUES"),
+				 parser_errposition(pstate,
+									locate_windowfunc((Node *) qry))));
 
 	return qry;
 }
@@ -917,7 +904,7 @@ transformGroupedWindows(Query *qry)
 	Assert(!PointerIsValid(qry->utilityStmt));
 	Assert(qry->returningList == NIL);
 
-	if ( !qry->hasWindFuncs || !(qry->groupClause || qry->hasAggs) )
+	if ( !qry->hasWindowFuncs || !(qry->groupClause || qry->hasAggs) )
 		return qry;
 
 	/* Make the new subquery (Q'').  Note that (per SQL:2003) there
@@ -932,7 +919,7 @@ transformGroupedWindows(Query *qry)
 	subq->resultRelation = 0;
 	subq->intoClause = NULL;
 	subq->hasAggs = qry->hasAggs;
-	subq->hasWindFuncs = false; /* reevaluate later */
+	subq->hasWindowFuncs = false; /* reevaluate later */
 	subq->hasSubLinks = qry->hasSubLinks; /* reevaluate later */
 
 	/* Core of subquery input table expression: */
@@ -952,10 +939,10 @@ transformGroupedWindows(Query *qry)
 	subq->setOperations = NULL;
 
 	/* Check if there is a window function in the join tree. If so
-	 * we must mark hasWindFuncs in the sub query as well.
+	 * we must mark hasWindowFuncs in the sub query as well.
 	 */
-	if (checkExprHasWindFuncs((Node *)subq->jointree))
-		subq->hasWindFuncs = true;
+	if (checkExprHasWindowFuncs((Node *)subq->jointree))
+		subq->hasWindowFuncs = true;
 
 	/* Make the single range table entry for the outer query Q' as
 	 * a wrapper for the subquery (Q'') currently under construction.
@@ -1651,8 +1638,8 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
 
-	qry->hasWindFuncs = pstate->p_hasWindFuncs;
-	if (pstate->p_hasWindFuncs)
+	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
+	if (pstate->p_hasWindowFuncs)
 		parseProcessWindFuncs(pstate, qry);
 
 
@@ -1665,7 +1652,7 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 	 * If the query mixes window functions and aggregates, we need to
 	 * transform it such that the grouped query appears as a subquery
 	 */
-	if (qry->hasWindFuncs && (qry->groupClause || qry->hasAggs))
+	if (qry->hasWindowFuncs && (qry->groupClause || qry->hasAggs))
 		transformGroupedWindows(qry);
 
 	return qry;
@@ -1881,10 +1868,12 @@ transformValuesClause(ParseState *pstate, SelectStmt *stmt)
 				 errmsg("cannot use aggregate function in VALUES"),
 				 parser_errposition(pstate,
 						   locate_agg_of_level((Node *) newExprsLists, 0))));
-	if (pstate->p_hasWindFuncs)
+	if (pstate->p_hasWindowFuncs)
 		ereport(ERROR,
 				(errcode(ERRCODE_WINDOWING_ERROR),
-				 errmsg("cannot use window function in VALUES")));
+				 errmsg("cannot use window function in VALUES"),
+				 parser_errposition(pstate,
+								locate_windowfunc((Node *) newExprsLists))));
 
 	return qry;
 }
@@ -2743,10 +2732,12 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 				 errmsg("cannot use aggregate function in UPDATE"),
 				 parser_errposition(pstate,
 									locate_agg_of_level((Node *) qry, 0))));
-	if (pstate->p_hasWindFuncs)
+	if (pstate->p_hasWindowFuncs)
 		ereport(ERROR,
 				(errcode(ERRCODE_WINDOWING_ERROR),
-				 errmsg("cannot use window function in UPDATE")));
+				 errmsg("cannot use window function in UPDATE"),
+				 parser_errposition(pstate,
+									locate_windowfunc((Node *) qry))));
 
 	/*
 	 * Now we are done with SELECT-like processing, and can get on with
@@ -2852,11 +2843,12 @@ transformReturningList(ParseState *pstate, List *returningList)
 				(errcode(ERRCODE_GROUPING_ERROR),
 				 errmsg("cannot use aggregate function in RETURNING")));
 
-	if (pstate->p_hasWindFuncs)
+	if (pstate->p_hasWindowFuncs)
 		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("cannot use window function in RETURNING")));
-
+				(errcode(ERRCODE_WINDOWING_ERROR),
+				 errmsg("cannot use window function in RETURNING"),
+				 parser_errposition(pstate,
+									locate_windowfunc((Node *) rlist))));
 
 	/* no new relation references please */
 	if (list_length(pstate->p_rtable) != length_rtable)
@@ -3043,7 +3035,7 @@ CheckSelectLocking(Query *qry)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("SELECT FOR UPDATE/SHARE is not allowed with aggregate functions")));
-	if (qry->hasWindFuncs)
+	if (qry->hasWindowFuncs)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("SELECT FOR UPDATE/SHARE is not allowed with window functions")));

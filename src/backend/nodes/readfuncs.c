@@ -4,6 +4,7 @@
  *	  Reader functions for Postgres tree nodes.
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -321,7 +322,7 @@ _readQuery(void)
 	READ_INT_FIELD(resultRelation);
 	READ_NODE_FIELD(intoClause);
 	READ_BOOL_FIELD(hasAggs);
-	READ_BOOL_FIELD(hasWindFuncs);
+	READ_BOOL_FIELD(hasWindowFuncs);
 	READ_BOOL_FIELD(hasSubLinks);
 	READ_BOOL_FIELD(hasDynamicFunctions);
 	READ_NODE_FIELD(rtable);
@@ -1109,7 +1110,6 @@ _readArrayCoerceExpr(void)
 	READ_DONE();
 }
 
-#ifndef COMPILING_BINARY_FUNCS
 /*
  * _readFuncCall
  *
@@ -1123,18 +1123,16 @@ _readFuncCall(void)
 
 	READ_NODE_FIELD(funcname);
 	READ_NODE_FIELD(args);
-    READ_NODE_FIELD(agg_order);
+	READ_NODE_FIELD(agg_order);
+	READ_NODE_FIELD(agg_filter);
 	READ_BOOL_FIELD(agg_star);
 	READ_BOOL_FIELD(agg_distinct);
 	READ_BOOL_FIELD(func_variadic);
+	READ_NODE_FIELD(over);
     READ_INT_FIELD(location);
-
-	READ_NODE_FIELD(over);          /*CDB*/
-	READ_NODE_FIELD(agg_filter);    /*CDB*/
 
 	READ_DONE();
 }
-#endif /* COMPILING_BINARY_FUNCS */
 
 static DefElem *
 _readDefElem(void)
@@ -1349,12 +1347,12 @@ _readWindowRef(void)
 	READ_OID_FIELD(winfnoid);
 	READ_OID_FIELD(restype);
 	READ_NODE_FIELD(args);
-	READ_UINT_FIELD(winlevelsup);
 	READ_BOOL_FIELD(windistinct);
 	READ_UINT_FIELD(winspec);
 	READ_UINT_FIELD(winindex);
 	READ_ENUM_FIELD(winstage, WinStage);
 	READ_UINT_FIELD(winlevel);
+	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
 }

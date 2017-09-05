@@ -5,6 +5,7 @@
  *
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -435,7 +436,6 @@ typedef enum NodeTag
 	T_AlterTSDictionaryStmt,
 	T_AlterTSConfigurationStmt,
 	T_WindowSpec,
-	T_WindowSpecParse,		/* GPDB_84_MERGE_FIXME: Unused, remove once we're open for catalog changes again */
 	T_PartitionBy,
 	T_PartitionElem,
 	T_PartitionRangeItem,

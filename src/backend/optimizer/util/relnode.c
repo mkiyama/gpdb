@@ -4,6 +4,7 @@
  *	  Relation-node lookup/construction routines
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -91,16 +92,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind)
 	rel->tuples = 0;
 	rel->subplan = NULL;
 	rel->subrtable = NIL;
-	rel->urilocationlist = NIL;
-	rel->execlocationlist = NIL;
-	rel->execcommand = NULL;
-	rel->fmttype = '\0';
-	rel->fmtopts = NULL;
-	rel->rejectlimit = -1;
-	rel->rejectlimittype = '\0';
-	rel->fmterrtbl = InvalidOid;
-	rel->ext_encoding = -1;
-	rel->writable = false;
+	rel->extEntry = NULL;
 	rel->baserestrictinfo = NIL;
 	rel->baserestrictcost.startup = 0;
 	rel->baserestrictcost.per_tuple = 0;

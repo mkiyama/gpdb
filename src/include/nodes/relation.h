@@ -5,6 +5,7 @@
  *
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -491,16 +492,7 @@ typedef struct RelOptInfo
 	List	   *subrtable;		/* if subquery */
 
 	/* used by external scan */
-	List		*urilocationlist;
-	List		*execlocationlist;
-	char		*execcommand;
-	char		fmttype;
-	char		*fmtopts;
-	int32		rejectlimit;
-	char		rejectlimittype;
-	Oid			fmterrtbl;
-	int32		ext_encoding;
-	bool		writable;	   /* true for writable, false for readable ext tables*/
+	struct ExtTableEntry *extEntry;
 
 	/* used by various scans and joins: */
 	List	   *baserestrictinfo;		/* RestrictInfo structures (if base

@@ -1,6 +1,8 @@
 #!/usr/bin/env perl
 #
-# copyright (c) 2007, 2008, 2009 GreenPlum.  All rights reserved.  
+# Portions Copyright (c) 2007, 2008, 2009 GreenPlum.  All rights reserved.
+# Portions Copyright (c) 2012-Present Pivotal Software, Inc.
+#
 # Author: Jeffrey I Cohen
 #
 # Pod::Usage is loaded lazily when needed, if the --help or other such option
@@ -19,6 +21,7 @@ use File::Spec;
 use FindBin;
 use lib "$FindBin::Bin";
 use atmsort;
+use GPTest qw(print_version);
 
 =head1 NAME
 
@@ -366,7 +369,8 @@ GetOptions(
     'gpd_init|gp_init|init:s' => \@init_file,
     'do_equiv:s' => \$do_equiv,
     'order_warn|orderwarn' => \$orderwarn,
-    'verbose' => \$verbose
+    'verbose' => \$verbose,
+    'version|v' => \&print_version
     )
     or lazy_pod2usage(2);
 

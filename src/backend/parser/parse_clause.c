@@ -4,6 +4,7 @@
  *	  handle clauses in parser
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -456,11 +457,12 @@ transformWindowClause(ParseState *pstate, Query *qry)
 
 		clauseno++;
 
-		if (checkExprHasWindFuncs((Node *)ws))
+		if (checkExprHasWindowFuncs((Node *) ws))
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(ERRCODE_WINDOWING_ERROR),
 					 errmsg("cannot use window function in a window specification"),
-					 parser_errposition(pstate, ws->location)));
+					 parser_errposition(pstate,
+										locate_windowfunc((Node *) ws))));
 
 		/*
 		 * Loop through those clauses we've already processed to
@@ -707,7 +709,7 @@ transformWindowClause(ParseState *pstate, Query *qry)
 	/* If there are no window functions in the targetlist,
 	 * forget the window clause.
 	 */
-	if (!pstate->p_hasWindFuncs)
+	if (!pstate->p_hasWindowFuncs)
 	{
 		pstate->p_win_clauses = NIL;
 		qry->windowClause = NIL;
@@ -2850,7 +2852,7 @@ transformDistinctClause(ParseState *pstate, List *distinctlist,
 	{
 		/* We had SELECT DISTINCT */
 
-		if (!pstate->p_hasAggs && !pstate->p_hasWindFuncs && *groupClause == NIL)
+		if (!pstate->p_hasAggs && !pstate->p_hasWindowFuncs && *groupClause == NIL)
 		{
 			/*
 			 * MPP-15040

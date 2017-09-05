@@ -4,6 +4,7 @@
  *	  Fast serialization functions for Postgres tree nodes.
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -893,7 +894,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_INT_FIELD(resultRelation);
 	WRITE_NODE_FIELD(intoClause);
 	WRITE_BOOL_FIELD(hasAggs);
-	WRITE_BOOL_FIELD(hasWindFuncs);
+	WRITE_BOOL_FIELD(hasWindowFuncs);
 	WRITE_BOOL_FIELD(hasSubLinks);
 	WRITE_BOOL_FIELD(hasDynamicFunctions);
 	WRITE_NODE_FIELD(rtable);

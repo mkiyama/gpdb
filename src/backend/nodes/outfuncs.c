@@ -4,6 +4,7 @@
  *	  Output functions for Postgres tree nodes.
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -1256,12 +1257,12 @@ _outWindowRef(StringInfo str, WindowRef *node)
 	WRITE_OID_FIELD(winfnoid);
 	WRITE_OID_FIELD(restype);
 	WRITE_NODE_FIELD(args);
-	WRITE_UINT_FIELD(winlevelsup);
 	WRITE_BOOL_FIELD(windistinct);
 	WRITE_UINT_FIELD(winspec);
 	WRITE_UINT_FIELD(winindex);
 	WRITE_ENUM_FIELD(winstage, WinStage);
 	WRITE_UINT_FIELD(winlevel);
+	WRITE_LOCATION_FIELD(location);
 }
 
 static void
@@ -2044,16 +2045,7 @@ _outRelOptInfo(StringInfo str, RelOptInfo *node)
 	WRITE_UINT_FIELD(pages);
 	WRITE_FLOAT_FIELD(tuples, "%.0f");
 	WRITE_NODE_FIELD(subplan);
-	WRITE_NODE_FIELD(urilocationlist);
-	WRITE_NODE_FIELD(execlocationlist);
-	WRITE_STRING_FIELD(execcommand);
-	WRITE_CHAR_FIELD(fmttype);
-	WRITE_STRING_FIELD(fmtopts);
-	WRITE_INT_FIELD(rejectlimit);
-	WRITE_CHAR_FIELD(rejectlimittype);
-	WRITE_OID_FIELD(fmterrtbl);
-	WRITE_INT_FIELD(ext_encoding);
-	WRITE_BOOL_FIELD(writable);
+	/* no output function for ExtTableEntry */
 	WRITE_NODE_FIELD(subrtable);
 	WRITE_NODE_FIELD(baserestrictinfo);
 	WRITE_NODE_FIELD(joininfo);
@@ -3218,13 +3210,13 @@ _outFuncCall(StringInfo str, FuncCall *node)
 
 	WRITE_NODE_FIELD(funcname);
 	WRITE_NODE_FIELD(args);
-    WRITE_NODE_FIELD(agg_order);
+	WRITE_NODE_FIELD(agg_order);
+	WRITE_NODE_FIELD(agg_filter);
 	WRITE_BOOL_FIELD(agg_star);
 	WRITE_BOOL_FIELD(agg_distinct);
 	WRITE_BOOL_FIELD(func_variadic);
 	WRITE_NODE_FIELD(over);
 	WRITE_INT_FIELD(location);
-	WRITE_NODE_FIELD(agg_filter);
 }
 
 static void
@@ -3493,7 +3485,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_INT_FIELD(resultRelation);
 	WRITE_NODE_FIELD(intoClause);
 	WRITE_BOOL_FIELD(hasAggs);
-	WRITE_BOOL_FIELD(hasWindFuncs);
+	WRITE_BOOL_FIELD(hasWindowFuncs);
 	WRITE_BOOL_FIELD(hasSubLinks);
 	WRITE_BOOL_FIELD(hasDynamicFunctions);
 	WRITE_NODE_FIELD(rtable);

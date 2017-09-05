@@ -1,19 +1,27 @@
-/*
+/*-------------------------------------------------------------------------
+ *
  * faultinjector.c
- * Copyright 2009-2010 Greenplum Inc. All rights reserved.
- *
- * GP Fault Injector utility (gpfaultinjector python script) is used 
- * for Greenplum internal testing only. 
+ *	  GP Fault Injector utility (gpfaultinjector python script) is used 
+ *	  for Greenplum internal testing only. 
  * 
- * The utility inject faults (as defined by 'fault_type') on primary or mirror segment 
- *	at predefined 'fault_name. 
+ * The utility inject faults (as defined by 'fault_type') on primary or
+ * mirror segment at predefined 'fault_name. 
  * 
- * The utility is started on master host. Master host sends the fault injection request to specified segment. 
- *			It connects to postmaster on a segment.
- *			Postmaster spawns backend process that sets fault injection request into shared memory.
- *			Shared memory is accessible to all segment processes.
- *			Segment processes are checking shared memory to find if/when fault has to be injected.
+ * The utility is started on master host.  Master host sends the fault
+ * injection request to specified segment.  It connects to postmaster on a
+ * segment.  Postmaster spawns backend process that sets fault injection
+ * request into shared memory.  Shared memory is accessible to all segment
+ * processes.  Segment processes are checking shared memory to find if/when
+ * fault has to be injected.
  *
+ * Portions Copyright (c) 2009-2010 Greenplum Inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
+ *
+ *
+ * IDENTIFICATION
+ *	    src/backend/utils/misc/faultinjector.c
+ *
+ *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
@@ -305,8 +313,6 @@ FaultInjectorIdentifierEnumToString[] = {
 		/* pause FTS process before committing changes, until shutdown */
 	_("runaway_cleanup"),
 		/* inject fault before cleaning up a runaway query */		
-	_("opt_task_allocate_string_buffer"),
-		/* inject fault while allocating string buffer */
 	_("opt_relcache_translator_catalog_access"),
 		/* inject fault while translating relcache entries */
 	_("send_qe_details_init_backend"),
@@ -329,6 +335,8 @@ FaultInjectorIdentifierEnumToString[] = {
 		/* inject fault in FinishPreparedTransaction() after recording the commit prepared record */
 	_("gang_created"),
 		/* inject fault to report ERROR just after creating Gang */
+	_("resgroup_assigned_on_master"),
+		/* inject fault to report ERROR just after resource group is assigned on master */
 	_("not recognized"),
 };
 
@@ -1120,7 +1128,6 @@ FaultInjector_NewHashEntry(
 		case DtmBroadcastCommitPrepared:
 		case DtmBroadcastAbortPrepared:
 		case DtmXLogDistributedCommit:
-		case OptTaskAllocateStringBuffer:
 		case OptRelcacheTranslatorCatalogAccess:
 			
 			if (fileRepRole != FileRepNoRoleConfigured)

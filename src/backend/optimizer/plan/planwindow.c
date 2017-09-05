@@ -4,12 +4,13 @@
  *	  Planning for window queries.
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $ID$
+ *	  src/backend/optimizer/plan/planwindow.c
  *
  *-------------------------------------------------------------------------
  */
@@ -295,7 +296,7 @@ window_planner(PlannerInfo *root, double tuple_fraction, List **pathkeys_ptr)
 	/* Assert existence of windowing in query. */
 	Assert(parse->targetList != NIL);
 	Assert(parse->windowClause != NULL);
-	Assert(parse->hasWindFuncs);	
+	Assert(parse->hasWindowFuncs);
 	/* Assert no unsupported stuff */
 	Assert(parse->setOperations == NULL);
 	Assert(!parse->hasAggs);
@@ -1302,7 +1303,7 @@ make_lower_targetlist(Query *parse,
 	SortClause *dummy;
 	ListCell   *lc;
 
-	Assert ( parse->hasWindFuncs );
+	Assert ( parse->hasWindowFuncs );
 	
 	/* Start with a "flattened" tlist (having just the vars mentioned in 
 	 * the targetlist or the window clause --- but no upper-level Vars; 
@@ -1555,7 +1556,7 @@ lookup_window_function(RefInfo *rinfo)
 		elog(ERROR, "cache lookup failed for function %u", fnoid);
 	proform = (Form_pg_proc) GETSTRUCT(tuple);
 	isagg = proform->proisagg;
-	iswin = proform->proiswin;
+	iswin = proform->proiswindow;
 	
 	if ( (!isagg) && (!iswin) )
 	{
@@ -3006,12 +3007,12 @@ static List *make_rowkey_targets()
 {
 	FuncExpr *seg;
 	WindowRef *row;
-	
+
 	seg = makeFuncExpr(MPP_EXECUTION_SEGMENT_OID, 
 					   MPP_EXECUTION_SEGMENT_TYPE, 
 					   NIL, 
 					   COERCE_DONTCARE);
-								  
+
 	row = makeNode(WindowRef);
 	row->winfnoid = ROW_NUMBER_OID;
 	row->restype = ROW_NUMBER_TYPE;
@@ -3019,7 +3020,8 @@ static List *make_rowkey_targets()
 	row->winspec = row->winindex = 0;
 	row->winstage = WINSTAGE_ROWKEY; /* so setrefs doesn't get confused  */
 	row->winlevel = 0;
-	
+	row->location = -1;
+
 	return list_make2(
 		makeTargetEntry((Expr*)seg, 1, pstrdup("segment_join_key"), false),
 		makeTargetEntry((Expr*)row, 1, pstrdup("row_join_key"), false) );
@@ -3089,7 +3091,7 @@ static AttrNumber addTargetToCoplan(Node *target, Coplan *coplan, WindowContext 
 static Aggref* makeWindowAggref(WindowRef *winref)
 {
 	Aggref *aggref = makeNode(Aggref);
-	
+
 	aggref->aggfnoid = winref->winfnoid;
 	aggref->aggtype = winref->restype;
 	aggref->args = copyObject(winref->args);
@@ -3097,6 +3099,7 @@ static Aggref* makeWindowAggref(WindowRef *winref)
 	aggref->aggstar = false; /* at this point in processing, doesn't matter */
 	aggref->aggdistinct = winref->windistinct;
 	aggref->aggstage = AGGSTAGE_NORMAL;
+	aggref->location = -1;
 
 	return aggref;
 }
@@ -3104,7 +3107,7 @@ static Aggref* makeWindowAggref(WindowRef *winref)
 static Aggref* makeAuxCountAggref()
 {
 	Aggref *aggref = makeNode(Aggref);
-	
+
 	aggref->aggfnoid = 2803; /* TODO count(*) oid define in pg_proc.h */
 	aggref->aggtype = 20; /* TODO count(*) result type oid in pg_proc.h */
 	aggref->args = NIL;
@@ -3112,7 +3115,8 @@ static Aggref* makeAuxCountAggref()
 	aggref->aggstar = true; 
 	aggref->aggdistinct = false; 
 	aggref->aggstage = AGGSTAGE_NORMAL;
-	
+	aggref->location = -1;
+
 	return aggref;
 }
 
@@ -3957,7 +3961,7 @@ Plan *wrap_plan(PlannerInfo *root, Plan *plan, Query *query,
 	subquery->resultRelation = 0;
 	subquery->intoClause = NULL;
 	subquery->hasAggs = false;
-	subquery->hasWindFuncs = false;
+	subquery->hasWindowFuncs = false;
 	subquery->hasSubLinks = false;
 	subquery->returningList = NIL;
 	subquery->groupClause = NIL;
@@ -4083,7 +4087,7 @@ Query *copy_common_subquery(Query *original, List *targetList)
 	common->resultRelation = 0;
 	common->utilityStmt = NULL;
 	common->intoClause = NULL;
-	common->hasWindFuncs = false;
+	common->hasWindowFuncs = false;
 	common->hasSubLinks = false; /* XXX */
 	common->returningList = NIL;
 	common->distinctClause = NIL;
@@ -4093,23 +4097,6 @@ Query *copy_common_subquery(Query *original, List *targetList)
 	common->rowMarks = NIL;
 	
 	return common;
-}
-
-/*
- * Return true if a node contains WindowRefs.
- *
- * 'context' is not used in this function.
- */
-bool
-contain_windowref(Node *node, void *context)
-{
-	if (node == NULL)
-		return false;
-	
-	if (IsA(node, WindowRef))
-		return true;
-	
-	return expression_tree_walker(node, contain_windowref, NULL);
 }
 
 /*

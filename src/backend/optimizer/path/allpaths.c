@@ -4,6 +4,7 @@
  *	  Routines to find possible search paths for processing a query
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -1550,7 +1551,7 @@ qual_contains_winref(Query *topquery,
 										 subquery->targetList,
 										 CMD_SELECT, 0);
 
-		result = contain_windowref(qualNew, NULL);
+		result = contain_window_function(qualNew);
 		pfree(qualNew);
 	}
 

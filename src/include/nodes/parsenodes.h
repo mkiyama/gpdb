@@ -10,6 +10,7 @@
  * the location.
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -119,7 +120,7 @@ typedef struct Query
 	IntoClause *intoClause;		/* target for SELECT INTO / CREATE TABLE AS */
 
 	bool		hasAggs;		/* has aggregates in tlist or havingQual */
-	bool		hasWindFuncs;	/* has window function(s) in target list */
+	bool		hasWindowFuncs; /* has window functions in tlist */
 	bool		hasSubLinks;	/* has subquery SubLink */
 	bool        hasDynamicFunctions; /* has functions with unstable return types */
 
@@ -316,13 +317,13 @@ typedef struct FuncCall
 	NodeTag		type;
 	List	   *funcname;		/* qualified name of function */
 	List	   *args;			/* the arguments (list of exprs) */
-    List       *agg_order;      /* ORDER BY (list of SortBy) */
+	List	   *agg_order;		/* ORDER BY (list of SortBy) */
+	Node	   *agg_filter;		/* FILTER clause, if any */
 	bool		agg_star;		/* argument was really '*' */
 	bool		agg_distinct;	/* arguments were labeled DISTINCT */
 	bool		func_variadic;	/* last argument was labeled VARIADIC */
-	int			location;		/* token location, or -1 if unknown */
 	struct WindowSpec *over;	/* OVER clause, if any */
-    Node       *agg_filter;     /* aggregation filter clause */
+	int			location;		/* token location, or -1 if unknown */
 } FuncCall;
 
 /*
@@ -532,7 +533,6 @@ typedef struct DefElem
 	Node	   *arg;			/* a (Value *) or a (TypeName *) */
 	DefElemAction defaction;	/* unspecified action, or SET/ADD/DROP */
 } DefElem;
-
 
 /*
  * LockingClause - raw representation of FOR UPDATE/SHARE options
@@ -1013,7 +1013,6 @@ typedef struct WindowSpec
  * nodes replaced by SetOperationStmt nodes.
  * ----------------------
  */
-
 typedef struct SetOperationStmt
 {
 	NodeTag		type;

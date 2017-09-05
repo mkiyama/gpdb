@@ -1,27 +1,32 @@
 /*-------------------------------------------------------------------------
-*
-* fileam.c
-*	  file access method routines
-*
-* This access layer mimics the heap access API with respect to how it
-* communicates with its respective scan node (external scan node) but
-* instead of accessing the heap pages, it actually "scans" data by
-* reading it from a local flat file or a remote data source.
-*
-* The actual data access, whether local or remote, is done with the
-* curl c library ('libcurl') which uses a 'c-file like' API but behind
-* the scenes actually does all the work of parsing the URI and communicating
-* with the target. In this case if the URI uses the file protocol (file://)
-* curl will try to open the specified file locally. If the URI uses the
-* http protocol (http://) then curl will reach out to that address and
-* get the data from there.
-*
-* As data is being read it gets parsed with the COPY command parsing rules,
-* as if it is data meant for COPY. Therefore, currently, with the lack of
-* single row error handling the first error will raise an error and the
-* query will terminate.
  *
- * Copyright (c) 2007-2008, Greenplum inc
+ * fileam.c
+ *	  file access method routines
+ *
+ * This access layer mimics the heap access API with respect to how it
+ * communicates with its respective scan node (external scan node) but
+ * instead of accessing the heap pages, it actually "scans" data by
+ * reading it from a local flat file or a remote data source.
+ *
+ * The actual data access, whether local or remote, is done with the
+ * curl c library ('libcurl') which uses a 'c-file like' API but behind
+ * the scenes actually does all the work of parsing the URI and communicating
+ * with the target. In this case if the URI uses the file protocol (file://)
+ * curl will try to open the specified file locally. If the URI uses the
+ * http protocol (http://) then curl will reach out to that address and
+ * get the data from there.
+ *
+ * As data is being read it gets parsed with the COPY command parsing rules,
+ * as if it is data meant for COPY. Therefore, currently, with the lack of
+ * single row error handling the first error will raise an error and the
+ * query will terminate.
+ *
+ * Portions Copyright (c) 2007-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
+ *
+ *
+ * IDENTIFICATION
+ *	    src/backend/access/external/fileam.c
  *
  *-------------------------------------------------------------------------
  */
@@ -503,21 +508,12 @@ external_insert_init(Relation rel)
 
 	if (extentry->command)
 	{
-		/* EXECUTE */
-
-		const char *command = extentry->command;
-		const char *prefix = "execute:";
-		char	   *prefixed_command = NULL;
-
-		/* allocate space for "execute:<cmd>" + 1 for null in sprintf */
-		prefixed_command = (char *) palloc((strlen(prefix) +
-											strlen(command)) *
-										   sizeof(char) + 1);
-
-		/* build the command string - 'execute:command' */
-		sprintf((char *) prefixed_command, "%s%s", prefix, command);
-
-		extInsertDesc->ext_uri = prefixed_command;
+		/*
+		 * EXECUTE
+		 *
+		 * build the command string, 'execute:<command>'
+		 */
+		extInsertDesc->ext_uri = psprintf("execute:%s", extentry->command);
 	}
 	else
 	{
@@ -761,10 +757,7 @@ else \
 	/* set the error message. Use original msg and add column name if availble */ \
 	if (pstate->cur_attname)\
 	{\
-		pstate->cdbsreh->errmsg = (char *) palloc((strlen(edata->message) + \
-												   strlen(pstate->cur_attname) + \
-												   10 + 1) * sizeof(char)); \
-		sprintf(pstate->cdbsreh->errmsg, "%s, column %s", \
+		pstate->cdbsreh->errmsg = psprintf("%s, column %s", \
 				edata->message, \
 				pstate->cur_attname); \
 	}\

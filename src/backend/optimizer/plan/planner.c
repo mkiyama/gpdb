@@ -4,6 +4,7 @@
  *	  The query optimizer external interface.
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -1350,7 +1351,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 													  true);
 	}
 	else if ( parse->windowClause && parse->targetList &&
-			  contain_windowref((Node *)parse->targetList, NULL) )
+			  contain_window_function((Node *) parse->targetList) )
 	{
 		if (extract_nodes(NULL, (Node *) tlist, T_PercentileExpr) != NIL)
 		{

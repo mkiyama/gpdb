@@ -19,6 +19,7 @@
  *
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -232,6 +233,7 @@ _equalWindowRef(WindowRef *a, WindowRef *b)
 	COMPARE_SCALAR_FIELD(winindex);
 	COMPARE_SCALAR_FIELD(winstage);
 	COMPARE_SCALAR_FIELD(winlevel);
+	COMPARE_LOCATION_FIELD(location);
 
 	return true;
 }
@@ -839,7 +841,7 @@ _equalQuery(Query *a, Query *b)
 	COMPARE_SCALAR_FIELD(resultRelation);
 	COMPARE_NODE_FIELD(intoClause);
 	COMPARE_SCALAR_FIELD(hasAggs);
-	COMPARE_SCALAR_FIELD(hasWindFuncs);
+	COMPARE_SCALAR_FIELD(hasWindowFuncs);
 	COMPARE_SCALAR_FIELD(hasSubLinks);
 	COMPARE_SCALAR_FIELD(hasDynamicFunctions);
 	COMPARE_NODE_FIELD(rtable);
@@ -2062,13 +2064,13 @@ _equalFuncCall(FuncCall *a, FuncCall *b)
 {
 	COMPARE_NODE_FIELD(funcname);
 	COMPARE_NODE_FIELD(args);
-    COMPARE_NODE_FIELD(agg_order);
+	COMPARE_NODE_FIELD(agg_order);
+	COMPARE_NODE_FIELD(agg_filter);
 	COMPARE_SCALAR_FIELD(agg_star);
 	COMPARE_SCALAR_FIELD(agg_distinct);
 	COMPARE_SCALAR_FIELD(func_variadic);
 	COMPARE_NODE_FIELD(over);
 	COMPARE_SCALAR_FIELD(location);
-	COMPARE_NODE_FIELD(agg_filter);
 
 	return true;
 }

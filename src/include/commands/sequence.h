@@ -4,6 +4,7 @@
  *	  prototypes for sequence.c.
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc.
+ * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -121,5 +122,6 @@ cdb_sequence_nextval_server(Oid    tablespaceid,
                             int64 *pincrement,
                             bool  *poverflow);
 
+extern void seq_mask(char *pagedata, BlockNumber blkno);
 
 #endif   /* SEQUENCE_H */
