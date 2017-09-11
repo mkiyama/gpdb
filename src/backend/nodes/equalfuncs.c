@@ -228,8 +228,10 @@ _equalWindowRef(WindowRef *a, WindowRef *b)
 	COMPARE_SCALAR_FIELD(winfnoid);
 	COMPARE_SCALAR_FIELD(restype);
 	COMPARE_NODE_FIELD(args);
-	COMPARE_SCALAR_FIELD(windistinct);
 	COMPARE_SCALAR_FIELD(winspec);
+	COMPARE_SCALAR_FIELD(winstar);
+	COMPARE_SCALAR_FIELD(winagg);
+	COMPARE_SCALAR_FIELD(windistinct);
 	COMPARE_SCALAR_FIELD(winindex);
 	COMPARE_SCALAR_FIELD(winstage);
 	COMPARE_SCALAR_FIELD(winlevel);
@@ -856,7 +858,6 @@ _equalQuery(Query *a, Query *b)
 	COMPARE_NODE_FIELD(scatterClause);
 	COMPARE_NODE_FIELD(cteList);
 	COMPARE_SCALAR_FIELD(hasRecursive);
-	COMPARE_SCALAR_FIELD(hasModifyingCTE);
 	COMPARE_NODE_FIELD(limitOffset);
 	COMPARE_NODE_FIELD(limitCount);
 	COMPARE_NODE_FIELD(rowMarks);
@@ -2319,7 +2320,6 @@ _equalWindowFrame(WindowFrame *a, WindowFrame *b)
 	COMPARE_SCALAR_FIELD(is_between);
 	COMPARE_NODE_FIELD(trail);
 	COMPARE_NODE_FIELD(lead);
-	COMPARE_SCALAR_FIELD(exclude);
 
 	return true;
 }

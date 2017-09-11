@@ -1258,8 +1258,10 @@ _outWindowRef(StringInfo str, WindowRef *node)
 	WRITE_OID_FIELD(winfnoid);
 	WRITE_OID_FIELD(restype);
 	WRITE_NODE_FIELD(args);
-	WRITE_BOOL_FIELD(windistinct);
 	WRITE_UINT_FIELD(winspec);
+	WRITE_BOOL_FIELD(winstar);
+	WRITE_BOOL_FIELD(winagg);
+	WRITE_BOOL_FIELD(windistinct);
 	WRITE_UINT_FIELD(winindex);
 	WRITE_ENUM_FIELD(winstage, WinStage);
 	WRITE_UINT_FIELD(winlevel);
@@ -3502,7 +3504,6 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(scatterClause);
 	WRITE_NODE_FIELD(cteList);
 	WRITE_BOOL_FIELD(hasRecursive);
-	WRITE_BOOL_FIELD(hasModifyingCTE);
 	WRITE_NODE_FIELD(limitOffset);
 	WRITE_NODE_FIELD(limitCount);
 	WRITE_NODE_FIELD(rowMarks);
@@ -3583,7 +3584,6 @@ _outWindowFrame(StringInfo str, WindowFrame *node)
 	WRITE_BOOL_FIELD(is_between);
 	WRITE_NODE_FIELD(trail);
 	WRITE_NODE_FIELD(lead);
-	WRITE_ENUM_FIELD(exclude, WindowExclusion);
 }
 
 static void

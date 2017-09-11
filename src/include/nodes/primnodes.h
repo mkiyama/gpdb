@@ -337,9 +337,11 @@ typedef struct WindowRef
 	Oid			winfnoid;		/* pg_proc Oid of the window function */
 	Oid			restype;		/* type Oid of result of the window function */
 	List	   *args;			/* arguments */	
-	bool		windistinct;	/* TRUE if it's agg(DISTINCT ...) */
 	Index		winspec;		/* index into Query window clause */
-	
+	bool		winstar;		/* TRUE if argument list was really '*' */
+	bool		winagg;			/* is function a simple aggregate? */
+	bool		windistinct;	/* TRUE if it's agg(DISTINCT ...) */
+
 	/* Following fields are significant only in a Plan tree. */
 	Index		winindex;		/* RefInfo index during planning. */
 	WinStage	winstage;		/* Stage of execution. */
@@ -1379,25 +1381,13 @@ typedef enum GroupingType
 	GROUPINGTYPE_GROUPING_SETS   /* GROUPING SETS grouping extension */
 } GroupingType;
 
-typedef enum WindowExclusion
-{
-	WINDOW_EXCLUSION_NULL = 0,
-	WINDOW_EXCLUSION_CUR_ROW, /* exclude current row */
-	WINDOW_EXCLUSION_GROUP, /* exclude rows matching us */
-	WINDOW_EXCLUSION_TIES, /* exclude rows matching us, and current row */
-	WINDOW_EXCLUSION_NO_OTHERS /* don't exclude -- distinct from EMPTY so
-								* that we may dump */
-} WindowExclusion;
-
 typedef enum WindowBoundingKind
 {
 	WINDOW_UNBOUND_PRECEDING,
 	WINDOW_BOUND_PRECEDING,
 	WINDOW_CURRENT_ROW,
 	WINDOW_BOUND_FOLLOWING,
-	WINDOW_UNBOUND_FOLLOWING,
-	WINDOW_DELAYED_BOUND_PRECEDING,
-    WINDOW_DELAYED_BOUND_FOLLOWING
+	WINDOW_UNBOUND_FOLLOWING
 } WindowBoundingKind;
 
 typedef struct WindowFrameEdge
@@ -1419,7 +1409,6 @@ typedef struct WindowFrame
 	 */
 	WindowFrameEdge *trail; /* trailing edge of the frame */
 	WindowFrameEdge *lead; /* leading edge of the frame */
-	WindowExclusion exclude; /* exclusion clause */
 } WindowFrame;
 
 

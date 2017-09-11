@@ -155,7 +155,7 @@ inline static char extended_char(char* token, size_t length)
 
 /* Read a bytea field */
 #define READ_BYTEA_FIELD(fldname) \
-	local_node->fldname = DatumGetPointer(readDatum(false))
+	local_node->fldname = (bytea *) DatumGetPointer(readDatum(false))
 
 /* Set field to a given value, ignoring the value read from the input */
 #define READ_DUMMY_FIELD(fldname,fldvalue)  READ_SCALAR_FIELD(fldname, fldvalue)
@@ -337,7 +337,6 @@ _readQuery(void)
 	READ_NODE_FIELD(scatterClause);
 	READ_NODE_FIELD(cteList);
 	READ_BOOL_FIELD(hasRecursive);
-	READ_BOOL_FIELD(hasModifyingCTE);
 	READ_NODE_FIELD(limitOffset);
 	READ_NODE_FIELD(limitCount);
 	READ_NODE_FIELD(rowMarks);
@@ -508,7 +507,6 @@ _readWindowFrame(void)
 	READ_BOOL_FIELD(is_between);
 	READ_NODE_FIELD(trail);
 	READ_NODE_FIELD(lead);
-	READ_ENUM_FIELD(exclude, WindowExclusion);
 
 	READ_DONE();
 }
@@ -1347,8 +1345,10 @@ _readWindowRef(void)
 	READ_OID_FIELD(winfnoid);
 	READ_OID_FIELD(restype);
 	READ_NODE_FIELD(args);
-	READ_BOOL_FIELD(windistinct);
 	READ_UINT_FIELD(winspec);
+	READ_BOOL_FIELD(winstar);
+	READ_BOOL_FIELD(winagg);
+	READ_BOOL_FIELD(windistinct);
 	READ_UINT_FIELD(winindex);
 	READ_ENUM_FIELD(winstage, WinStage);
 	READ_UINT_FIELD(winlevel);

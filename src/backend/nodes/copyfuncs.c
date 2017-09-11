@@ -74,7 +74,7 @@
 	do { \
 		if (from->fldname) \
 		{ \
-			newnode->fldname = DatumGetPointer( \
+			newnode->fldname = (bytea *) DatumGetPointer( \
 					datumCopy(PointerGetDatum(from->fldname), false, len)); \
 		} \
 	} while (0)
@@ -1470,8 +1470,10 @@ _copyWindowRef(WindowRef *from)
 	COPY_SCALAR_FIELD(winfnoid);
 	COPY_SCALAR_FIELD(restype);
 	COPY_NODE_FIELD(args);
-	COPY_SCALAR_FIELD(windistinct);
 	COPY_SCALAR_FIELD(winspec);
+	COPY_SCALAR_FIELD(winstar);
+	COPY_SCALAR_FIELD(winagg);
+	COPY_SCALAR_FIELD(windistinct);
 	COPY_SCALAR_FIELD(winindex);
 	COPY_SCALAR_FIELD(winstage);
 	COPY_SCALAR_FIELD(winlevel);
@@ -2365,7 +2367,6 @@ _copyWindowFrame(WindowFrame *from)
 	COPY_SCALAR_FIELD(is_between);
 	COPY_NODE_FIELD(trail);
 	COPY_NODE_FIELD(lead);
-	COPY_SCALAR_FIELD(exclude);
 
 	return newnode;
 }
@@ -2842,7 +2843,6 @@ _copyQuery(Query *from)
 	COPY_NODE_FIELD(scatterClause);
 	COPY_NODE_FIELD(cteList);
 	COPY_SCALAR_FIELD(hasRecursive);
-	COPY_SCALAR_FIELD(hasModifyingCTE);
 	COPY_NODE_FIELD(limitOffset);
 	COPY_NODE_FIELD(limitCount);
 	COPY_NODE_FIELD(rowMarks);

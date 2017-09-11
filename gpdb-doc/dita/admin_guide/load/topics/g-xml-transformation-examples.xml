@@ -8,8 +8,8 @@
       STX transformations. Files and detailed instructions associated with these examples are in the
       GitHub greenplum-db/gpdb repo in <codeph><xref
           href="https://github.com/greenplum-db/gpdb/blob/master/gpMgmt/demo/gpfdist_transform"
-          format="html" scope="external">gpdb/gpMgmt/demo/gpfdist_transform</xref></codeph>. Read
-      the README file in the <i>Before You Begin</i> section before you run the examples. The README
+          format="html" scope="external">gpMgmt/demo/gpfdist_transform</xref></codeph>. Read the
+      README file in the <i>Before You Begin</i> section before you run the examples. The README
       file explains how to download the example data file used in the examples.</p>
   </body>
 </topic>
