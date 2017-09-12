@@ -213,51 +213,7 @@ contain_windowfuncs_walker(Node *node, void *context)
 	if (node == NULL)
 		return false;
 	if (IsA(node, WindowRef))
-	{
-		return true;		/* abort the tree traversal and return true */
-	}
-	else if (IsA(node, SortBy))
-	{
-		SortBy	   *s = (SortBy *) node;
-		return contain_windowfuncs_walker(s->node, context);
-	}
-	else if (IsA(node, WindowFrame))
-	{
-		WindowFrame *f = (WindowFrame *) node;
-		if (contain_windowfuncs_walker((Node *)f->trail, context))
-			return true;
-		if (contain_windowfuncs_walker((Node *)f->lead, context))
-			return true;
-	}
-	else if (IsA(node, WindowFrameEdge))
-	{
-		WindowFrameEdge *e = (WindowFrameEdge *) node;
-
-		return contain_windowfuncs_walker(e->val, context);
-	}
-	else if(IsA(node, A_Expr))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-	else if(IsA(node, ColumnRef))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-
-	else if (IsA(node, A_Const))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-
-	else if (IsA(node, TypeCast))
-	{
-		/* could be seen inside an untransformed window clause */
-		return false;
-	}
-
+		return true;			/* abort the tree traversal and return true */
 	/* Mustn't recurse into subselects */
 	return expression_tree_walker(node, contain_windowfuncs_walker,
 								  (void *) context);
@@ -776,6 +732,7 @@ IncrementVarSublevelsUp(Node *node, int delta_sublevels_up,
 
 	context.delta_sublevels_up = delta_sublevels_up;
 	context.min_sublevels_up = min_sublevels_up;
+	context.ignore_min_sublevels_up = false;
 
 	/*
 	 * Must be prepared to start with a Query or a bare expression tree; if
@@ -819,6 +776,7 @@ IncrementVarSublevelsUp_rtable(List *rtable, int delta_sublevels_up,
 
 	context.delta_sublevels_up = delta_sublevels_up;
 	context.min_sublevels_up = min_sublevels_up;
+	context.ignore_min_sublevels_up = false;
 
 	range_table_walker(rtable,
 					   IncrementVarSublevelsUp_walker,
