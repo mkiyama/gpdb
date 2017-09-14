@@ -7,6 +7,8 @@
       database using the <codeph><xref href="./gpdbrestore.xml#topic1" type="topic" format="dita"
         /></codeph> utility. The <codeph>gpcrondump</codeph> utility can be called directly or from
       a <codeph>crontab</codeph> entry.</p>
+    <note>This utility is deprecated and will not be supported after the end of Greenplum Database
+      5.x Support Life.</note>
     <section id="section2">
       <title>Synopsis</title>
       <codeblock><b>gpcrondump</b> <b>-x</b> <varname>database_name</varname> 
