@@ -725,8 +725,8 @@ sdw4,192.0.2.4</codeblock>
                 </plentry>
                 <plentry>
                     <pt>--validate=<varname>type</varname></pt>
-                    <pd><draft-comment author="mkiyama">add sha-256.</draft-comment>Perform data
-                        validation on table data. These are the supported types of validation.</pd>
+                    <pd>Perform data validation on table data. These are the supported types of
+                        validation.</pd>
                     <pd><codeph>count</codeph> - Specify this value to compare row counts between
                         source and destination table data.</pd>
                     <pd><codeph>md5</codeph> - Specify this value to compare MD5 values between
