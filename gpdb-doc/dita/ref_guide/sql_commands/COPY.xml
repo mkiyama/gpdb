@@ -400,8 +400,8 @@ COPY {table [(<varname>column</varname> [, ...])] | (<varname>query</varname>)} 
           <codeph>COPY</codeph> command might return table distribution policy errors, if you
         attempt to restore table data and the table distribution policy was changed after the
           <codeph>COPY FROM...ON SEGMENT</codeph> was run.</p>
-      <note>If you run <codeph>COPY FROM...ON SEGMENT</codeph>and the server configuration parameter
-          <codeph>gp_enable_segment_copy_checking</codeph> is <codeph>false</codeph>, manual
+      <note>If you run <codeph>COPY FROM...ON SEGMENT</codeph> and the server configuration
+        parameter <codeph>gp_enable_segment_copy_checking</codeph> is <codeph>false</codeph>, manual
         redistribution of table data might be required. See the <codeph>ALTER TABLE</codeph> clause
           <codeph>WITH REORGANIZE</codeph>.</note>
       <p>When you specify the <codeph>LOG ERRORS</codeph> clause, Greenplum Database captures errors
