@@ -13,7 +13,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/path/pathkeys.c,v 1.93.2.1 2009/07/17 23:20:15 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/path/pathkeys.c,v 1.95 2008/08/25 22:42:33 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -22,6 +22,7 @@
 #include "access/skey.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/plannodes.h"
 #include "optimizer/clauses.h"
 #include "optimizer/pathnode.h"
@@ -31,8 +32,7 @@
 #include "optimizer/var.h"
 #include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
-#include "parser/parse_expr.h"
-#include "parser/parse_oper.h"	/* for compatible_oper_opid() */
+#include "parser/parse_oper.h" /* for compatible_oper_opid() */
 #include "utils/lsyscache.h"
 
 #include "cdb/cdbpullup.h"		/* cdbpullup_expr(), cdbpullup_make_var() */
@@ -195,7 +195,7 @@ gen_implied_qual(PlannerInfo *root,
 	 */
 	if (bms_membership(new_qualscope) == BMS_MULTIPLE)
 	{
-		List	   *vars = pull_var_clause(new_clause, false);
+		List	   *vars = pull_var_clause(new_clause, true);
 
 		add_vars_to_targetlist(root, vars, required_relids);
 		list_free(vars);

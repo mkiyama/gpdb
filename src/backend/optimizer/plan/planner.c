@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/planner.c,v 1.231 2008/04/01 00:48:33 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/planner.c,v 1.245 2008/10/21 20:42:53 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -56,7 +56,6 @@
 #include "cdb/cdbpathtoplan.h"	/* cdbpathtoplan_create_flow() */
 #include "cdb/cdbgroup.h"		/* grouping_planner extensions */
 #include "cdb/cdbsetop.h"		/* motion utilities */
-#include "cdb/cdbsubselect.h"	/* cdbsubselect_flatten_sublinks() */
 #include "cdb/cdbvars.h"
 
 
@@ -73,9 +72,8 @@ planner_hook_type planner_hook = NULL;
 #define EXPRKIND_RTFUNC		2
 #define EXPRKIND_VALUES		3
 #define EXPRKIND_LIMIT		4
-#define EXPRKIND_ININFO		5
-#define EXPRKIND_APPINFO	6
-#define EXPRKIND_WINDOW_BOUND 7
+#define EXPRKIND_APPINFO	5
+#define EXPRKIND_WINDOW_BOUND 6
 
 
 static Node *preprocess_expression(PlannerInfo *root, Node *expr, int kind);
@@ -250,6 +248,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	glob->finalrtable = NIL;
 	glob->relationOids = NIL;
 	glob->invalItems = NIL;
+	glob->lastPHId = 0;
 	glob->transientPlan = false;
 	glob->oneoffPlan = false;
 	/* ApplyShareInputContext initialization. */
@@ -508,6 +507,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	PlannerInfo *root;
 	Plan	   *plan;
 	List	   *newHaving;
+	bool		hasOuterJoins;
 	ListCell   *l;
 
 	/* Create a PlannerInfo data structure for this subquery */
@@ -528,7 +528,6 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 		root->list_cteplaninfo = init_list_cteplaninfo(list_length(parse->cteList));
 	}
 
-	root->in_info_list = NIL;
 	root->append_rel_list = NIL;
 
 	Assert(config);
@@ -568,16 +567,16 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	AssertImply(parse->jointree->fromlist, list_length(parse->jointree->fromlist) == 1);
 
 	/* CDB: Stash current query level's relids before pulling up subqueries. */
-	root->currlevel_relids = get_relids_in_jointree((Node *) parse->jointree);
+	root->currlevel_relids = get_relids_in_jointree((Node *) parse->jointree, false);
 
 	/*
-	 * Look for IN clauses at the top level of WHERE, and transform them into
-	 * joins.  Note that this step only handles IN clauses originally at top
-	 * level of WHERE; if we pull up any subqueries below, their INs are
+	 * Look for ANY and EXISTS SubLinks in WHERE and JOIN/ON clauses, and try
+	 * to transform them into joins. Note that this step does not descend
+	 * into subqueries; if we pull up any subqueries below, their SubLinks are
 	 * processed just before pulling them up.
 	 */
 	if (parse->hasSubLinks)
-		cdbsubselect_flatten_sublinks(root, (Node *) parse);
+		pull_up_sublinks(root);
 
 	/*
 	 * Scan the rangetable for set-returning functions, and inline them
@@ -591,21 +590,16 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	 * this query.
 	 */
 	parse->jointree = (FromExpr *)
-		pull_up_subqueries(root, (Node *) parse->jointree, false, false);
+		pull_up_subqueries(root, (Node *) parse->jointree, NULL, NULL);
 
 	/*
 	 * Detect whether any rangetable entries are RTE_JOIN kind; if not, we can
 	 * avoid the expense of doing flatten_join_alias_vars().  Also check for
-	 * outer joins --- if none, we can skip reduce_outer_joins() and some
-	 * other processing.  This must be done after we have done
-	 * pull_up_subqueries, of course.
-	 *
-	 * Note: if reduce_outer_joins manages to eliminate all outer joins,
-	 * root->hasOuterJoins is not reset currently.	This is OK since its
-	 * purpose is merely to suppress unnecessary processing in simple cases.
+	 * outer joins --- if none, we can skip reduce_outer_joins().
+	 * This must be done after we have done pull_up_subqueries, of course.
 	 */
 	root->hasJoinRTEs = false;
-	root->hasOuterJoins = false;
+	hasOuterJoins = false;
 	foreach(l, parse->rtable)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(l);
@@ -615,7 +609,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 			root->hasJoinRTEs = true;
 			if (IS_OUTER_JOIN(rte->jointype))
 			{
-				root->hasOuterJoins = true;
+				hasOuterJoins = true;
 				/* Can quit scanning once we find an outer join */
 				break;
 			}
@@ -691,9 +685,6 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	parse->limitCount = preprocess_expression(root, parse->limitCount,
 											  EXPRKIND_LIMIT);
 
-	root->in_info_list = (List *)
-		preprocess_expression(root, (Node *) root->in_info_list,
-							  EXPRKIND_ININFO);
 	root->append_rel_list = (List *)
 		preprocess_expression(root, (Node *) root->append_rel_list,
 							  EXPRKIND_APPINFO);
@@ -772,7 +763,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	 * This step is most easily done after we've done expression
 	 * preprocessing.
 	 */
-	if (root->hasOuterJoins)
+	if (hasOuterJoins)
 		reduce_outer_joins(root);
 
 	/*
@@ -941,13 +932,9 @@ preprocess_qual_conditions(PlannerInfo *root, Node *jtnode)
 	else if (IsA(jtnode, JoinExpr))
 	{
 		JoinExpr   *j = (JoinExpr *) jtnode;
-		ListCell   *l;
 
 		preprocess_qual_conditions(root, j->larg);
 		preprocess_qual_conditions(root, j->rarg);
-
-		foreach(l, j->subqfromlist)
-			preprocess_qual_conditions(root, lfirst(l));
 
 		j->quals = preprocess_expression(root, j->quals, EXPRKIND_QUAL);
 	}
@@ -1000,9 +987,7 @@ inheritance_planner(PlannerInfo *root)
 			continue;
 
 		/*
-		 * Generate modified query with this rel as target.  We have to be
-		 * prepared to translate varnos in in_info_list as well as in the
-		 * Query proper.
+		 * Generate modified query with this rel as target.
 		 */
 		memcpy(&subroot, root, sizeof(PlannerInfo));
 		subroot.parse = (Query *)
@@ -1010,12 +995,11 @@ inheritance_planner(PlannerInfo *root)
 								   appinfo);
 		subroot.returningLists = NIL;
 		subroot.init_plans = NIL;
-		subroot.in_info_list = (List *)
-			adjust_appendrel_attrs(&subroot, (Node *) root->in_info_list,
-								   appinfo);
-		subroot.init_plans = NIL;
+		/* We needn't modify the child's append_rel_list */
 		/* There shouldn't be any OJ info to translate, as yet */
-		Assert(subroot.oj_info_list == NIL);
+		Assert(subroot.join_info_list == NIL);
+		/* and we haven't created PlaceHolderInfos, either */
+		Assert(subroot.placeholder_list == NIL);
 
 		/* Generate plan */
 		subplan = grouping_planner(&subroot, 0.0 /* retrieve all tuples */ );
@@ -2298,9 +2282,9 @@ is_dummy_plan_walker(Node *node, bool *context)
 							&& is_dummy_plan(outerPlan(node));
 						break;
 
-					case JOIN_IN:
+					case JOIN_SEMI:
 					case JOIN_LASJ_NOTIN:
-					case JOIN_LASJ:		/* outer */
+					case JOIN_ANTI:		/* outer */
 						*context = is_dummy_plan(outerPlan(node));
 						break;
 
@@ -2866,7 +2850,7 @@ make_subplanTargetList(PlannerInfo *root,
 	 * Vars; they will be replaced by Params later on).
 	 */
 	sub_tlist = flatten_tlist(tlist);
-	extravars = pull_var_clause(parse->havingQual, false);
+	extravars = pull_var_clause(parse->havingQual, true);
 	sub_tlist = add_to_flat_tlist(sub_tlist, extravars, false /* resjunk */);
 	list_free(extravars);
 

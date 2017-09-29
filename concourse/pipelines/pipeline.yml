@@ -76,6 +76,10 @@ groups:
   - MM_gprecoverseg
   - DPM_backup_43_restore_5
 
+- name: Experimental Tests
+  jobs:
+  - icw_gporca_centos6_gpos_memory
+
 ## ======================================================================
 ## resource types
 ## ======================================================================
@@ -460,14 +464,14 @@ resources:
     secret_access_key: {{bucket-secret-access-key}}
     regexp: deliverables/greenplum-db-(.*)-behave.tar.gz
 
-- name: singlecluster-CDH
+- name: singlecluster-HDP
   type: s3
   source:
     access_key_id: {{bucket-access-key-id}}
     secret_access_key: {{bucket-secret-access-key}}
     bucket: {{pxf-aws-bucket-name}}
     region_name: {{aws-region}}
-    versioned_file: singlecluster-without-pxf/singlecluster-CDH.tar.gz
+    versioned_file: singlecluster-without-pxf/singlecluster-HDP.tar.gz
 
 - name: nightly-trigger
   type: time
@@ -783,6 +787,25 @@ jobs:
       TEST_OS: centos
       CONFIGURE_FLAGS: {{configure_flags}}
 
+- name: icw_gporca_centos6_gpos_memory
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      passed: [compile_gpdb_centos6]
+    - get: bin_gpdb
+      resource: bin_gpdb_centos6
+      passed: [compile_gpdb_centos6]
+      trigger: true
+    - get: centos-gpdb-dev-6
+  - task: ic_gpdb
+    file: gpdb_src/concourse/tasks/ic_gpdb.yml
+    image: centos-gpdb-dev-6
+    params:
+      MAKE_TEST_COMMAND: PGOPTIONS='-c optimizer=on' installcheck-world
+      BLDWRAP_POSTGRES_CONF_ADDONS: "fsync=off | optimizer_use_gpdb_allocators=on"
+      TEST_OS: centos
+      CONFIGURE_FLAGS: {{configure_flags}}
+
 - name: icw_gporca_centos7
   serial: true
   plan:
@@ -943,7 +966,7 @@ jobs:
       passed: [compile_gpdb_centos6]
       trigger: true
     - get: singlecluster
-      resource: singlecluster-CDH
+      resource: singlecluster-HDP
       trigger: true
     - get: pxf_automation_src
       trigger: true

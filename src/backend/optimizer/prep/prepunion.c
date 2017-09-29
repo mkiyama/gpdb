@@ -24,7 +24,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/prep/prepunion.c,v 1.156 2008/10/04 21:56:53 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/prep/prepunion.c,v 1.159 2008/10/21 20:42:53 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -37,8 +37,8 @@
 #include "cdb/cdbpartition.h"
 #include "commands/tablecmds.h"
 #include "nodes/makefuncs.h"
-#include "optimizer/clauses.h"
 #include "optimizer/paths.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/plancat.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
@@ -46,7 +46,6 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_coerce.h"
-#include "parser/parse_expr.h"
 #include "parser/parsetree.h"
 #include "utils/lsyscache.h"
 
@@ -1340,23 +1339,26 @@ adjust_appendrel_attrs_mutator(Node *node, AppendRelInfoContext *ctx)
 			j->rtindex = appinfo->child_relid;
 		return (Node *) j;
 	}
-	if (IsA(node, InClauseInfo))
+	if (IsA(node, PlaceHolderVar))
 	{
-		/* Copy the InClauseInfo node with correct mutation of subnodes */
-		InClauseInfo *ininfo;
-
-		ininfo = (InClauseInfo *) expression_tree_mutator(node,
-											  adjust_appendrel_attrs_mutator,
-														  (void *) ctx);
-		/* now fix InClauseInfo's relid sets */
-		ininfo->righthand = adjust_relid_set(ininfo->righthand,
-											 appinfo->parent_relid,
-											 appinfo->child_relid);
-		return (Node *) ininfo;
+		/* Copy the PlaceHolderVar node with correct mutation of subnodes */
+		PlaceHolderVar *phv;
+		
+		phv = (PlaceHolderVar *) expression_tree_mutator(node,
+														 adjust_appendrel_attrs_mutator,
+														 (void *) ctx);
+		/* now fix PlaceHolderVar's relid sets */
+		if (phv->phlevelsup == 0)
+			phv->phrels = adjust_relid_set(phv->phrels,
+										   appinfo->parent_relid,
+										   appinfo->child_relid);
+		return (Node *) phv;
 	}
-	/* Shouldn't need to handle OuterJoinInfo or AppendRelInfo here */
-	Assert(!IsA(node, OuterJoinInfo));
+
+	/* Shouldn't need to handle planner auxiliary nodes here */
+	Assert(!IsA(node, SpecialJoinInfo));
 	Assert(!IsA(node, AppendRelInfo));
+	Assert(!IsA(node, PlaceHolderInfo));
 
 	/*
 	 * We have to process RestrictInfo nodes specially.
@@ -1371,11 +1373,11 @@ adjust_appendrel_attrs_mutator(Node *node, AppendRelInfoContext *ctx)
 
 		/* Recursively fix the clause itself */
 		newinfo->clause = (Expr *)
-			adjust_appendrel_attrs_mutator((Node *) oldinfo->clause, ctx);
+				adjust_appendrel_attrs_mutator((Node *) oldinfo->clause, ctx);
 
 		/* and the modified version, if an OR clause */
 		newinfo->orclause = (Expr *)
-			adjust_appendrel_attrs_mutator((Node *) oldinfo->orclause, ctx);
+				adjust_appendrel_attrs_mutator((Node *) oldinfo->orclause, ctx);
 
 		/* adjust relid sets too */
 		newinfo->clause_relids = adjust_relid_set(oldinfo->clause_relids,

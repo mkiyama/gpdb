@@ -12,7 +12,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/createplan.c,v 1.249 2008/10/04 21:56:53 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/createplan.c,v 1.251 2008/10/21 20:42:53 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -24,6 +24,7 @@
 #include "catalog/pg_type.h"	/* INT8OID */
 #include "access/skey.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "executor/execHHashagg.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
@@ -36,7 +37,6 @@
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
 #include "parser/parse_clause.h"
-#include "parser/parse_expr.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"	/* ordering_oper_opid */
 #include "utils/lsyscache.h"
@@ -193,7 +193,7 @@ create_plan(PlannerInfo *root, Path *path)
 	Plan	   *plan;
 
 	/* Modify path to support unique rowid operation for subquery preds. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		cdbpath_dedup_fixup(root, path);
 
 	/* Generate the Plan tree. */
@@ -461,9 +461,9 @@ build_relation_tlist(RelOptInfo *rel)
 	foreach(v, rel->reltargetlist)
 	{
 		/* Do we really need to copy here?	Not sure */
-		Var		   *var = (Var *) copyObject(lfirst(v));
+		Node   *node = (Node *) copyObject(lfirst(v));
 
-		tlist = lappend(tlist, makeTargetEntry((Expr *) var,
+		tlist = lappend(tlist, makeTargetEntry((Expr *) node,
 											   resno,
 											   NULL,
 											   false));
@@ -482,6 +482,7 @@ use_physical_tlist(PlannerInfo *root, RelOptInfo *rel)
 {
 	RangeTblEntry *rte;
 	int			i;
+	ListCell   *lc;
 
 	/*
 	 * We can do this for real relation scans, subquery scans, function scans,
@@ -503,13 +504,26 @@ use_physical_tlist(PlannerInfo *root, RelOptInfo *rel)
 		return false;
 
 	/*
-	 * Can't do it if any system columns or whole-row Vars are requested,
-	 * either.	(This could possibly be fixed but would take some fragile
-	 * assumptions in setrefs.c, I think.)
+	 * Can't do it if any system columns or whole-row Vars are requested.
+	 * (This could possibly be fixed but would take some fragile assumptions
+	 * in setrefs.c, I think.)
 	 */
 	for (i = rel->min_attr; i <= 0; i++)
 	{
 		if (!bms_is_empty(rel->attr_needed[i - rel->min_attr]))
+			return false;
+	}
+
+	/*
+	 * Can't do it if the rel is required to emit any placeholder expressions,
+	 * either.
+	 */
+	foreach(lc, root->placeholder_list)
+	{
+		PlaceHolderInfo *phinfo = (PlaceHolderInfo *) lfirst(lc);
+		
+		if (bms_nonempty_difference(phinfo->ph_needed, rel->relids) &&
+			bms_is_subset(phinfo->ph_eval_at, rel->relids))
 			return false;
 	}
 
@@ -821,8 +835,8 @@ create_unique_plan(PlannerInfo *root, UniquePath *best_path)
 {
 	Plan	   *plan;
 	Plan	   *subplan;
-	List	   *uniq_exprs;
 	List	   *in_operators;
+	List	   *uniq_exprs;
 	List	   *newtlist;
 	int			nextresno;
 	bool		newitems;
@@ -856,7 +870,7 @@ create_unique_plan(PlannerInfo *root, UniquePath *best_path)
 		return (Plan *) limitplan;
 	}
 
-	/*----------
+	/*
 	 * As constructed, the subplan has a "flat" tlist containing just the
 	 * Vars needed here and at upper levels.  The values we are supposed
 	 * to unique-ify may be expressions in these variables.  We have to
@@ -871,13 +885,6 @@ create_unique_plan(PlannerInfo *root, UniquePath *best_path)
 	 * Therefore newtlist starts from build_relation_tlist() not just a
 	 * copy of the subplan's tlist; and we don't install it into the subplan
 	 * unless we are sorting or stuff has to be added.
-	 *
-	 * To find the correct list of values to unique-ify, we look in the
-	 * information saved for IN expressions.  If this code is ever used in
-	 * other scenarios, some other way of finding what to unique-ify will
-	 * be needed.  The IN clause's operators are needed too, since they
-	 * determine what the meaning of "unique" is in this context.
-	 *----------
 	 */
 	uniq_exprs = best_path->distinct_on_exprs;	/* CDB */
 	in_operators = best_path->distinct_on_eq_operators; /* CDB */
@@ -4667,7 +4674,7 @@ make_sort_from_pathkeys(PlannerInfo *root, Plan *lefttree, List *pathkeys,
 					if (em->em_is_const || em->em_is_child)
 						continue;
 					sortexpr = em->em_expr;
-					exprvars = pull_var_clause((Node *) sortexpr, false);
+					exprvars = pull_var_clause((Node *) sortexpr, true);
 					foreach(k, exprvars)
 					{
 						if (!tlist_member_ignore_relabel(lfirst(k), tlist))

@@ -10,13 +10,14 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/path/allpaths.c,v 1.170 2008/04/01 00:48:33 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/path/allpaths.c,v 1.175 2008/10/21 20:42:52 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
 
+#include "nodes/nodeFuncs.h"
 #ifdef OPTIMIZER_DEBUG
 #include "nodes/print.h"
 #endif
@@ -31,7 +32,6 @@
 #include "optimizer/var.h"
 #include "optimizer/planshare.h"
 #include "parser/parse_clause.h"
-#include "parser/parse_expr.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "utils/guc.h"
@@ -296,7 +296,7 @@ set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		set_baserel_size_estimates(root, rel);
 
 	/* CDB: Attach subquery duplicate suppression info. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		rel->dedup_info = cdb_make_rel_dedup_info(root, rel);
 
 	/*
@@ -558,6 +558,10 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 			Var		   *parentvar = (Var *) lfirst(parentvars);
 			Var		   *childvar = (Var *) lfirst(childvars);
 
+			/*
+			 * Accumulate per-column estimates too.  Whole-row Vars and
+			 * PlaceHolderVars can be ignored here.
+			 */
 			if (IsA(parentvar, Var) &&
 				IsA(childvar, Var))
 			{
@@ -734,7 +738,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		rel->tuples = rel->subplan->plan_rows;
 
 	/* CDB: Attach subquery duplicate suppression info. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		rel->dedup_info = cdb_make_rel_dedup_info(root, rel);
 
 	/* Mark rel with estimated output rows, width, etc */
@@ -766,7 +770,7 @@ set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	rel->onerow = !expression_returns_set(rte->funcexpr);
 
 	/* CDB: Attach subquery duplicate suppression info. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		rel->dedup_info = cdb_make_rel_dedup_info(root, rel);
 
 	/* Mark rel with estimated output rows, width, etc */
@@ -825,7 +829,7 @@ set_tablefunction_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rt
 	rel->onerow = !expression_returns_set(rte->funcexpr);
 
 	/* Attach subquery duplicate suppression info. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		rel->dedup_info = cdb_make_rel_dedup_info(root, rel);
 
 	/* Mark rel with estimated output rows, width, etc */
@@ -853,7 +857,7 @@ set_values_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				   !expression_returns_set((Node *) rte->values_lists));
 
 	/* CDB: Attach subquery duplicate suppression info. */
-	if (root->in_info_list)
+	if (root->join_info_list)
 		rel->dedup_info = cdb_make_rel_dedup_info(root, rel);
 
 	/* Generate appropriate path */
@@ -1560,7 +1564,7 @@ qual_contains_winref(Query *topquery,
 		 */
 		Node	   *qualNew = ResolveNew(qual, rti, 0, rte,
 										 subquery->targetList,
-										 CMD_SELECT, 0);
+										 CMD_SELECT, 0, NULL);
 
 		result = contain_window_function(qualNew);
 		pfree(qualNew);
@@ -1669,11 +1673,24 @@ qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 	 * Examine all Vars used in clause; since it's a restriction clause, all
 	 * such Vars must refer to subselect output columns.
 	 */
-	vars = pull_var_clause(qual, false);
+	vars = pull_var_clause(qual, true);
 	foreach(vl, vars)
 	{
 		Var		   *var = (Var *) lfirst(vl);
 		TargetEntry *tle;
+
+		/*
+		 * XXX Punt if we find any PlaceHolderVars in the restriction clause.
+		 * It's not clear whether a PHV could safely be pushed down, and even
+		 * less clear whether such a situation could arise in any cases of
+		 * practical interest anyway.  So for the moment, just refuse to push
+		 * down.
+		 */
+		if (!IsA(var, Var))
+		{
+			safe = false;
+			break;
+		}
 
 		Assert(var->varno == rti);
 
@@ -1793,7 +1810,8 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 		 */
 		qual = ResolveNew(qual, rti, 0, rte,
 						  subquery->targetList,
-						  CMD_SELECT, 0);
+						  CMD_SELECT, 0,
+						  &subquery->hasSubLinks);
 
 		/*
 		 * Now attach the qual to the proper place: normally WHERE, but if the

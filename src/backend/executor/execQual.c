@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/executor/execQual.c,v 1.228 2008/03/25 22:42:43 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/executor/execQual.c,v 1.233 2008/08/25 22:42:32 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -51,7 +51,6 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/planmain.h"
-#include "parser/parse_expr.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -5450,6 +5449,19 @@ ExecInitExpr(Expr *node, PlanState *parent)
 				parent->subPlan = lcons(sstate, parent->subPlan);
 
 				state = (ExprState *) sstate;
+			}
+			break;
+		case T_AlternativeSubPlan:
+			{
+				AlternativeSubPlan *asplan = (AlternativeSubPlan *) node;
+				AlternativeSubPlanState *asstate;
+				
+				if (!parent)
+					elog(ERROR, "AlternativeSubPlan found with no parent plan");
+				
+				asstate = ExecInitAlternativeSubPlan(asplan, parent);
+				
+				state = (ExprState *) asstate;
 			}
 			break;
 		case T_FieldSelect:

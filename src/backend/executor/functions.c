@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/executor/functions.c,v 1.124 2008/03/26 18:48:59 alvherre Exp $
+ *	  $PostgreSQL: pgsql/src/backend/executor/functions.c,v 1.126 2008/08/25 22:42:32 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -23,8 +23,8 @@
 #include "executor/functions.h"
 #include "funcapi.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "parser/parse_coerce.h"
-#include "parser/parse_expr.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
@@ -348,10 +348,11 @@ init_sql_fcache(FmgrInfo *finfo)
 	 * Functions use that type of SELECT to evaluate expressions, so without those,
 	 * no functions would be useful.
 	 * 
-	 * We also need to execute certain catalog queries locally.  The Fault-Tolerance system
-	 * does queries of gp_configuration, and some DDL and Utility commands do selects from the 
-	 * catalog table, etc.    So, if the FROM clause consists only of catalog tables, we 
-	 * will run the query locally.
+	 * We also need to execute certain catalog queries locally.  The
+	 * Fault-Tolerance system does queries of gp_segment_configuration, and
+	 * some DDL and Utility commands do selects from the catalog table, etc.
+	 * So, if the FROM clause consists only of catalog tables, we will run the
+	 * query locally.
 	 * 
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE)

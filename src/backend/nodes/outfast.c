@@ -669,17 +669,6 @@ _outIndexOptInfo(StringInfo str, IndexOptInfo *node)
 	WRITE_BOOL_FIELD(cdb_default_stats_used);
 }
 
-static void
-_outOuterJoinInfo(StringInfo str, OuterJoinInfo *node)
-{
-	WRITE_NODE_TYPE("OUTERJOININFO");
-
-	WRITE_BITMAPSET_FIELD(min_lefthand);
-	WRITE_BITMAPSET_FIELD(min_righthand);
-	WRITE_ENUM_FIELD(join_type, JoinType);
-	WRITE_BOOL_FIELD(lhs_strict);
-}
-
 /*****************************************************************************
  *
  *	Stuff from parsenodes.h.
@@ -1376,6 +1365,9 @@ _outNode(StringInfo str, void *obj)
 			case T_SubPlan:
 				_outSubPlan(str, obj);
 				break;
+			case T_AlternativeSubPlan:
+				_outAlternativeSubPlan(str, obj);
+				break;
 			case T_FieldSelect:
 				_outFieldSelect(str, obj);
 				break;
@@ -1533,11 +1525,8 @@ _outNode(StringInfo str, void *obj)
 			case T_InnerIndexscanInfo:
 				_outInnerIndexscanInfo(str, obj);
 				break;
-			case T_OuterJoinInfo:
-				_outOuterJoinInfo(str, obj);
-				break;
-			case T_InClauseInfo:
-				_outInClauseInfo(str, obj);
+			case T_SpecialJoinInfo:
+				_outSpecialJoinInfo(str, obj);
 				break;
 			case T_AppendRelInfo:
 				_outAppendRelInfo(str, obj);
@@ -2017,6 +2006,12 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AlterTSDictionaryStmt:
 				_outAlterTSDictionaryStmt(str, obj);
+				break;
+			case T_PlaceHolderVar:
+				_outPlaceHolderVar(str, obj);
+				break;
+			case T_PlaceHolderInfo:
+				_outPlaceHolderInfo(str, obj);
 				break;
 
 			default:

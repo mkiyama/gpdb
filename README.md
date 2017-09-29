@@ -41,36 +41,17 @@ Follow [these linux steps](README.linux.md) for getting your system ready for GP
 ### Build the optimizer
 #### Automatically with Conan dependency manager
 
-**Note**: Conan may fail to install xerces on a fresh install of Mac OS. If you
-are using a Mac, we recommend the manual build steps in the next section.
-
-1. cd gpdb/depends
-2. conan remote add conan-gpdb https://api.bintray.com/conan/greenplum-db/gpdb-oss
-3. conan install --build
-   * This command will fetch the ORCA and xerces artifacts from bintray repository, build and install them.
-   * The header and library files will be copied to the location specified by imports section of conanfile.txt in depends directory.
-     In case, the files should be copied elsewhere, please change the location.
+    cd depends
+    conan remote add conan-gpdb https://api.bintray.com/conan/greenplum-db/gpdb-oss
+    conan install --build
+    cd ..
 
 #### Manually
-Currently GPDB assumes ORCA libraries and headers are available in the targeted
-system and tries to build with ORCA by default.  For your convenience, here are
-the steps of how to build the optimizer. For the most up-to-date way of
-building, see the README in the
-[ORCA repository](https://github.com/greenplum-db/gporca).
-
-
-    git clone https://github.com/greenplum-db/gporca
-    mkdir gporca/build
-    cd gporca/build
-    cmake ../
-    make
-    make install
-    cd ../..
+Follow the directions in the [ORCA README](https://github.com/greenplum-db/gporca).
 
 **Note**: Get the latest ORCA `git pull --ff-only` if you see an error message like below:
 
     checking Checking ORCA version... configure: error: Your ORCA version is expected to be 2.33.XXX
-
 
 ### Build the database
 Note: If you are using CentOS, first make sure that you add `/usr/local/lib` and `/usr/local/lib64` to `/etc/ld.so.conf`, run command `ldconfig`.
@@ -169,14 +150,9 @@ make distclean
 
 PXF is an extension framework for GPDB to enable fast access to external hadoop datasets.
 Refer to [PXF extension](https://github.com/greenplum-db/gpdb/tree/master/gpAux/extensions/pxf) for more information.
-Currently, GPDPB isn't built with PXF by default.
-In order to build GPDB with pxf, simply invoke `./configure` with the additional option `--enable-pxf`.
-PXF requires curl version >= 7.21.3, so `--enable-pxf` is not compatible with
-the `--without-libcurl` option.
-```
-# Configure build environment to additionally build PXF, and install at /usr/local/gpdb
-./configure --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb --enable-pxf
-```
+Currently, GPDPB is built with PXF by default (--enable-pxf is on).
+In order to build GPDB without pxf, simply invoke `./configure` with additional option `--disable-pxf`.
+PXF requires curl, so `--enable-pxf` is not compatible with the `--without-libcurl` option.
 
 ### Building GPDB with code generation enabled
 

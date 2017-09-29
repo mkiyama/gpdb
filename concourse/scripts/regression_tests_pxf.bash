@@ -91,13 +91,14 @@ function setup_singlecluster() {
 	export SLAVES=1
 	./init-gphd.sh
 	./start-hdfs.sh
+	./start-hive.sh
 	popd
 }
 
 function start_pxf() {
 	local hdfsrepo=$1
 	pushd ${PXF_HOME} > /dev/null
-	./bin/pxf init --hadoop-home ${hdfsrepo}/hadoop
+	./bin/pxf init --hadoop-home ${hdfsrepo}/hadoop --hive-home ${hdfsrepo}/hive
 	./bin/pxf start
 	popd > /dev/null
 }

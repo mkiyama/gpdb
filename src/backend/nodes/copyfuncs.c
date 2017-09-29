@@ -17,7 +17,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/nodes/copyfuncs.c,v 1.390 2008/03/21 22:41:48 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/nodes/copyfuncs.c,v 1.429 2009/04/05 19:59:39 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -686,7 +686,7 @@ _copySubqueryScan(SubqueryScan *from)
 	COPY_NODE_FIELD(subrtable);
 
 	COPY_NODE_FIELD(subrtable);
-	
+
 	return newnode;
 }
 
@@ -1157,9 +1157,9 @@ _copyMotion(Motion *from)
 	COPY_POINTER_FIELD(sortColIdx, from->numSortCols * sizeof(AttrNumber));
 	COPY_POINTER_FIELD(sortOperators, from->numSortCols * sizeof(Oid));
 	COPY_POINTER_FIELD(nullsFirst, from->numSortCols * sizeof(bool));
-	
+
 	COPY_SCALAR_FIELD(segidColIdx);
-	
+
 	return newnode;
 }
 
@@ -1242,7 +1242,7 @@ _copyAssertOp(const AssertOp *from)
 
 	COPY_SCALAR_FIELD(errcode);
 	COPY_NODE_FIELD(errmessage);
-	
+
 	return newnode;
 }
 
@@ -1620,6 +1620,21 @@ _copySubPlan(SubPlan *from)
 	COPY_NODE_FIELD(parParam);
 	COPY_NODE_FIELD(args);
 	COPY_NODE_FIELD(extParam);
+	COPY_SCALAR_FIELD(startup_cost);
+	COPY_SCALAR_FIELD(per_call_cost);
+
+	return newnode;
+}
+
+/*
+ * _copyAlternativeSubPlan
+ */
+static AlternativeSubPlan *
+_copyAlternativeSubPlan(AlternativeSubPlan *from)
+{
+	AlternativeSubPlan *newnode = makeNode(AlternativeSubPlan);
+
+	COPY_NODE_FIELD(subplans);
 
 	return newnode;
 }
@@ -2027,7 +2042,6 @@ _copyJoinExpr(JoinExpr *from)
 	COPY_NODE_FIELD(quals);
 	COPY_NODE_FIELD(alias);
 	COPY_SCALAR_FIELD(rtindex);
-	COPY_NODE_FIELD(subqfromlist);          /*CDB*/
 
 	return newnode;
 }
@@ -2148,37 +2162,41 @@ _copyRestrictInfo(RestrictInfo *from)
 }
 
 /*
- * _copyOuterJoinInfo
+ * _copyPlaceHolderVar
  */
-static OuterJoinInfo *
-_copyOuterJoinInfo(OuterJoinInfo *from)
+static PlaceHolderVar *
+_copyPlaceHolderVar(PlaceHolderVar *from)
 {
-	OuterJoinInfo *newnode = makeNode(OuterJoinInfo);
+	PlaceHolderVar *newnode = makeNode(PlaceHolderVar);
 
-	COPY_BITMAPSET_FIELD(min_lefthand);
-	COPY_BITMAPSET_FIELD(min_righthand);
-	COPY_BITMAPSET_FIELD(syn_lefthand);
-	COPY_BITMAPSET_FIELD(syn_righthand);
-	COPY_SCALAR_FIELD(join_type);
-	COPY_SCALAR_FIELD(lhs_strict);
-	COPY_SCALAR_FIELD(delay_upper_joins);
+	COPY_NODE_FIELD(phexpr);
+	COPY_BITMAPSET_FIELD(phrels);
+	COPY_SCALAR_FIELD(phid);
+	COPY_SCALAR_FIELD(phlevelsup);
 
 	return newnode;
 }
 
 /*
- * _copyInClauseInfo
+ * _copySpecialJoinInfo
  */
-static InClauseInfo *
-_copyInClauseInfo(InClauseInfo *from)
+static SpecialJoinInfo *
+_copySpecialJoinInfo(SpecialJoinInfo *from)
 {
-	InClauseInfo *newnode = makeNode(InClauseInfo);
+	SpecialJoinInfo *newnode = makeNode(SpecialJoinInfo);
 
-	COPY_BITMAPSET_FIELD(righthand);
-	COPY_NODE_FIELD(sub_targetlist);
-	COPY_NODE_FIELD(in_operators);
-
-    COPY_SCALAR_FIELD(try_join_unique);                 /*CDB*/
+	COPY_BITMAPSET_FIELD(min_lefthand);
+	COPY_BITMAPSET_FIELD(min_righthand);
+	COPY_BITMAPSET_FIELD(syn_lefthand);
+	COPY_BITMAPSET_FIELD(syn_righthand);
+	COPY_SCALAR_FIELD(jointype);
+	COPY_SCALAR_FIELD(lhs_strict);
+	COPY_SCALAR_FIELD(delay_upper_joins);
+	COPY_NODE_FIELD(join_quals);
+	COPY_SCALAR_FIELD(try_join_unique);	/* CDB */
+	COPY_SCALAR_FIELD(consider_dedup);	/* CDB */
+	COPY_NODE_FIELD(semi_operators);
+	COPY_NODE_FIELD(semi_rhs_exprs);
 
 	return newnode;
 }
@@ -2198,6 +2216,24 @@ _copyAppendRelInfo(AppendRelInfo *from)
 	COPY_NODE_FIELD(col_mappings);
 	COPY_NODE_FIELD(translated_vars);
 	COPY_SCALAR_FIELD(parent_reloid);
+
+	return newnode;
+}
+
+/*
+ * _copyPlaceHolderInfo
+ */
+static PlaceHolderInfo *
+_copyPlaceHolderInfo(PlaceHolderInfo *from)
+{
+	PlaceHolderInfo *newnode = makeNode(PlaceHolderInfo);
+
+	COPY_SCALAR_FIELD(phid);
+	COPY_NODE_FIELD(ph_var);
+	COPY_BITMAPSET_FIELD(ph_eval_at);
+	COPY_BITMAPSET_FIELD(ph_needed);
+	COPY_BITMAPSET_FIELD(ph_may_need);
+	COPY_SCALAR_FIELD(ph_width);
 
 	return newnode;
 }
@@ -2948,7 +2984,7 @@ _copyAlterTableCmd(AlterTableCmd *from)
 	COPY_NODE_FIELD(transform);
 	COPY_SCALAR_FIELD(behavior);
 	COPY_SCALAR_FIELD(part_expanded);
-	
+
 	/* Need to copy AT workspace since process uses copy internally. */
 	COPY_NODE_FIELD(partoids);
 
@@ -3354,7 +3390,7 @@ _copyCreateExternalStmt(CreateExternalStmt *from)
 	COPY_NODE_FIELD(sreh);
 	COPY_NODE_FIELD(extOptions);
 	COPY_NODE_FIELD(encoding);
-	COPY_NODE_FIELD(distributedBy);	
+	COPY_NODE_FIELD(distributedBy);
 	if (from->policy)
 	{
 		COPY_POINTER_FIELD(policy,sizeof(GpPolicy) + from->policy->nattrs*sizeof(from->policy->attrs[0]));
@@ -3926,7 +3962,7 @@ _copyFileSpaceEntry(FileSpaceEntry *from)
 	FileSpaceEntry *newnode = makeNode(FileSpaceEntry);
 
 	COPY_SCALAR_FIELD(dbid);
-	COPY_SCALAR_FIELD(contentid);	
+	COPY_SCALAR_FIELD(contentid);
 	COPY_STRING_FIELD(location);
 	COPY_STRING_FIELD(hostname);
 
@@ -4740,6 +4776,9 @@ copyObject(void *from)
 		case T_SubPlan:
 			retval = _copySubPlan(from);
 			break;
+		case T_AlternativeSubPlan:
+			retval = _copyAlternativeSubPlan(from);
+			break;
 		case T_FieldSelect:
 			retval = _copyFieldSelect(from);
 			break;
@@ -4834,14 +4873,17 @@ copyObject(void *from)
 		case T_RestrictInfo:
 			retval = _copyRestrictInfo(from);
 			break;
-		case T_OuterJoinInfo:
-			retval = _copyOuterJoinInfo(from);
+		case T_PlaceHolderVar:
+			retval = _copyPlaceHolderVar(from);
 			break;
-		case T_InClauseInfo:
-			retval = _copyInClauseInfo(from);
+		case T_SpecialJoinInfo:
+			retval = _copySpecialJoinInfo(from);
 			break;
 		case T_AppendRelInfo:
 			retval = _copyAppendRelInfo(from);
+			break;
+		case T_PlaceHolderInfo:
+			retval = _copyPlaceHolderInfo(from);
 			break;
 
 			/*

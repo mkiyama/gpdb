@@ -137,7 +137,6 @@ expression_tree_walker(Node *node,
 		case T_CurrentOfExpr:
 		case T_SetToDefault:
 		case T_RangeTblRef:
-		case T_OuterJoinInfo:
 		case T_DMLActionExpr:
 		case T_PartSelectedExpr:
 		case T_PartDefaultExpr:
@@ -279,6 +278,8 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
+		case T_AlternativeSubPlan:
+			return walker(((AlternativeSubPlan *) node)->subplans, context);
 		case T_FieldSelect:
 			return walker(((FieldSelect *) node)->arg, context);
 		case T_FieldStore:
@@ -401,8 +402,6 @@ expression_tree_walker(Node *node,
 					return true;
 				if (walker(join->rarg, context))
 					return true;
-				if (walker(join->subqfromlist, context))    /*CDB*/
-					return true;                            /*CDB*/
 				if (walker(join->quals, context))
 					return true;
 
@@ -421,15 +420,8 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
-		case T_InClauseInfo:
-			{
-				InClauseInfo *ininfo = (InClauseInfo *) node;
-
-				if (expression_tree_walker((Node *) ininfo->sub_targetlist,
-										   walker, context))
-					return true;
-			}
-			break;
+		case T_PlaceHolderVar:
+			return walker(((PlaceHolderVar *) node)->phexpr, context);
 		case T_AppendRelInfo:
 			{
 				AppendRelInfo *appinfo = (AppendRelInfo *) node;
@@ -439,6 +431,8 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
+		case T_PlaceHolderInfo:
+			return walker(((PlaceHolderInfo *) node)->ph_var, context);
 		case T_GroupingClause:
 			{
 				GroupingClause *g = (GroupingClause *) node;
@@ -1182,7 +1176,7 @@ plan_tree_walker(Node *node,
 		case T_FromExpr:
 		case T_JoinExpr:
 		case T_SetOperationStmt:
-		case T_InClauseInfo:
+		case T_SpecialJoinInfo:
 		case T_TableValueExpr:
 		case T_PartSelectedExpr:
 		case T_PartDefaultExpr:

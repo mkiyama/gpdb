@@ -225,6 +225,12 @@ explain select C.j from C where not exists (select rank() over (order by B.i) fr
 select C.j from C where not exists (select rank() over (order by B.i) from B  where C.i = B.i) order by C.j;
 explain select * from A where not exists (select sum(C.i) from C where C.i = A.i group by a.i);
 select * from A where not exists (select sum(C.i) from C where C.i = A.i group by a.i);
+explain select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
+select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
+explain select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
+select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
+explain select * from A where A.i in (select C.j from C,B where B.i in (select i from C));
+select * from A where A.i in (select C.j from C,B where B.i in (select i from C));
 
 
 -- ----------------------------------------------------------------------
@@ -814,6 +820,16 @@ select rnum, c1, c2 from qp_tjoin2 where 20 > all ( select c1 from qp_tjoin1 whe
 select rnum, c1, c2 from qp_tjoin2 where 75 > all ( select c2 from qp_tjoin1) order by rnum;
 
 select rnum, c1, c2 from qp_tjoin2 where 20 > all ( select c1 from qp_tjoin1) order by rnum;
+
+-- start_ignore
+DROP TABLE IF EXISTS foo;
+DROP TABLE IF EXISTS bar;
+
+CREATE TABLE foo(a int, b int);
+CREATE TABLE bar(c int, d int);
+-- end_ignore
+
+EXPLAIN SELECT a FROM foo f1 LEFT JOIN bar on a=c WHERE NOT EXISTS(SELECT 1 FROM foo f2 WHERE f1.a = f2.a);
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql

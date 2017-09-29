@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/nodes/outfuncs.c,v 1.324 2008/03/21 22:41:48 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/nodes/outfuncs.c,v 1.358 2009/04/05 19:59:40 tgl Exp $
  *
  * NOTES
  *	  Every node type that can appear in stored rules' parsetrees *must*
@@ -1067,7 +1067,7 @@ _outSplitUpdate(StringInfo str, SplitUpdate *node)
 	WRITE_INT_FIELD(tupleoidColIdx);
 	WRITE_NODE_FIELD(insertColIdx);
 	WRITE_NODE_FIELD(deleteColIdx);
-	
+
 	_outPlanInfo(str, (Plan *) node);
 }
 
@@ -1097,7 +1097,7 @@ _outAssertOp(StringInfo str, AssertOp *node)
 
 	WRITE_NODE_FIELD(errmessage);
 	WRITE_INT_FIELD(errcode);
-	
+
 	_outPlanInfo(str, (Plan *) node);
 }
 
@@ -1382,6 +1382,7 @@ _outSubPlan(StringInfo str, SubPlan *node)
 	WRITE_NODE_FIELD(testexpr);
 	WRITE_NODE_FIELD(paramIds);
 	WRITE_INT_FIELD(plan_id);
+	WRITE_STRING_FIELD(plan_name);
 	WRITE_OID_FIELD(firstColType);
 	WRITE_INT_FIELD(firstColTypmod);
 	WRITE_BOOL_FIELD(useHashTable);
@@ -1392,6 +1393,16 @@ _outSubPlan(StringInfo str, SubPlan *node)
 	WRITE_NODE_FIELD(parParam);
 	WRITE_NODE_FIELD(args);
 	WRITE_NODE_FIELD(extParam);
+	WRITE_FLOAT_FIELD(startup_cost, "%.2f");
+	WRITE_FLOAT_FIELD(per_call_cost, "%.2f");
+}
+
+static void
+_outAlternativeSubPlan(StringInfo str, AlternativeSubPlan *node)
+{
+	WRITE_NODE_TYPE("ALTERNATIVESUBPLAN");
+
+	WRITE_NODE_FIELD(subplans);
 }
 
 static void
@@ -1663,8 +1674,6 @@ _outJoinExpr(StringInfo str, JoinExpr *node)
 	WRITE_BOOL_FIELD(isNatural);
 	WRITE_NODE_FIELD(larg);
 	WRITE_NODE_FIELD(rarg);
-    if (node->subqfromlist)                     /*CDB*/
-        WRITE_NODE_FIELD(subqfromlist);         /*CDB*/
 	WRITE_NODE_FIELD_AS(usingClause, using);    /*CDB*/
 	WRITE_NODE_FIELD(quals);
 	WRITE_NODE_FIELD(alias);
@@ -1940,7 +1949,7 @@ static void
 _outPlannerGlobal(StringInfo str, PlannerGlobal *node)
 {
 	WRITE_NODE_TYPE("PLANNERGLOBAL");
-	
+
 	/* NB: this isn't a complete set of fields */
 	WRITE_NODE_FIELD(paramlist);
 	WRITE_NODE_FIELD(subplans);
@@ -1949,6 +1958,7 @@ _outPlannerGlobal(StringInfo str, PlannerGlobal *node)
 	WRITE_NODE_FIELD(finalrtable);
 	WRITE_NODE_FIELD(relationOids);
 	WRITE_NODE_FIELD(invalItems);
+	WRITE_UINT_FIELD(lastPHId);
 	WRITE_BOOL_FIELD(transientPlan);
 	WRITE_BOOL_FIELD(oneoffPlan);
 	WRITE_NODE_FIELD(share.motStack);
@@ -1977,16 +1987,15 @@ _outPlannerInfo(StringInfo str, PlannerInfo *node)
 	WRITE_NODE_FIELD(left_join_clauses);
 	WRITE_NODE_FIELD(right_join_clauses);
 	WRITE_NODE_FIELD(full_join_clauses);
-	WRITE_NODE_FIELD(oj_info_list);
-	WRITE_NODE_FIELD(in_info_list);
+	WRITE_NODE_FIELD(join_info_list);
 	WRITE_NODE_FIELD(append_rel_list);
+	WRITE_NODE_FIELD(placeholder_list);
 	WRITE_NODE_FIELD(query_pathkeys);
 	WRITE_NODE_FIELD(group_pathkeys);
 	WRITE_NODE_FIELD(sort_pathkeys);
 	WRITE_FLOAT_FIELD(total_table_pages, "%.0f");
 	WRITE_FLOAT_FIELD(tuple_fraction, "%.4f");
 	WRITE_BOOL_FIELD(hasJoinRTEs);
-	WRITE_BOOL_FIELD(hasOuterJoins);
 	WRITE_BOOL_FIELD(hasHavingQual);
 	WRITE_BOOL_FIELD(hasPseudoConstantQuals);
 	WRITE_BOOL_FIELD(hasRecursion);
@@ -2192,31 +2201,34 @@ _outInnerIndexscanInfo(StringInfo str, InnerIndexscanInfo *node)
 	WRITE_NODE_FIELD(cheapest_total_innerpath);
 }
 
-#ifndef COMPILING_BINARY_FUNCS
 static void
-_outOuterJoinInfo(StringInfo str, OuterJoinInfo *node)
+_outPlaceHolderVar(StringInfo str, PlaceHolderVar *node)
 {
-	WRITE_NODE_TYPE("OUTERJOININFO");
+	WRITE_NODE_TYPE("PLACEHOLDERVAR");
+
+	WRITE_NODE_FIELD(phexpr);
+	WRITE_BITMAPSET_FIELD(phrels);
+	WRITE_UINT_FIELD(phid);
+	WRITE_UINT_FIELD(phlevelsup);
+}
+
+static void
+_outSpecialJoinInfo(StringInfo str, SpecialJoinInfo *node)
+{
+	WRITE_NODE_TYPE("SPECIALJOININFO");
 
 	WRITE_BITMAPSET_FIELD(min_lefthand);
 	WRITE_BITMAPSET_FIELD(min_righthand);
 	WRITE_BITMAPSET_FIELD(syn_lefthand);
 	WRITE_BITMAPSET_FIELD(syn_righthand);
-	WRITE_ENUM_FIELD(join_type, JoinType);
+	WRITE_ENUM_FIELD(jointype, JoinType);
 	WRITE_BOOL_FIELD(lhs_strict);
 	WRITE_BOOL_FIELD(delay_upper_joins);
-}
-#endif /* COMPILING_BINARY_FUNCS */
-
-static void
-_outInClauseInfo(StringInfo str, InClauseInfo *node)
-{
-	WRITE_NODE_TYPE("INCLAUSEINFO");
-
-	WRITE_BITMAPSET_FIELD(righthand);
-    WRITE_BOOL_FIELD(try_join_unique);                  /*CDB*/
-	WRITE_NODE_FIELD(sub_targetlist);
-	WRITE_NODE_FIELD(in_operators);
+	WRITE_NODE_FIELD(join_quals);
+	WRITE_BOOL_FIELD(try_join_unique);	/*CDB*/
+	WRITE_BOOL_FIELD(consider_dedup);	/*CDB*/
+	WRITE_NODE_FIELD(semi_operators);
+	WRITE_NODE_FIELD(semi_rhs_exprs);
 }
 
 static void
@@ -2231,6 +2243,19 @@ _outAppendRelInfo(StringInfo str, AppendRelInfo *node)
 	WRITE_NODE_FIELD(col_mappings);
 	WRITE_NODE_FIELD(translated_vars);
 	WRITE_OID_FIELD(parent_reloid);
+}
+
+static void
+_outPlaceHolderInfo(StringInfo str, PlaceHolderInfo *node)
+{
+	WRITE_NODE_TYPE("PLACEHOLDERINFO");
+
+	WRITE_UINT_FIELD(phid);
+	WRITE_NODE_FIELD(ph_var);
+	WRITE_BITMAPSET_FIELD(ph_eval_at);
+	WRITE_BITMAPSET_FIELD(ph_needed);
+	WRITE_BITMAPSET_FIELD(ph_may_need);
+	WRITE_INT_FIELD(ph_width);
 }
 
 static void
@@ -2283,7 +2308,7 @@ static void
 _outColumnReferenceStorageDirective(StringInfo str, ColumnReferenceStorageDirective *node)
 {
 	WRITE_NODE_TYPE("COLUMNREFERENCESTORAGEDIRECTIVE");
-	
+
 	WRITE_STRING_FIELD(column);
 	WRITE_BOOL_FIELD(deflt);
 	WRITE_NODE_FIELD(encoding);
@@ -2504,10 +2529,10 @@ _outCreateRoleStmt(StringInfo str, CreateRoleStmt *node)
 }
 
 static void
-_outDenyLoginInterval(StringInfo str, DenyLoginInterval *node) 
+_outDenyLoginInterval(StringInfo str, DenyLoginInterval *node)
 {
 	WRITE_NODE_TYPE("DENYLOGININTERVAL");
-	
+
 	WRITE_NODE_FIELD(start);
 	WRITE_NODE_FIELD(end);
 }
@@ -4210,7 +4235,7 @@ static void
 _outTableValueExpr(StringInfo str, TableValueExpr *node)
 {
 	WRITE_NODE_TYPE("TABLEVALUEEXPR");
-	
+
 	WRITE_NODE_FIELD(subquery);
 }
 
@@ -4519,6 +4544,9 @@ _outNode(StringInfo str, void *obj)
 			case T_SubPlan:
 				_outSubPlan(str, obj);
 				break;
+			case T_AlternativeSubPlan:
+				_outAlternativeSubPlan(str, obj);
+				break;
 			case T_FieldSelect:
 				_outFieldSelect(str, obj);
 				break;
@@ -4685,14 +4713,17 @@ _outNode(StringInfo str, void *obj)
 			case T_InnerIndexscanInfo:
 				_outInnerIndexscanInfo(str, obj);
 				break;
-			case T_OuterJoinInfo:
-				_outOuterJoinInfo(str, obj);
+			case T_PlaceHolderVar:
+				_outPlaceHolderVar(str, obj);
 				break;
-			case T_InClauseInfo:
-				_outInClauseInfo(str, obj);
+			case T_SpecialJoinInfo:
+				_outSpecialJoinInfo(str, obj);
 				break;
 			case T_AppendRelInfo:
 				_outAppendRelInfo(str, obj);
+				break;
+			case T_PlaceHolderInfo:
+				_outPlaceHolderInfo(str, obj);
 				break;
 			case T_PlannerParamItem:
 				_outPlannerParamItem(str, obj);
@@ -4912,7 +4943,7 @@ _outNode(StringInfo str, void *obj)
 			case T_AlterDomainStmt:
 				_outAlterDomainStmt(str, obj);
 				break;
-				
+
 			case T_TransactionStmt:
 				_outTransactionStmt(str, obj);
 				break;

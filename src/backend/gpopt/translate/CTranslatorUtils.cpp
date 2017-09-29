@@ -694,11 +694,11 @@ CTranslatorUtils::EdxljtFromJoinType
 			edxljt = EdxljtRight;
 			break;
 
-		case JOIN_IN:
+		case JOIN_SEMI:
 			edxljt = EdxljtIn;
 			break;
 
-		case JOIN_LASJ:
+		case JOIN_ANTI:
 			edxljt = EdxljtLeftAntiSemijoin;
 			break;
 

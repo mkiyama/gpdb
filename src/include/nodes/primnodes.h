@@ -12,7 +12,7 @@
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/nodes/primnodes.h,v 1.142 2008/10/04 21:56:55 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/nodes/primnodes.h,v 1.148 2009/04/05 19:59:40 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -281,7 +281,7 @@ typedef struct Grouping
  * Defined to make it easy to distinguish this column from others.
  *
  * This is used to determine whether output tuples are coming from
- * duplicate grouping sets. For example, a table 
+ * duplicate grouping sets. For example, a table
  *
  *    test (a integer, b integer)
  *
@@ -330,6 +330,7 @@ typedef enum WinStage
  * In a query tree, a WindowFunc corresponds to a SQL window function
  * call.  In a plan tree, a WindowRef is an expression the corresponds
  * to some or all of the calculation of the window function result.
+ *
  */
 typedef struct WindowFunc
 {
@@ -342,7 +343,6 @@ typedef struct WindowFunc
 	bool		winstar;		/* TRUE if argument list was really '*' */
 	bool		winagg;			/* is function a simple aggregate? */
 	bool		windistinct;	/* TRUE if it's agg(DISTINCT ...) */
-
 	/* Following fields are significant only in a Plan tree. */
 	Index		winindex;		/* RefInfo index during planning. */
 	WinStage	winstage;		/* Stage of execution. */
@@ -505,11 +505,11 @@ typedef struct BoolExpr
 
 /*
  * TableValueExpr - a "TABLE( <subquery> )" expression indicating a subquery
- * expression that is passed as a value to a function.  
+ * expression that is passed as a value to a function.
  *
  * This is <table value constructor by query> within the SQL Standard
  */
-typedef struct TableValueExpr  
+typedef struct TableValueExpr
 {
 	NodeTag     type;
 	Node       *subquery;
@@ -569,7 +569,7 @@ typedef enum SubLinkType
 	EXPR_SUBLINK,
 	ARRAY_SUBLINK,
 	CTE_SUBLINK,
-	NOT_EXISTS_SUBLINK
+	NOT_EXISTS_SUBLINK   /* GPDB_84_MERGE_FIXME: Does ORCA really need this? */
 } SubLinkType;
 
 
@@ -603,7 +603,8 @@ typedef struct SubLink
  *
  * If the sub-select becomes an initplan rather than a subplan, the executable
  * expression is part of the outer plan's expression tree (and the SubPlan
- * node itself is not).  In this case testexpr is NULL to avoid duplication.
+ * node itself is not, but rather is found in the outer plan's initPlan
+ * list). In this case testexpr is NULL to avoid duplication.
  *
  * The planner also derives lists of the values that need to be passed into
  * and out of the subplan.	Input values are represented as a list "args" of
@@ -615,6 +616,10 @@ typedef struct SubLink
  * is an initplan; they are listed in order by sub-select output column
  * position.  (parParam and setParam are integer Lists, not Bitmapsets,
  * because their ordering is significant.)
+ *
+ * Also, the planner computes startup and per-call costs for use of the
+ * SubPlan.  Note that these include the cost of the subquery proper,
+ * evaluation of the testexpr if any, and any hashtable management overhead.
  */
 typedef struct SubPlan
 {
@@ -629,10 +634,8 @@ typedef struct SubPlan
 
 	/* Identification of the Plan tree to use: */
 	int			plan_id;		/* Index (from 1) in PlannedStmt.subplans */
-
 	/* Identification of the SubPlan for EXPLAIN and debugging purposes: */
 	char	   *plan_name;		/* A name assigned during planning */
-
 	/* Extra data useful for determining subplan's output type: */
 	Oid			firstColType;	/* Type of first column of subplan result */
 	int32		firstColTypmod;	/* Typmod of first column of subplan result */
@@ -655,7 +658,24 @@ typedef struct SubPlan
 	List	   *parParam;		/* indices of input Params from parent plan */
 	List	   *args;			/* exprs to pass as parParam values */
 	List	   *extParam;		/* indices of input Params from ancestor plan */
+	/* Estimated execution costs: */
+	Cost		startup_cost;	/* one-time setup cost */
+	Cost		per_call_cost;	/* cost for each subplan evaluation */
 } SubPlan;
+
+/*
+ * AlternativeSubPlan - expression node for a choice among SubPlans
+ *
+ * The subplans are given as a List so that the node definition need not
+ * change if there's ever more than two alternatives.  For the moment,
+ * though, there are always exactly two; and the first one is the fast-start
+ * plan.
+ */
+typedef struct AlternativeSubPlan
+{
+	Expr		xpr;
+	List	   *subplans;		/* SubPlan(s) with equivalent results */
+} AlternativeSubPlan;
 
 /* ----------------
  * FieldSelect
@@ -1137,7 +1157,7 @@ typedef struct CurrentOfExpr
 	/* for planning */
 	Index		cvarno;			/* RT index of target relation */
 	/* for validation */
-	Oid			target_relid;	/* OID of original target relation, 
+	Oid			target_relid;	/* OID of original target relation,
 								 * before any inheritance expansion */
 } CurrentOfExpr;
 
@@ -1274,10 +1294,6 @@ typedef struct RangeTblRef
  * be created that refer to the outputs of the join.  The planner sometimes
  * generates JoinExprs internally; these can have rtindex = 0 if there are
  * no join alias variables referencing such joins.
- *
- * CDB: When the planner flattens sublinks in the JOIN...ON clause, it may
- * attach a list of RangeTblRef nodes ('subqfromlist') which are to be
- * included in the cross product along with 'larg' and 'rarg'.
  *----------
  */
 typedef struct JoinExpr
@@ -1290,9 +1306,7 @@ typedef struct JoinExpr
 	List	   *usingClause;	/* USING clause, if any (list of String) */
 	Node	   *quals;			/* qualifiers on join, if any */
 	Alias	   *alias;			/* user-written alias clause, if any */
-	int			rtindex;		/* RT index assigned for join */
-    List       *subqfromlist;   /* CDB: List of join subtrees resulting from
-                                 *  flattening of sublinks */
+	int			rtindex;		/* RT index assigned for join, or 0 */
 } JoinExpr;
 
 /*----------
@@ -1336,33 +1350,33 @@ typedef struct Flow
 {
 	NodeTag		type;			/* T_Flow */
 	FlowType	flotype;		/* Type of flow produced by the plan. */
-	
+
 	/* What motion (including none) should be applied to this Plan's output. */
 	Movement	req_move;
-	
+
 	/* Locus type (optimizer flow characterization).
 	 */
 	CdbLocusType	locustype;
-	
+
 	/* If flotype is FLOW_SINGLETON, then this is the segment (-1 for entry)
 	 * on which tuples occur.  If req_move is MOVEMENT_FOCUS, then this is
 	 * the desired segment for the resulting singleton flow.
 	 */
 	int			segindex;		/* Segment index of singleton flow. */
 
-	/* If req_move is MOVEMENT_REPARTITION, these express the desired 
+	/* If req_move is MOVEMENT_REPARTITION, these express the desired
      * partitioning for a hash motion.  Else if flotype is FLOW_PARTITIONED,
-     * this is the partitioning key.  Otherwise NIL. 
+     * this is the partitioning key.  Otherwise NIL.
 	 * otherwise, they are NIL. */
 	List       *hashExpr;			/* list of hash expressions */
 
 	/* If req_move is MOVEMENT_EXPLICIT, this contains the index of the segid column
 	 * to use in the motion	 */
 	AttrNumber segidColIdx;
-	
+
     /* The original Flow ptr is saved here upon setting req_move. */
     struct Flow    *flow_before_req_move;
-	
+
 } Flow;
 
 typedef enum GroupingType
