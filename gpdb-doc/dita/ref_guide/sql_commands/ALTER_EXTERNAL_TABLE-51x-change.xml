@@ -4,9 +4,17 @@
 <topic id="topic1">
   <title id="ak20941">ALTER EXTERNAL TABLE</title>
   <body>
+    <draft-comment author="mkiyama">
+      <p>Lots of fixes <xref href="https://github.com/greenplum-db/gpdb/issues/3338" format="html"
+          scope="external">gpdb/issues/3338</xref></p>
+      <p>Changing the datatype of an external table requires a dummy USING -<xref
+          href="https://github.com/greenplum-db/gpdb/issues/3356" format="html" scope="external"
+          >gpdb/issues/3356</xref> NO (no text cast 'feature')</p>
+    </draft-comment>
     <p id="sql_command_desc">Changes the definition of an external table.</p>
     <section id="section2"
-      ><title>Synopsis</title><codeblock id="sql_command_synopsis">ALTER EXTERNAL TABLE <varname>name</varname> <varname>action</varname> [, ... ]
+        ><title>Synopsis</title>
+      <codeblock id="sql_command_synopsis">ALTER EXTERNAL TABLE <varname>name</varname> <varname>action</varname> [, ... ]
 
 where <varname>action</varname> is one of:
 
@@ -86,16 +94,13 @@ where <varname>action</varname> is one of:
     <section id="section5"><title>Examples</title><p>Add a new column to an external table
         definition:</p><codeblock>ALTER EXTERNAL TABLE ext_expenses ADD COLUMN manager text;</codeblock><p>Change
         the owner of an external
-        table:</p><codeblock>ALTER EXTERNAL TABLE ext_data OWNER TO jojo;</codeblock><p>Change the
-        data type of an external table:</p><codeblock>ALTER EXTERNAL TABLE ext_leads ALTER COLUMN acct_code TYPE integer USING acct_code::integer</codeblock>
+        table:</p><codeblock>ALTER EXTERNAL TABLE ext_data OWNER TO jojo;</codeblock><p>Change the data type of an external table:</p><codeblock>ALTER EXTERNAL TABLE ext_leads ALTER COLUMN acct_code TYPE integer USING acct_code::integer</codeblock>
       <p>When altering the column data type from <codeph>text</codeph> to <codeph>integer</codeph>,
-        the <codeph>USING</codeph> clause is required but does not affect the external data.
-      </p></section>
+        the <codeph>USING</codeph> clause is required but does not affect the external data. </p></section>
     <section id="section6"><title>Compatibility</title><p><codeph>ALTER EXTERNAL TABLE</codeph> is a
         Greenplum Database extension. There is no <codeph>ALTER EXTERNAL TABLE</codeph> statement in
         the SQL standard or regular PostgreSQL. </p></section>
-    <section id="section7"><title>See Also</title><p><codeph><xref
-            href="./CREATE_EXTERNAL_TABLE.xml#topic1" type="topic" format="dita"/></codeph>,
+    <section id="section7"><title>See Also</title><p><codeph><xref href="./CREATE_EXTERNAL_TABLE.xml#topic1" type="topic" format="dita"/></codeph>,
             <codeph><xref href="./DROP_EXTERNAL_TABLE.xml#topic1" type="topic" format="dita"
           /></codeph>, <codeph><xref href="./ALTER_TABLE.xml#topic1" type="topic" format="dita"
           /></codeph></p></section>
