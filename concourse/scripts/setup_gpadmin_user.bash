@@ -62,6 +62,9 @@ setup_gpadmin_user() {
     centos)
       /usr/sbin/useradd -G supergroup,tty gpadmin
       ;;
+    ubuntu)
+      /usr/sbin/useradd -G supergroup,tty gpadmin
+      ;;
     *) echo "Unknown OS: $TEST_OS"; exit 1 ;;
   esac
   echo -e "password\npassword" | passwd gpadmin
@@ -71,7 +74,9 @@ setup_gpadmin_user() {
 }
 
 setup_sshd() {
-  test -e /etc/ssh/ssh_host_key || ssh-keygen -f /etc/ssh/ssh_host_key -N '' -t rsa1
+  if [ ! "$TEST_OS" = 'ubuntu' ]; then
+    test -e /etc/ssh/ssh_host_key || ssh-keygen -f /etc/ssh/ssh_host_key -N '' -t rsa1
+  fi
   test -e /etc/ssh/ssh_host_rsa_key || ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
   test -e /etc/ssh/ssh_host_dsa_key || ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
 
@@ -99,6 +104,10 @@ determine_os() {
   fi
   if [ -f /etc/os-release ] && grep -q '^NAME=.*SLES' /etc/os-release ; then
     echo "sles"
+    return
+  fi
+  if lsb_release -a | grep -q 'Ubuntu' ; then
+    echo "ubuntu"
     return
   fi
   echo "Could not determine operating system type" >/dev/stderr
