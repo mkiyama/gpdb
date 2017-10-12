@@ -1,0 +1,1233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+  PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="topic1" xml:lang="en">
+  <title id="pz212122">PL/Container Language Extensions</title>
+  <body>
+    <draft-comment author="msk">4.3.9.x - see <xref
+        href="https://docs.google.com/document/d/1ZoK825_65l9WGtEU6jUKkNpimodW0qRK0NH_UyQgyfk/edit#heading=h.sh43yrfhk0k"
+        format="html" scope="external">GoogleDoc-UserGuides</xref> -PL/Container is NOT OSS - <xref
+        href="https://www.pivotaltracker.com/story/show/114624233" format="html" scope="external"
+        >#114624233</xref><p>5.0.0 New options <xref
+          href="https://github.com/greenplum-db/plcontainer/pull/16" format="html" scope="external"
+          >plcontainer/pull/16</xref> draft added to container-config
+        utility</p><codeblock otherprops="op-hidden">HIDDEN - remove me before publishing
+"guest" login for Docker:
+docker login
+* user: gpdbplcontainer
+* password: trustedlanguages</codeblock><p>/usr/local/greenplum-db/share/postgresql/plcontainer/plcontainer_configuration.xml
+          <xref href="https://www.pivotaltracker.com/story/show/150588655" format="html"
+          scope="external">150588655</xref></p></draft-comment>
+    <p>This chapter includes the following information:</p>
+    <ul>
+      <li id="pz219023"><xref href="#topic2" type="topic" format="dita"/></li>
+      <li>
+        <xref href="#topic_tcm_htd_gw" format="dita"/></li>
+      <li id="pz213664"><xref href="#topic3" type="topic" format="dita"/></li>
+      <li id="pz213668"><xref href="#topic6" type="topic" format="dita"/>
+      </li>
+      <li id="pz215253"><xref href="#topic_rh3_p3q_dw" format="dita"/></li>
+      <li><xref href="#topic_ehl_r3q_dw" format="dita"/></li>
+      <li><xref href="#topic_lqz_t3q_dw" format="dita"/></li>
+      <li><xref href="#topic_sk1_gdq_dw" format="dita"/></li>
+      <li><xref href="#topic_aff_4dq_dw" format="dita"/></li>
+      <li><xref href="#topic_ydp_c3q_dw" format="dita"/></li>
+      <li><xref href="#topic_k2v_5qt_lw" format="dita"/></li>
+      <li id="pz213676"><xref href="#topic10" type="topic" format="dita"/></li>
+    </ul>
+  </body>
+  <topic id="topic2" xml:lang="en">
+    <title id="pz217886">About the PL/Container Extension</title>
+    <body>
+      <p dir="ltr" id="docs-internal-guid-13c0efc0-0765-d3c9-ee59-fcf9998c6b5d"><draft-comment
+          author="msk"><b>Q:</b> Is PL/Container a language (see the google doc
+          UserGuide)?</draft-comment>The Greenplum Database PL/Container extension is an interface
+        that allows Greenplum Database to interact with a Docker container to execute a user-defined
+        function (UDF) in the container. Docker containers ensure the user code is not able to
+        access the file system of the source host. Also, containers are started with limited network
+        access and cannot connect back to Greenplum Database or open any other external
+        connections.</p>
+      <p>Generally speaking, a Docker <i>container</i> is a Linux process running in a managed way
+        by applying specific Linux kernel features like cgroups, namespaces and union file systems.
+        A Docker <i>image</i> is the basis of a container. A Docker container is a running instance
+        of a Docker image. When you start a Docker container you specify a Docker image. A Docker
+        image is the collection of root filesystem changes and execution parameters that are used
+        when you run a Docker container on the host system. An image does not have state and never
+        changes. For information about Docker, see the Docker web site <xref
+          href="https://www.docker.com/" format="html" scope="external"
+          >https://www.docker.com/</xref>. </p>
+      <draft-comment author="msk"><b>Q:</b> What is a container session? GPDB session running
+        PL/Container</draft-comment>
+      <p dir="ltr" id="docs-internal-guid-13c0efc0-0767-c789-571f-1b8ffc520eaf">The PL/Container
+        configuration file <codeph>plcontainer_configuration.xml</codeph> is read only on the first
+        invocation of PL/Container function in each session. You can force configuration to be
+        re-read by calling <codeph>select * from plcontainer_read_config()</codeph> within the
+        container session.</p>
+      <p dir="ltr">Starting the container is invoked only on the first call to a specific container
+        in specific function. Imagine that you are making a select from billion-row table, applying
+        transformation to the data using PL/Container function. Staring would be executed only once
+        for each of the segments, after that the container would be contacted directly by the
+        executor to receive results in the fastest possible way.</p>
+      <p dir="ltr">After starting a full cycle of a query execution. The executor sends a call to
+        the container. The container might answer with SPI - SQL query executed by the container to
+        get some data back from the database, returning result to the query executor. For
+        set-returning functions these steps might be executed many times.</p>
+      <p>The container shuts down when the connection to it is closed, and connection to the
+        container is closed when you close the Greenplum Database session. A container running in
+        standby mode has almost no consumption of CPU resources as it is waiting on the socket.
+        PL/Container memory consumption depends on the amount of data you cache in global
+        dictionaries.</p>
+    </body>
+  </topic>
+  <topic id="topic_tcm_htd_gw">
+    <title>PL/Container Languages</title>
+    <body>
+      <p dir="ltr"><draft-comment author="msk">Are the Docker images for the PL/Container languages
+          going to be on Docker Hub or someplace else?</draft-comment>PL/Container languages are
+        Docker images. The Docker images are available under <codeph>pivotaldata</codeph>
+        organization in Docker Hub:</p>
+      <ul id="ul_gxy_q5r_dw">
+        <li dir="ltr"><codeph>plcontainer_python</codeph> - container with Python 2.7.5 installed
+          into it, with no additional modules;</li>
+        <li dir="ltr"><codeph>plcontainer_python_shared</codeph> - container configured to share the
+            <codeph>/usr/local</codeph> directory with the host and start Python 2.6.2 embedded into
+          Greenplum installation. It shares Python libraries with the PL/Python language, so
+          installing packages for PL/Python would automatically make them available for the
+            <codeph>plcontainer_python_shared</codeph> container.</li>
+        <li dir="ltr"><codeph>plcontainer_anaconda</codeph> - container with Anaconda Python 4.0.0
+          installed into it;</li>
+        <li dir="ltr"><codeph>plcontainer_r</codeph> - container with R 3.2.3 installed into it,
+          with no additional modules;</li>
+        <li dir="ltr"><codeph>plcontainer_r_shared</codeph> - container configured to share the
+            <codeph>/usr/local</codeph> directory with the host and start R 3.1.0 that is installed
+          with Greenplum Database when installing the PL/R package. The R running as PL/Container
+          Docker container shares R libraries with PL/R, so installing packages for PL/R would
+          automatically make them available for the <codeph>plcontainer_r_shared</codeph>
+          container.</li>
+      </ul>
+      <p>The Docker container tag represents the PL/Container version (for example,
+          <codeph>0.1.1</codeph>) and the container build version. For example, the full container
+        name for <codeph>plcontainer_python</codeph> is similar to
+          <codeph>pivotaldata/plcontainer_python:0.1.1-1</codeph>, version 0.0.1 and version 1. This
+        is the name that is referred to in the default configuration.</p>
+    </body>
+  </topic>
+  <topic id="topic3" xml:lang="en">
+    <title id="pz214493">Installing the PL/Container Extension</title>
+    <body>
+      <p>To use PL/Container languages consists of these steps:<ol id="ol_byz_fvr_dw">
+          <li><xref href="#topic_i31_3tr_dw" format="dita"/> Ensure the Greenplum Database hosts
+            meet the prerequisites </li>
+          <li><xref href="#topic_ifk_2tr_dw" format="dita"/>Install the PL/Container extension</li>
+          <li><xref href="#topic_gkv_rtr_dw" format="dita"/>Install the Docker containers with the
+            PL/Container languages</li>
+        </ol></p>
+    </body>
+    <topic id="topic_i31_3tr_dw">
+      <title>Prerequisites</title>
+      <body>
+        <p dir="ltr" id="docs-internal-guid-13c0efc0-076c-448b-776a-91f4c270abac">Before installing
+          PL/Container, make sure your system meets the following prerequisites:</p>
+        <ul id="ul_ztj_kzp_dw">
+          <li dir="ltr">Docker host operating system prerequisites:<ul id="ul_a5j_kzp_dw">
+              <li dir="ltr">Minimum supported Linux OS kernel version is 3.10. You can check your
+                kernel version with <codeph>uname -r</codeph> command. RHEL 7.x and CentOS 7.x both
+                have this version of kernel.<note dir="ltr">RHEL 6.7 and CentOS 6.7 are not
+                  supported by both Docker and Red Hat. Here is Red Hat official statement:<p
+                    dir="ltr">The Red Hat provided, maintained, and supported version of Docker is
+                    only available on RHEL 7.</p><p dir="ltr">Red Hat does not recommend running any
+                    version of Docker on any RHEL 6 releases. Docker feature developments are tied
+                    to RHEL7 infrastructure components for kernel, devicemapper (thin provisioning,
+                    direct lvm), sVirt and systemd.</p></note></li>
+            </ul></li>
+        </ul>
+        <ul id="ul_b5j_kzp_dw">
+          <li dir="ltr">Docker 1.10 or 1.11 is installed on all Greenplum Database hosts (master,
+            primary and all standby hosts). <p>For installation instructions, see <xref
+                href="https://docs.docker.com/engine/installation/linux/centos/" format="html"
+                scope="external"
+              >https://docs.docker.com/engine/installation/linux/centos/</xref></p></li>
+          <li>To run a local Docker registry, Docker Registry version 2.3.1
+              (<codeph>registry:2.3.1</codeph>)</li>
+          <li dir="ltr">On each Greenplum Database host the <codeph>gpadmin</codeph> user should be
+            part of the <codeph>docker</codeph> group for the user to be able to manage Docker
+            images and containers.</li>
+        </ul>
+        <p dir="ltr">For the customers running Greenplum Database cluster with no internet access
+          from the nodes, you can create a local yum repository and install Docker from a local
+          host. </p>
+        <ul id="ul_c5j_kzp_dw">
+          <li dir="ltr">Fetch the directory <xref
+              href="https://yum.dockerproject.org/repo/main/centos/" format="html" scope="external"
+              >https://yum.dockerproject.org/repo/main/centos/</xref> to the machine with internet
+            access and transfer it over to the Greenplum Database
+            master:<codeblock dir="ltr">wget -r -np <xref href="https://yum.dockerproject.org/repo/main/centos/" format="html" scope="external">https://yum.dockerproject.org/repo/main/centos/</xref></codeblock></li>
+        </ul>
+        <ul id="ul_d5j_kzp_dw">
+          <li dir="ltr">Set up a local yum repository that points to the directory, For instructions
+            on creating local yum repository, see <xref
+              href="http://www.unixmen.com/setup-local-yum-repository-centos-7/" format="html"
+              scope="external"
+            >http://www.unixmen.com/setup-local-yum-repository-centos-7/</xref></li>
+        </ul>
+        <p>To install Docker on all the Greenplum Database hosts, you can run the yum command to
+          install the Docker engine with the Greenplum Database <codeph>gpssh</codeph> utility.</p>
+      </body>
+    </topic>
+    <topic id="topic_xpq_nj2_3w">
+      <title>Working with the Docker Daemon</title>
+      <body>
+        <p>After you install the Docker engine, you can start the Docker
+          daemon.<codeblock>sudo service docker start</codeblock></p>
+        <draft-comment author="msk" otherprops="op-hidden">HIDDEN This will also
+          work.<codeblock>systemctl start  docker.service</codeblock></draft-comment>
+        <p>To configure a Linux host to start the Docker daemon during system start up, run this
+          command.<codeblock>sudo chkconfig docker on</codeblock></p>
+        <p>To test if the Docker daemon is running, you can list the Docker images that are on the
+          system.</p>
+        <codeblock>docker images</codeblock>
+        <p>To see a list of Docker containers on your system.</p>
+        <codeblock>docker ps -a</codeblock>
+        <p>For a list of Docker commands, see the Docker engine Run Reference <xref
+            href="https://docs.docker.com/engine/reference/run/" format="html" scope="external"
+            >https://docs.docker.com/engine/reference/run/</xref>.</p>
+      </body>
+    </topic>
+    <topic id="topic_ifk_2tr_dw">
+      <title>Installing the PL/Container Extension Package</title>
+      <body>
+        <p dir="ltr" id="docs-internal-guid-13c0efc0-076d-1ac7-c9eb-be85acde0d67">Install the
+          PL/Container extension with the Greenplum Database<codeph>gppkg</codeph> utility.</p>
+        <ol id="ul_w5b_nzp_dw">
+          <li dir="ltr">Copy the PL/Container extension package to the Greenplum Database master
+            host as the <codeph>gpadmin</codeph> user.</li>
+          <li dir="ltr">Make sure Greenplum Database is up and running. If not, bring it up with
+            this command.<codeblock dir="ltr">gpstart -a</codeblock></li>
+          <li dir="ltr">Run the package installation
+            command.<codeblock dir="ltr">gppkg -i plcontainer-pv0.1_gpdb4.3orca-rhel5-x86_64.gppkg</codeblock></li>
+          <li dir="ltr">Source the file
+            <codeph>$GPHOME/greenplum_path.sh</codeph>.<codeblock dir="ltr">source $GPHOME/greenplum_path.sh</codeblock></li>
+          <li dir="ltr">Restart Greenplum Database.<codeblock dir="ltr">gpstop -r</codeblock></li>
+          <li dir="ltr">Enable PL/Container for specific databases by
+              running<codeblock dir="ltr">psql -d <codeph>your_database</codeph> 
+  -f $GPHOME/share/postgresql/plcontainer/plcontainer_install.sql</codeblock><p>The
+              SQL script registers the language <codeph>plcontainer</codeph> in the database creates
+              PL/Container specific UDFs.</p></li>
+          <li dir="ltr">Initialize PL/Container configuration on the Greenplum Database hosts by
+            running the <codeph>plcontainer-config</codeph>
+            utility:<codeblock dir="ltr">plcontainer-config --reset</codeblock></li>
+        </ol>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_gkv_rtr_dw">
+    <title>Installing PL/Container Language Images</title>
+    <body>
+      <p>After installing PL/Container extension you can install and run Docker images that contain
+        PL/Container languages. See <xref href="#topic_tcm_htd_gw" format="dita"/></p>
+      <p>The Docker image tag of a PL/Container language image represents PL/Container version and
+        container build version.
+            <codeph><varname>Docker_version</varname>-<varname>build_version</varname></codeph>. For
+        example, <codeph>pivotaldata/plcontainer_python:0.1.1-1</codeph> is the full Docker image
+        name for the Docker image for PL/Python language that is run with the PL/Container
+        extension. The <codeph>0.1.1</codeph> is the PL/Container version the and the 1 after the
+        minus sign (<codeph>-1</codeph>) is the build version. </p>
+      <p>This is the name that is specified in the default PL/Container configuration file.</p>
+      <p>There are several ways to install PL/Container Docker images that execute UDFs.<ul
+          id="ul_xjg_53s_dw">
+          <li><xref href="#topic_gq5_ysr_dw" format="dita"/></li>
+          <li><xref href="#topic_egx_ysr_dw" format="dita"/></li>
+          <li><xref href="#topic_jmv_xsr_dw" format="dita"/></li>
+        </ul></p>
+      <p>The first two options are simpler and can be used in test and development environments. The
+        third option is recommended for production clusters. </p>
+      <p>You can also Be aware that for building Docker image you will most likely need internet
+        access - the build process downloads base image from the Docker Hub and runs a series of
+          <codeph>yum</codeph> commands to install required packages.</p>
+    </body>
+    <topic id="topic_gq5_ysr_dw">
+      <title>Installing PL/Container Language Images (Internet Access)</title>
+      <body>
+        <p dir="ltr">If all the Greenplum Database hosts have internet access you can install the
+          PL/Container language images with the Greenplum Database <codeph>gpssh</codeph> utility
+          and the <codeph>docker pull</codeph> command. These steps install all the PL/Container
+          language images on the Greenplum Database hosts.</p>
+        <ol id="ul_sdv_5cq_dw">
+          <li dir="ltr">Run <codeph>gpssh</codeph> to open ssh sessions on the Greenplum Database
+            hosts, including master and standby master.
+            <codeblock dir="ltr">gpssh -f hostfile_all</codeblock></li>
+          <li dir="ltr">In the <codeph>gpssh</codeph> shell, run these commands to pull the Docker
+            images from Docker
+            Hub:<codeblock>docker pull pivotaldata/plcontainer_python:0.1.1-1
+docker pull pivotaldata/plcontainer_python_shared:0.1.1-1
+docker pull pivotaldata/plcontainer_anaconda:0.1.1-1
+docker pull pivotaldata/plcontainer_r:0.1.1-1
+docker pull pivotaldata/plcontainer_r_shared:0.1.1-1</codeblock></li>
+        </ol>
+        <p dir="ltr">Depending on release of PL/Container you are installing, the Docker image tag
+          might differ from <codeph>0.1.1-1</codeph>. You can run the Greenplum Database utility
+            <codeph>plcontainer-config -s</codeph> to show you the current PL/Container
+          configuration file that lists the PL/Container language Docker image names with the
+          current Docker tags.</p>
+      </body>
+    </topic>
+    <topic id="topic_egx_ysr_dw">
+      <title>Installing PL/Container Language Images Locally</title>
+      <body>
+        <p dir="ltr">If the Greenplum Database hosts do not have internet access you can pull the
+          Docker images to a local system that has internet access and then install the images from
+          that machine. The local system runs the same OS and the same version of Docker as the
+          Greenplum Database hosts.</p>
+        <ol id="ul_udv_5cq_dw">
+          <li dir="ltr">Pull the PL/Container Language images from Docker Hub onto the local system
+            with internet
+            access:<codeblock>docker pull pivotaldata/plcontainer_python:0.1.1-1
+docker pull pivotaldata/plcontainer_python_shared:0.1.1-1
+docker pull pivotaldata/plcontainer_anaconda:0.1.1-1
+docker pull pivotaldata/plcontainer_r:0.1.1-1
+docker pull pivotaldata/plcontainer_r_shared:0.1.1-1</codeblock></li>
+          <li dir="ltr">For each of the images, save the image to a tar file, transfer the tar file
+            to all the Greenplum Database hosts, including the master and standby master hosts and
+            load the Docker image on to the local host. See <xref href="#topic_wts_n41_mw"
+              format="dita"/>. </li>
+          <li>If needed, update the PL/Container configuration file. See <xref
+              href="#topic_ojn_r2s_dw" format="dita"/>.</li>
+        </ol>
+      </body>
+      <topic id="topic_wts_n41_mw">
+        <title>Copying and Moving Local Docker Images</title>
+        <body>
+          <p dir="ltr">You can create a copy of a local Docker image and install the copy on another
+            host with the Docker commands <codeph>save</codeph> and <codeph>load</codeph>. This is
+            one option for transferring Docker images to hosts without internet access.</p>
+          <ol id="ol_xts_n41_mw">
+            <li dir="ltr">Connect to the machine where the Docker image is hosted.</li>
+            <li dir="ltr">Save the Docker image to tar file with the Docker <codeph>save</codeph>
+              command.<codeblock dir="ltr">docker save -o <varname>path_to_tar_file</varname> <varname>image_name</varname></codeblock></li>
+            <li dir="ltr">Copy the Docker image tar file to the target host. <p>To copy a file from
+                a Greeplum Database host to other hosts, you can use the Greenplum Database
+                  <codeph>gpscp</codeph> utility to copy tar file to hosts. This command copies the
+                Docker image tar file to the <codeph>/tmp</codeph> directory on each of the
+                Greenplum hosts listed in the <codeph>hosts_file</codeph>.
+              </p><codeblock dir="ltr">gpscp -f hosts_file <varname>docker_tar_file</varname> =:/tmp</codeblock></li>
+            <li dir="ltr">Connect to the target host and load the Docker image into docker on the
+              host. Docker must be running on the
+              host.<codeblock dir="ltr">docker load -i <varname>path_to_tar_file</varname></codeblock></li>
+          </ol>
+          <p>You can list the Docker images on the target host with the Docker
+              <codeph>images</codeph> command. </p>
+          <codeblock>docker images</codeblock>
+          <p dir="ltr">To manage Docker images from a single location, you can set up a local Docker
+            registry. For example, you can update local Docker images and then store images in a
+            local registry and pull the images from the registry. </p>
+        </body>
+      </topic>
+    </topic>
+    <topic id="topic_jmv_xsr_dw">
+      <title>Installing PL/Container Images From a Local Docker Registry</title>
+      <body>
+        <p dir="ltr">You can create a local Docker registry to store and manage Docker images. You
+          can pull Docker images from the local registry to Greenplum Database hosts. Managing
+          Docker images from a local registry is recommended for a production Greenplum Database
+          system.</p>
+        <p>For information about setting up the local Docker registry on a local host that the
+          Greenplum Database hosts can access, see <xref href="#topic_j1b_j3q_dw" format="dita"
+          />.</p>
+        <ol id="ul_wdv_5cq_dw">
+          <li dir="ltr">If needed, set up a system with internet access to pull Docker images from
+            Docker Hub. The system must be running the same OS and the same version of Docker as the
+            Greenplum Database hosts.<p>This system can be VM running on a local computer.</p></li>
+          <li dir="ltr">Pull the PL/Container images from Docker Hub onto this local system. These
+            commands pull the PL/Container language
+            images.<codeblock>docker pull pivotaldata/plcontainer_python:0.1.1-1
+docker pull pivotaldata/plcontainer_python_shared:0.1.1-1
+docker pull pivotaldata/plcontainer_anaconda:0.1.1-1
+docker pull pivotaldata/plcontainer_r:0.1.1-1
+docker pull pivotaldata/plcontainer_r_shared:0.1.1-1</codeblock></li>
+          <li dir="ltr">If needed, transfer the Docker images to the system hosting the local Docker
+            registry. See <xref href="#topic_wts_n41_mw" format="dita"/>. </li>
+          <li dir="ltr">Tag the Docker images on the local system with the name that references the
+            local registry, then push the images with the new tags to the local registry.<p>See
+                <xref href="#topic_ysy_23q_dw" format="dita"/>.</p></li>
+          <li dir="ltr">Pull the Docker images from the local Docker registry. <p>For example, run
+                <codeph>gpssh</codeph> to open the ssh sessions to all the Greenplum Database hosts
+              in your system, including master and standby
+              master.</p><codeblock dir="ltr">gpssh -f hostfile_all</codeblock><p>Pull the
+              PL/Container images from the local registry to the Greenplum Database
+            hosts</p><codeblock>docker pull {registryhost}:{reigstryport}/plcontainer_python:0.1.1-1
+docker pull {registryhost}:{reigstryport}/plcontainer_python_shared:0.1.1-1
+docker pull {registryhost}:{reigstryport}/plcontainer_anaconda:0.1.1-1
+docker pull {registryhost}:{reigstryport}/plcontainer_r:0.1.1-1
+docker pull {registryhost}:{reigstryport}/plcontainer_r_shared:0.1.1-1</codeblock></li>
+        </ol>
+      </body>
+    </topic>
+    <topic id="topic_njj_vsr_dw" otherprops="op-hidden">
+      <title>HIDDEN - Installing PL/Container Images (Custom Language Image)</title>
+      <body>
+        <draft-comment author="msk">check updates in google doc. </draft-comment>
+        <p dir="ltr">There is one more option available for advanced users. PL/Container comes with
+          all the docker files and client binaries required for building target Docker images on
+          your own machine. Be aware that for building Docker image you will most likely need
+          internet access - the build process downloads base image from the Docker Hub and runs a
+          series of <codeph>yum</codeph> commands to install required packages.</p>
+        <p dir="ltr">Follow these steps:</p>
+        <ol id="ul_zdv_5cq_dw">
+          <li dir="ltr">Get the machine with internet access, preferably running the same OS and the
+            same version of Docker as the Greenplum cluster. This might be just a VM running on your
+            local computer. It should have GPDB and PL/Container installed on it, same versions as
+            your main cluster</li>
+          <li dir="ltr">Go to the PL/Container
+            directory:<codeblock dir="ltr">cd $GPHOME/share/postgresql/plcontainer</codeblock></li>
+          <li dir="ltr">Build docker image of your
+            choice:<codeblock>docker build -f dockerfiles/Dockerfile.python -t my_plc_python:0.0.1 .</codeblock></li>
+        </ol>
+        <p>You can modify the Docker file to reflect desired logic, assign different tag to the
+          image, etc. It gives you a good flexibility in terms of what you can do.</p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic6" xml:lang="en">
+    <title id="pz213704">Uninstalling PL/Container Extension</title>
+    <body>
+      <draft-comment author="msk">Need to test. <p><b>NOTE:</b> Uninstall script not yet
+          created.</p></draft-comment>
+      <p>When you remove support for the PL/Container extension, the <codeph>plcontainer</codeph>
+        user-defined functions that you created in the database will no longer work. </p>
+    </body>
+    <topic xml:lang="en" id="topic_qnb_3cj_kw">
+      <title>Remove PL/Container Support for a Database</title>
+      <body>
+        <p>For a database that no long requires PL/Container languages, remove support for
+          PL/Container. Run the <codeph>plcontainer_uninstall.sql</codeph> file as the
+            <codeph>gpadmin</codeph> user. For example, this command removes the
+            <codeph>plcontainer</codeph> language in the specified database. </p>
+        <codeblock dir="ltr">psql -d <varname>your_database</varname> 
+  -f $GPHOME/share/postgresql/plcontainer/plcontainer_uninstall.sql</codeblock>
+      </body>
+    </topic>
+    <topic xml:lang="en" id="topic_dty_fcj_kw">
+      <title>Uninstall the PL/Container Extension</title>
+      <body>
+        <p>If no databases have <codeph>plcontainer</codeph> as a registered language, uninstall the
+          Greenplum Database PL/Container extension with the <codeph>gppkg</codeph> utility. </p>
+        <ol id="ol_ety_fcj_kw">
+          <li>Use the Greenplum Database <codeph>gppkg</codeph> utility with the <codeph>-r</codeph>
+            option to uninstall the PL/Container extension. This example uninstalls the PL/Container
+            extension on a Linux
+              system:<codeblock>$ gppkg -r plcontainer-pv0.1_gpdb4.3orca</codeblock><p>You can run
+              the <codeph>gppkg</codeph> utility with the options <codeph>-q --all</codeph> to list
+              the installed extensions and their versions.</p></li>
+          <li dir="ltr">Reload
+            <codeph>greenplum_path.sh</codeph>.<codeblock dir="ltr">$ source $GPHOME/greenplum_path.sh</codeblock></li>
+          <li>Restart the database.<codeblock>$ gpstop -r </codeblock></li>
+        </ol>
+      </body>
+    </topic>
+    <topic id="topic_rnb_4s5_lw">
+      <title>Uninstall Docker Containers and Images</title>
+      <body>
+        <p>On the Greenplum Database hosts, uninstall the Docker containers and images that are no
+          longer required<ul id="ul_emd_ts5_lw">
+            <li>The command <codeph>docker ps -a</codeph> lists the containers on a host. The
+              command <codeph>docker stop</codeph> stops a container.</li>
+            <li>The command <codeph>docker images</codeph> lists the images on a host.</li>
+            <li>The command <codeph>docker rmi</codeph> removes images.</li>
+            <li>The command <codeph>docker rm</codeph> removes containers. </li>
+          </ul></p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_rh3_p3q_dw">
+    <title>Using PL/Container Languages</title>
+    <body>
+      <draft-comment>TO DO</draft-comment>
+      <p>When you have the enabled the <codeph>plcontainer</codeph> language, you can create and run
+        user-defined functions in the procedural languages supported by the PL/Container extension.
+        To create a UDF that uses PL/Container, the UDF must have the these items.</p>
+      <ul id="ul_z2m_1kj_kw">
+        <li>The first line of the UDF must be <codeph># container:
+            <varname>language_name</varname></codeph></li>
+        <li>The <codeph>LANGUAGE</codeph> attribute must be <codeph>plcontainer</codeph></li>
+      </ul>
+      <p>The <varname>language_name</varname> is the name that PL/Container uses to identify the
+        Docker container to run the UDF. The <varname>language_name</varname> is the
+          <codeph>name</codeph> element associated with the Docker container that is used when
+        running the UDF. See <xref href="#topic_ojn_r2s_dw" format="dita"/> for information about
+        how PL/Container maps the <varname>language_name</varname> to a Docker container. </p>
+    </body>
+    <topic id="topic9" xml:lang="en">
+      <title id="pz215232">Examples</title>
+      <body>
+        <p dir="ltr">This is an example of PL/Python function that runs using the
+            <codeph>plc_python</codeph>
+          container:<codeblock>CREATE OR REPLACE FUNCTION pylog100() RETURNS double precision AS $$
+# container: plc_python
+import math
+return math.log10(100)
+$$ LANGUAGE plcontainer;</codeblock></p>
+        <p dir="ltr">This is an example of a similar function using the <codeph>plc_r</codeph>
+          container:<codeblock>CREATE OR REPLACE FUNCTION rlog100() RETURNS text AS $$
+# container: plc_r
+return(log10(100))
+$$ LANGUAGE plcontainer;</codeblock></p>
+        <p dir="ltr">The PL/Container language you specify, <codeph>plc_python</codeph> and
+            <codeph>plc_r</codeph> in the examples, are the names defined in
+            <codeph>plcontainer_config.xml file</codeph>, and they are mapped to the
+            <codeph>container_id</codeph> to be started using Docker. Removing a specific
+            <codeph>container</codeph> entry from the configuration file makes it impossible for end
+          users to start the container. </p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_ehl_r3q_dw">
+    <title>About PL/Container Running PL/Python </title>
+    <body>
+      <p dir="ltr">In the Python language container, the module <codeph>plpy</codeph> is
+        implemented. The module contains these methods:</p>
+      <draft-comment author="msk">plpy.execute takes two parameters stmnt string and limit int, to
+        limit returned rows. </draft-comment>
+      <ul id="ul_qfd_mdq_dw">
+        <li dir="ltr"><codeph>plpy.execute(stmt)</codeph> - executes the query string
+            <codeph>stmt</codeph> and returns query result in a list of dictionary objects. To be
+          able to access the result fields make sure your query returns named fields</li>
+        <li dir="ltr"><codeph>plpy.debug(msg)</codeph> - send DEBUG2 message to the Greenplum
+          Database log </li>
+        <li dir="ltr"><codeph>plpy.log(msg)</codeph> - send LOG message to the Greenplum Database
+          log</li>
+        <li dir="ltr"><codeph>plpy.info(msg)</codeph> - send INFO message to the Greenplum Database
+          log</li>
+        <li dir="ltr"><codeph>plpy.notice(msg)</codeph> - send NOTICE message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>plpy.warning(msg)</codeph> - send WARNING message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>plpy.error(msg)</codeph> - send ERROR message to the Greenplum
+          Database log. ERROR message raise in Greenplum Database causes execution process to stop
+          and transaction to rollback</li>
+        <li dir="ltr"><codeph>plpy.fatal(msg)</codeph> - send FATAL message to the Greenplum
+          Database log. FATAL causes Greenplum Database session to be closed and transaction to be
+          rolled back</li>
+      </ul>
+      <p dir="ltr">Also, the Python module has two global dictionary objects that retain the data
+        between function calls. They are named GD and SD. GD is used to share the data between all
+        the function running within the same container, while SD is used for sharing the data
+        between multiple calls of each separate function. Be aware that accessing the data is
+        possible only within the same session, when the container process lives on a segment or
+        master. Be aware that for idle sessions Greenplum Database terminates segment processes,
+        which means the related containers would be shut down and the data from GD and SD lost.</p>
+      <p>For information about PL/Python, see <xref href="pl_python.xml#topic1"/>.</p>
+    </body>
+  </topic>
+  <topic id="topic_lqz_t3q_dw">
+    <title>About PL/Container Running PL/R</title>
+    <body>
+      <p dir="ltr">In the R language container, the module <codeph>pg.spi</codeph> is implemented.
+        The module contains these methods:<draft-comment author="msk">For R, are results returned as
+          a data.frame? Is there a simple example?</draft-comment></p>
+      <ul id="ul_mqz_t3q_dw">
+        <li dir="ltr"><codeph>pg.spi.exec(stmt)</codeph> - executes the query string
+            <codeph>stmt</codeph> and returns query result in R data.frame. To be able to access the
+          result fields make sure your query returns named fields</li>
+        <li dir="ltr"><codeph>pg.spi.debug(msg)</codeph> - send DEBUG2 message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>pg.spi.log(msg)</codeph> - send LOG message to the Greenplum Database
+          log</li>
+        <li dir="ltr"><codeph>pg.spi.info(msg)</codeph> - send INFO message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>pg.spi.notice(msg)</codeph> - send NOTICE message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>pg.spi.warning(msg)</codeph> - send WARNING message to the Greenplum
+          Database log</li>
+        <li dir="ltr"><codeph>pg.spi.error(msg)</codeph> - send ERROR message to the Greenplum
+          Database log. ERROR message raise in Greenplum Database causes execution process to stop
+          and transaction to rollback</li>
+        <li dir="ltr"><codeph>pg.spi.fatal(msg)</codeph> - send FATAL message to the Greenplum
+          Database log. FATAL causes Greenplum Database session to be closed and transaction to be
+          rolled back</li>
+      </ul>
+      <p>For information about PL/R, see <xref href="pl_r.xml#topic1"/>.</p>
+    </body>
+  </topic>
+  <topic id="topic_sk1_gdq_dw">
+    <title>Configuring PL/Container Languages</title>
+    <body>
+      <p dir="ltr" id="docs-internal-guid-4c1ff10e-0788-463d-0721-75b683aa15de">The Greenplum
+        Database utility <codeph>plcontainer-config</codeph> manages the PL/Container configuration
+        files in a Greenplum Database installation. The utility ensures that the configuration files
+        are consistent across the Greenplum Database master and segments.</p>
+      <note type="warning"> Modifying the configuration files manually might create different,
+        incompatible configurations on different Greenplum Database segments that could cause
+        unexpected behavior. </note>
+      <p>Configuration changes that are made with the utility are applied to the XML files on all
+        Greenplum Database segments. However, PL/Container configurations of currently running
+        sessions use the configuration that existed during session startup. To update the
+        PL/Container configuration in a running session, execute this command in the session.</p>
+      <codeblock><codeph>select * from plcontainer_read_config()</codeph></codeblock>
+      <p dir="ltr">When you change the <codeph>plcontainer_configuration.xml</codeph> configuration
+        file with the<codeph>plcontainer-config</codeph> utility, the utility creates a back up of
+        the original configuration file in the same directory. The backup file name is
+            <codeph>plcontainer_configuration.xml.bak<varname>YYYYMMDD</varname>_<varname>hhmmss</varname></codeph>.
+        The timestamp of the change is appended to the file name. Using the
+          <codeph>plcontainer-config</codeph> utility option <codeph>--restore</codeph>, you can
+        roll back the configuration changes to the previous version.</p>
+    </body>
+    <topic id="topic_rw3_52s_dw">
+      <title>plcontainer-config Utility</title>
+      <body>
+        <p dir="ltr">The <codeph>plcontainer-config</codeph> utility
+          syntax:<codeblock><b>plcontainer-config</b> {<b>-e</b> <varname>editor</varname> | <b>--editor</b>=<varname>editor</varname> }
+
+<b>plcontainer-config</b>
+  {<b>--reset</b> | <b>--restore</b> | <b>--cleanup</b> |
+  {<b>-s</b> | <b>--show</b> } }
+  [<b>--batch-size</b>=<varname>BATCH_SIZE</varname> ]
+
+<b>plcontainer-config</b> {<b>-v</b> | <b>--verbose</b> }
+
+<b>plcontainer-config</b> {<b>-h</b> | <b>--help</b> }
+<draft-comment author="mkiyama">5.0.0 New options <xref href="https://github.com/greenplum-db/plcontainer/pull/16" format="html" scope="external">plcontainer/pull/16</xref></draft-comment>('-c', '--configure', dest='conf', action='store_true', 
+       help='Configure container image name and location as well as sharedfolder')
+('-n', '--name', dest='name', type='string', 
+       help='Configure container image name')
+('-i', '--image', dest='image', type='string', 
+       help='Configure container image location')
+('--volume', dest='shared', type='string', 
+       help='Set shared folder, format: HOST:CONTAINER:[RW|RO]')</codeblock></p>
+        <parml>
+          <plentry>
+            <pt>h | --help</pt>
+            <pd>Display help text.</pd>
+          </plentry>
+          <plentry>
+            <pt>-s | --show</pt>
+            <pd>Display the contents of configuration file.</pd>
+          </plentry>
+          <plentry>
+            <pt>-v | --verbose</pt>
+            <pd>Enable verbose logging</pd>
+          </plentry>
+          <plentry>
+            <pt>-e <varname>editor</varname> | --editor=<varname>editor</varname></pt>
+            <pd>Open the file <codeph>plcontainer_configuration.xml</codeph> with the specified
+              editor.</pd>
+            <pd>Saving the file updates the configuration file on all Greenplum Database hosts and
+              saves the previous version of the file.</pd>
+          </plentry>
+          <plentry>
+            <pt>--reset</pt>
+            <pd>Reset the configuration file to the default.</pd>
+          </plentry>
+          <plentry>
+            <pt>--restore</pt>
+            <pd>Restore the previous version of the PL/Container configuration file.</pd>
+          </plentry>
+          <plentry>
+            <pt>--cleanup</pt>
+            <pd>Remove all the backup PL/Container configuration files. </pd>
+            <pd>
+              <note>After specifying the <codeph>--cleanup</codeph> option, you can only restore
+                configuration files from backups that were created after the clean up. </note>
+            </pd>
+          </plentry>
+          <plentry>
+            <pt>--batch-size=<varname>BATCH_SIZE</varname></pt>
+            <pd><draft-comment author="msk">What are the batch size for? Passing data between the
+                container and GPDB?</draft-comment>--batch-size=BATCH_SIZE</pd>
+          </plentry>
+        </parml>
+        <p dir="ltr">The most common commands you would run are the following:</p>
+        <ul id="ul_p5f_kdq_dw">
+          <li dir="ltr">Initialize the Greenplum Database installation with default configuration
+            file after installing a PL/Container
+            package:<codeblock dir="ltr">plcontainer-config --reset</codeblock></li>
+          <li>Edit the configuration in interactive editor of your
+            choice:<codeblock dir="ltr">plcontainer-config</codeblock></li>
+          <li dir="ltr">Show the current
+            configuration:<codeblock dir="ltr">plcontainer-config --show</codeblock></li>
+          <li dir="ltr">Restore previous configuration from the
+            backup:<codeblock dir="ltr">Plcontainer-config --restore</codeblock></li>
+          <li dir="ltr">Cleanup old configuration backup files (will remove all the backup files,
+            you will no longer have an option to restore the old
+            configuration):<codeblock dir="ltr">Plcontainer-config --cleanup</codeblock></li>
+        </ul>
+      </body>
+    </topic>
+    <topic id="topic_ojn_r2s_dw">
+      <title>PL/Container Configuration File</title>
+      <body>
+        <p dir="ltr">The default PL/Container configuration file is in
+            <codeph>$GPHOME/share/postgresql/plcontainer/plcontainer_configuration.xml</codeph>. The
+          PL/Container configuration file is an XML file. In the XML file, the root element
+            <codeph>configuration</codeph> contains a list of <codeph>container</codeph> elements,
+          one element for each PL/Container language in the Greenplum Database installation.
+          <codeblock>&lt;configuration>
+  &lt;container>
+    &lt;name>plc_python&lt;/name>
+    &lt;container_id>pivotaldata/plcontainer_python:0.1.1-1&lt;/container_id>
+    &lt;command>./client&lt;/command>
+    &lt;memory_mb>128&lt;/memory_mb>
+  &lt;/container>
+  &lt;container>
+    &lt;name>plc_r&lt;/name>
+    &lt;container_id>pivotaldata/plcontainer_r:0.1.1-1&lt;/container_id>
+    &lt;command>./client&lt;/command>
+    &lt;memory_mb>256&lt;/memory_mb>
+  &lt;/container>
+&lt;/configuration></codeblock></p>
+        <p dir="ltr">These are the XML elements and attributes in a PL/Container configuration
+          file.</p>
+        <parml>
+          <plentry>
+            <pt>configuration</pt>
+            <pd>Root element for the XML file.</pd>
+          </plentry>
+          <plentry>
+            <pt>container</pt>
+            <pd>One element for each specific container available in the system. Child element of
+              the <codeph>configuration</codeph> element.</pd>
+            <pd>
+              <parml>
+                <plentry>
+                  <pt>name</pt>
+                  <pd> Required. The value is used reference a Docker container from a function.
+                    Only containers defined in the PL/Container configuration file can be specified
+                    in PL/Container functions. A Docker container cannot be referenced by its full
+                    Docker name (container ID) for security reasons. </pd>
+                </plentry>
+                <plentry>
+                  <pt>container_id</pt>
+                  <pd>Required. The value is the full Docker image name, including image tag. The
+                    same way you specify them for starting this container in Docker. Configuration
+                    allows to have many container objects referencing the same
+                      <codeph>container_id</codeph>, this way in Docker they would be represented by
+                    identical containers. </pd>
+                  <pd>For example, you might have two containers named
+                      <codeph>plc_python_128</codeph> and <codeph>plc_python_256</codeph>, both
+                    referencing the Docker <codeph>pivotaldata/plcontainer_python:0.1.1-1</codeph>
+                    container, but first one with 128MB RAM limit and the second one with 256MB RAM
+                    limit that is specified by the <codeph>memory_mb</codeph> element.</pd>
+                </plentry>
+                <plentry>
+                  <pt>command</pt>
+                  <pd>Required. The value is the command to be run inside of container to start the
+                    client process inside. This is a mandatory field. </pd>
+                  <pd>You should modify it only if you build your custom container and want to
+                    implement some additional initialization logic before the container starts.</pd>
+                </plentry>
+                <plentry>
+                  <pt>memory_mb</pt>
+                  <pd>The value specifies the amount of memory container is allowed to use, in MB.
+                    Each container is started with this amount of RAM and twice as big swap space.
+                    Memory consumption in container is limited by <codeph>cgroups</codeph>, which
+                    means in case of memory overcommit the container would be killed by OS.</pd>
+                </plentry>
+                <plentry>
+                  <pt>shared_directory</pt>
+                  <pd>Optional. This element specifies multiple shared directories per each
+                    container, with different sharing options. XML attributes allowed:<ul
+                      id="ul_x4d_lcs_dw">
+                      <li><codeph>host</codeph> - specifies shared directory location on the host
+                        system, </li>
+                      <li><codeph>container</codeph> - specifies directory location inside of
+                        container. </li>
+                      <li><codeph>access</codeph> - specifies access level to this shared directory,
+                        which can be either <codeph>ro</codeph> (read-only) or <codeph>rw</codeph>
+                        (read-write). </li>
+                    </ul></pd>
+                  <pd>You should be careful specifying writable shared directories on the host.
+                    Write access to the host system might be used to exchange the data between
+                    containers and possibly compromise the host system.</pd>
+                </plentry>
+              </parml>
+            </pd>
+          </plentry>
+        </parml>
+      </body>
+    </topic>
+    <topic id="topic_v3s_qv3_kw">
+      <title>Adding a container Element</title>
+      <body>
+        <p dir="ltr">The <codeph>configuration</codeph> element can contain many
+            <codeph>container</codeph> elements that reference the same
+            <codeph>container_id</codeph>. In Docker, the <codeph>container_id</codeph> represents
+          identical containers. This configuration contains <codeph>container</codeph> elements
+          named <codeph>plc_python_128</codeph> and <codeph>plc_python_256</codeph>, both
+          referencing the Docker container <codeph>pivotaldata/plcontainer_python:0.1.1-1</codeph>.
+          The first element is defined with a a 128MB RAM limit and the second one with a 256MB RAM
+          limit.</p>
+        <codeblock>&lt;configuration>
+  &lt;container>
+    &lt;name>plc_python_128&lt;/name>
+    &lt;container_id>pivotaldata/plcontainer_python:0.1.1-1&lt;/container_id>
+    &lt;command>./client&lt;/command>
+    &lt;memory_mb>128&lt;/memory_mb>
+  &lt;/container>
+  &lt;container>
+    &lt;name>plc_python_256&lt;/name>
+    &lt;container_id>pivotaldata/plcontainer_python:0.1.1-1&lt;/container_id>
+    &lt;command>./client&lt;/command>
+    &lt;memory_mb>256&lt;/memory_mb>
+  &lt;/container>
+&lt;configuration></codeblock>
+      </body>
+    </topic>
+    <topic id="topic_oyl_zv3_kw">
+      <title>Notes</title>
+      <body>
+        <p>PL/Container configuration file <codeph>plcontainer_configuration.xml</codeph> is stored
+          in all the Greenplum Database data directories for all the Greenplum Database segments:
+          master, standby master, primary and mirror. This query lists the Greenplum Database system
+          data
+          directories:<codeblock>select g.hostname, fe.fselocation as directory
+    from pg_filespace as f, pg_filespace_entry as fe,
+         gp_segment_configuration as g
+    where f.oid = fe.fsefsoid and g.dbid = fe.fsedbid
+        and f.fsname = 'pg_system';</codeblock></p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_aff_4dq_dw">
+    <title>Working with Docker Images</title>
+    <body>
+      <p>You can manage the Docker images that are used with the Greenplum Database PL/Container
+        extension.</p>
+    </body>
+    <topic id="topic_o1g_l3q_dw">
+      <title>About Docker Image Names</title>
+      <body>
+        <p dir="ltr">You retrieve a Docker image by specifying the image name. A Docker image name
+          is composed of two parts, a <varname>repository</varname> part and a
+            <varname>tag</varname> part, separated by a colon:
+            <varname>repository</varname>:<varname>tag</varname>. </p>
+        <ul id="ul_ebt_pzk_gw">
+          <li>The repository part describes the repository server where the image is hosted. This
+            part might be simply the name of image from Docker Hub, might define the user owning the
+            image at a private Docker Hub repository, or contain the reference to a local Docker
+            registry server. <p dir="ltr">If you use a local registry you must also include a
+              registry host port to the Docker image name. For example, the image
+                <codeph>plcontainer_python:0.1.1-1</codeph> stored in local Docker registry on the
+              local system dockerregistry.example.com would be named
+                <codeph>dockerregistry.example.com:5000/plcontainer_python:0.1.1-1</codeph>. This
+              way your custom modification of it might be called
+                <codeph>dockerregistry.example.com:5000/plcontainer_python:0.1.1-1mod01</codeph> or
+              you can simply choose another container name for it like
+                <codeph>dockerregistry.example.com:5000/my_plc_python:0.1</codeph>.</p></li>
+          <li>The tag part specifies a specific image, a version, in a repository. <p dir="ltr">When
+              you build an image and name it <codeph>plc_container</codeph> without a tag, Docker
+              creates an image with the name <codeph>plc_container:latest</codeph>. The version
+                <codeph>lastest</codeph> is just a tag for the version of the container, it is not a
+              special tag. Specifying the version <codeph>latest</codeph> does not specify the most
+              current image or container, it is the image or container with the tag
+                <codeph>latest</codeph> in the registry. It might be not really the latest version
+              of the application you want. If you fetch the <codeph>latest</codeph> image to the
+              Docker node, you would be able to use application, but Docker does not check whether
+                <codeph>latest</codeph> has changed in the Docker registry, this process is not
+              automated. This is why it is strongly not recommended to use <codeph>latest</codeph>
+              tag in the repository. </p><p dir="ltr">The version tag of the images
+                <codeph>plcontainer_python</codeph> and <codeph>plcontainer_r</codeph> are
+                <codeph>0.1.1-1</codeph>. If you want to create a custom container make sure you
+              specify a different version tag, for example you might create
+                <codeph>plcontainer_python:0.1.1-1mod01</codeph>. This would ensure that with
+              updating PL/Container version your private container version names don't conflict with
+              the Greenplum Database image names.</p></li>
+        </ul>
+        <p dir="ltr">For example, when you retrieve the Docker image <codeph>centos:7</codeph> with
+          a Docker command, the command retrieves the image in a public Docker Hub for
+            <codeph>centos</codeph> registry with tag <codeph>7</codeph>. If you specify
+            <codeph>pivotaldata/gpdb-base:0.3</codeph> the command retrieves the image
+            <codeph>gpdb-base</codeph> from the repository of the user <codeph>pivotaldata</codeph>
+          with tag <codeph>0.3</codeph>. When you specify
+            <codeph>mydockerregistry.myhost.com:5000/centos:7</codeph> the command connects to the
+          registry server host <codeph>mydockerregistry.myhost.com</codeph> using port
+            <codeph>5000</codeph> and looks up the image <codeph>centos</codeph> with tag
+            <codeph>7</codeph>.</p>
+        <p dir="ltr">To access the images hosted on Docker Hub, your Docker instance requires
+          internet access. For Greenplum Database hosts without internet access, you can use these
+          methods to deliver Docker images to the hosts.</p>
+        <ul id="ul_a5f_pdq_dw">
+          <li dir="ltr">Use the Docker commands <codeph>save</codeph> and <codeph>load</codeph> to
+            copy and move a local Docker image.</li>
+          <li dir="ltr">Use a local Docker registry server that the Greenplum Database hosts can
+            access.</li>
+        </ul>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic_ydp_c3q_dw">
+    <title>Building Custom Docker Images</title>
+    <body>
+      <p dir="ltr">When you use PL/Container with the Python or R containers, you might to need to
+        add functionality to the container. For example, you might require Python packages in the
+          <codeph>plc_container</codeph> or R modules in the <codeph>plc_r</codeph>. </p>
+      <p dir="ltr">With the Docker command <codeph>docker build</codeph>, you can build a Docker
+        image that contains the packages or modules. The input for the docker build command is a
+        Docker image and a Dockerfile. </p>
+      <p>Building a Docker image usually requires internet access. When necessary, the Docker build
+        process downloads a base image from the Docker Hub and runs a series of <codeph>yum</codeph>
+        commands to install required packages.</p>
+      <p dir="ltr">This example starts with the Docker image
+          <codeph>pivotaldata/plcontainer_python:0.1.2-1</codeph> and adds Python modules to the
+        image.</p>
+      <ol id="ol_wf2_s1d_pw">
+        <li>Create a Dockerfile (a text file) that contains this text. In the example, the
+          Dockerfile name is
+          <codeph>my_new_dockerfile</codeph><codeblock>FROM pivotaldata/plcontainer_python:0.1.2-1
+# Running Python client inside of container
+RUN yum -y install wget
+RUN yum -y install python
+RUN wget https://bootstrap.pypa.io/get-pip.py &amp;&amp; python get-pip.py
+RUN pip install numpy scipy sklearn</codeblock>The
+          Dockerfile starts with the python PL/Container image and installs the utilities
+            <codeph>wget</codeph>, <codeph>python</codeph>, and <codeph>pip</codeph>. Docker uses
+          the utilities to install additional Python modules NumPy, SciPy and Scikit-Learn. Building
+          this Docker image requires internet access to pull the image
+            <codeph>pivotaldata/plcontainer_python:0.1.2-1</codeph> from Docker Hub and to access
+          and install Linux packages with a series of <codeph>yum</codeph>, <codeph>wget</codeph>,
+          and <codeph>pip</codeph> commands.</li>
+        <li>Build the customized Docker image with the <codeph>docker build</codeph> command. This
+          example command builds a new Docker image on the local system. The name of the new image
+          includes the local Docker registry on <codeph>example.com</codeph>.
+            <codeblock dir="ltr">docker build -f my_new_dockerfile \
+  -t example.com:5000/plcontainer/my_plc_python:0.1 .</codeblock><p>The
+            command creates a Docker image on the local host. You can list the Docker images on the
+            host with this command.</p><codeblock>docker images</codeblock></li>
+      </ol>
+      <p>After you create the new image you can push it to the local Docker registry or use the
+        Docker save and load approach to deliver it to remote hosts. </p>
+      <p>To create and run a UDF with the custom Docker image, you must install the Docker image on
+        all Greenplum Database hosts and update the <codeph>plcontainer_configuration.xml</codeph>
+        file. </p>
+      <p>When testing a custom Docker image, you can display the full output of communication
+        between the PL/Container and Docker by setting <codeph>client_min_messages=DEBUG1</codeph>
+        in your Greenplum Database session. </p>
+      <p>For information about Dockerfiles, see the Docker information at <xref
+          href="https://docs.docker.com/engine/reference/builder/" format="html" scope="external"
+          >https://docs.docker.com/engine/reference/builder/</xref>. </p>
+      <codeblock><b>HIDDEN</b>
+# OLD version - does not work?
+FROM centos:7.2.1511
+# Running Python client inside of container
+RUN yum -y install wget
+RUN yum -y install python
+RUN wget https://bootstrap.pypa.io/get-pip.py &amp;&amp; python get-pip.py
+RUN pip install numpy scipy sklearn
+ADD ./src/pyclient/bin /clientdir
+EXPOSE 8080
+WORKDIR /clientdir</codeblock>
+    </body>
+  </topic>
+  <topic id="topic_k2v_5qt_lw">
+    <title>About Docker Registry</title>
+    <body>
+      <p dir="ltr">Docker Registry is a stateless, highly scalable server side application to store
+        and distribute Docker images. Docker Registry is a component Project of Docker and is
+        available as a container that can be pulled from Docker Hub with <codeph>docker
+          pull</codeph> command and then can be started inside a Docker container.</p>
+      <p dir="ltr">To manage Docker images from a single location, you can set up a local Docker
+        registry. For example, you can update local Docker images and then store and pull the images
+        from the local registry. Systems that pull Docker images from the local registry do not
+        require access to the internet.</p>
+    </body>
+    <topic id="topic_j1b_j3q_dw">
+      <title>Installing a Local Docker Registry</title>
+      <body>
+        <p>These steps describe how to install local Docker registry for use with Greenplum
+          Database.</p>
+        <p dir="ltr">The setup process requires a machine with internet access that is running the
+          same OS and the same version of Docker as the Greenplum Database hosts. If you run the
+          local Docker registry on a system that is not a Greenplum Database host, that system must
+          also run same OS and the same version of Docker as the Greenplum Database hosts.</p>
+        <note dir="ltr">Greenplum Database PL/Container extension supports Docker registry version
+          2.3.1. </note>
+        <ol id="ul_e5f_pdq_dw">
+          <li dir="ltr">Pull the container image of Docker Registry version 2.3.1 from the Docker
+            Hub to a local system with internet
+            access.<codeblock dir="ltr">docker pull registry:2.3.1</codeblock></li>
+          <li dir="ltr">If needed, transfer the Docker registry image from the local system to the
+            destination system that will host the local registry. See <xref href="#topic_wts_n41_mw"
+              format="dita"/>. </li>
+        </ol>
+        <p dir="ltr">Once the Docker registry image is loaded on the system, you can start a Docker
+          container from the Docker registry image on the local system. This example starts a Docker
+          registry container with a minimal set of options. The option <codeph>-d</codeph> runs the
+          container in background, <codeph>--name</codeph> specifies the container name
+            <codeph>localregistry</codeph>, and <codeph>-p</codeph> publishes the container's port
+          to the host. </p>
+        <codeblock>docker run  -d --name mytestregistry -p 5000:5000 registry:2.3.1</codeblock>
+        <note type="warning">This command runs an insecure Docker registry, a registry without
+          authentication. This configuration should be used only for isolated testing or in a
+          tightly controlled, air-gapped environment. See this Docker information <xref
+            href="https://docs.docker.com/registry/insecure/" format="html" scope="external"
+            >https://docs.docker.com/registry/insecure/</xref>. <p>For information about running a
+            registry with a self-signed SSL certificate, see <xref href="#topic_ogr_msm_lw"
+              format="dita"/>.</p></note>
+        <p>List running containers to see the Docker registry container on the local system. This
+          command shows the running Docker containers.</p>
+        <codeblock>docker ps</codeblock>
+        <p>The command <codeph>docker ps -a</codeph> lists all Docker containers on the host.</p>
+        <p>You can test this registry with the Docker commands <codeph>tag</codeph>
+          <codeph>push</codeph> and <codeph>pull</codeph>. </p>
+        <p>The <codeph>docker tag</codeph> command tags a local Docker image with a name that
+          references the local registry address. This command tags the PL/Python
+          image.<codeblock dir="ltr">docker tag pivotaldata/plcontainer_python:0.1.2-1 \
+  localhost:5000/gpdb/plc_python_base:0.0.1</codeblock></p>
+        <p>The <codeph>docker push</codeph> command pushes the image to the the local repository. </p>
+        <p>After pushing the image to the repository, you can delete the image from the local
+          host.</p>
+        <p>
+          <codeblock>docker rmi localhost:5000/gpdb/plc_python_base:0.0.1</codeblock>
+        </p>
+        <p>This <codeph>docker pull</codeph> command, pulls the image from the local Docker
+          repository.</p>
+        <codeblock>docker rmi localhost:5000/gpdb/plc_python_base:0.0.1</codeblock>
+        <p>This command stops the Docker registry container specifying the container name.</p>
+        <codeblock>docker stop mytestregistry</codeblock>
+        <p>This command removes the Docker registry container.</p>
+        <codeblock>docker rm mytestregistry</codeblock>
+        <p dir="ltr">You can specify other options such as the location to store the Docker images
+          and SSL certificates to access the Registry. For information about deploying Docker
+          Registry and defining deployment options, see <xref
+            href="https://docs.docker.com/registry/deploying/" format="html" scope="external"
+            >https://docs.docker.com/registry/deploying/</xref></p>
+      </body>
+      <topic id="topic_ysy_23q_dw">
+        <title>Working with a Local Docker Registry</title>
+        <body>
+          <p dir="ltr">You can test this insecure Docker registry with the Docker commands
+              <codeph>tag</codeph>, <codeph>push</codeph> and <codeph>pull</codeph>. </p>
+          <ol id="ul_aw1_h3q_dw">
+            <li dir="ltr">Choose a local Docker image that you want to upload to the registry. These
+              steps use the image <codeph>pivotaldata/plcontainer_python:0.1.2-1</codeph> that is on
+              the local host.</li>
+            <li dir="ltr">Use the <codeph>docker tag</codeph> command to add a image name to the
+              local Docker image that reflects the local registry
+                address:<codeblock dir="ltr">docker tag pivotaldata/plcontainer_python:0.1.2-1 \
+  localhost:5000/gpdb/plc_python_base:0.0.1</codeblock><p>The
+                command creates a second local Docker image with the same image ID but a different
+                  <codeph>repository</codeph>.</p></li>
+            <li dir="ltr">Confirm the Docker image with local registry name is in the Docker
+              repository. This command lists the Docker images on the current
+              host.<codeblock>docker images</codeblock></li>
+            <li dir="ltr">Push the Docker image from the host to the local registry with this
+              command:<codeblock dir="ltr">docker push localhost:5000/gpdb/plc_bython_base:0.0.1</codeblock></li>
+          </ol>
+          <p dir="ltr">After pushing the image to the local registry, you can pull the image from
+            the local registry to Docker repositories on hosts with access to the local Docker
+            registry host. </p>
+          <p dir="ltr">To check that the image is available from the local registry to a host
+            system, you can log on to another host with Docker installed and pull Docker image from
+            the local registry.</p>
+          <codeblock dir="ltr">docker pull localhost:5000/gpdb/plc_bython_base:0.0.1</codeblock>
+          <draft-comment author="msk">Is there a better way to list local registry? <p>I found this
+              page <xref
+                href="http://stackoverflow.com/questions/31251356/how-to-get-a-list-of-images-on-docker-registry-v2"
+                format="html" scope="external">stackoverflow.com- list of
+                images-on-docker-registry-v2</xref> that has a link to this script.</p><p><xref
+                href="https://github.com/BradleyA/Search-docker-registry-v2-script.1.0"
+                format="html" scope="external"
+                >https://github.com/BradleyA/Search-docker-registry-v2-script.1.0</xref></p><p>Also,
+              there is this git repo <xref
+                href="https://hub.docker.com/r/konradkleine/docker-registry-frontend/" format="html"
+                scope="external"
+                >https://hub.docker.com/r/konradkleine/docker-registry-frontend/</xref></p></draft-comment>
+          <p>This <codeph>curl</codeph> command lists the image names in the repository.</p>
+          <codeblock>curl http://localhost:5000/v2/_catalog</codeblock>
+          <p>This <codeph>curl</codeph> command lists tags for an image
+            name.<codeblock>curl http://centos72-docker:5000/v2/plc_test_python/tags/list</codeblock></p>
+          <p>These commands stop the local registry container and removes the container and the
+            container data.</p>
+          <codeblock>docker stop mytestregistry 
+docker rm -v mytestregistry</codeblock>
+        </body>
+      </topic>
+      <topic id="topic_n1y_14l_nw" otherprops="op-hidden">
+        <title>HIDDEN - Insecure Registry setup</title>
+        <body>
+          <draft-comment author="msk">Tried a lot of things and could not get this to work.
+            :-(</draft-comment>
+          <p>See this Docker page for information about testing an insecure local Docker registry
+              <xref href="https://docs.docker.com/registry/insecure/" format="html" scope="external"
+              >https://docs.docker.com/registry/insecure/</xref>
+          </p>
+          <p>Also see this issues thread for a discussion. <xref
+              href="https://github.com/docker/docker/issues/9889" format="html" scope="external"
+              >https://github.com/docker/docker/issues/9889</xref></p>
+          <p>Need to set <codeph>EnvironmentFile=/etc/default/docker</codeph> in the docker systemd
+            config files. See <xref
+              href="https://github.com/docker/docker/pull/14513#issuecomment-125009350"
+              format="html" scope="external">#14513 (comment)</xref> or <xref
+              href="https://github.com/docker/docker/pull/15301" format="html" scope="external"
+              >#15301</xref> for how to configure systemd to resolve this.</p>
+          <codeblock>systemctl show docker | grep EnvironmentFile
+EnvironmentFile=-/etc/sysconfig/docker (ignore_errors=yes)</codeblock>
+          <p>The recommended way is to use a systemd drop-in file. These are local files in the
+            <codeblock>/etc/systemd/system/docker.service.d</codeblock> directory. This could also
+            be the file name</p>
+          <p><codeblock>/etc/systemd/system/docker.service</codeblock>, which also works for
+            overriding the defaults from
+            <codeblock>/lib/systemd/system/docker.service</codeblock></p>
+          <p>show location of Docker systemd file to override defaults.</p>
+          <p>
+            <codeblock>systemctl show --property=FragmentPath docker
+FragmentPath=/usr/lib/systemd/system/docker.service</codeblock>
+          </p>
+          <p>See <xref href="https://docs.docker.com/articles/systemd/" format="html"
+              scope="external">https://docs.docker.com/articles/systemd/</xref> too.</p>
+          <ol id="ol_iyl_bml_nw">
+            <li>Open the <codeph>/etc/default/docker</codeph> file or
+                <codeph>/etc/sysconfig/docker</codeph> for editing.<p>Depending on your operating
+                system, your Engine daemon start options.</p></li>
+            <li>Edit (or add) the <codeph>DOCKER_OPTS</codeph> line and add the
+                flag<codeblock>--insecure-registry</codeblock><p>This flag takes the URL of your
+                registry, for example.</p><p>
+                <codeblock>neither works in /etc/default/docker file even with EnvironmentFile defined.
+DOCKER_OPTS="--insecure-registry=example.com"
+DOCKER_OPTS="--insecure-registry example.com:5000"</codeblock>
+              </p></li>
+            <li>Close and save the configuration file.</li>
+            <li>Restart your Docker daemon.
+              <codeblock>service docker stop
+service docker start</codeblock></li>
+            <li>Repeat this configuration on every host that is running the Docker engine that wants
+              to access the local registry.</li>
+          </ol>
+        </body>
+      </topic>
+    </topic>
+    <topic id="topic_ogr_msm_lw">
+      <title>Setting Up a Local Docker Registry with SSL</title>
+      <body>
+        <p dir="ltr">This example configures a Docker registry with an SSL self-signed certificate.
+          Some example commands are on multiple lines for readability. For those commands, the
+          backslash character (<codeph>\</codeph>) is used to escape the new line character. </p>
+        <ol id="ul_g5f_pdq_dw">
+          <li dir="ltr">Connect to the system that runs the local Docker registry.</li>
+          <li dir="ltr">If needed, create directory for hosting the images. The example uses the
+            directory
+              <codeph>/data/docker/registry</codeph>:<codeblock dir="ltr">mkdir -p /data/docker/registry</codeblock><note
+              dir="ltr">This directory hosts all the Docker images in the local Docker registry and
+              could grow to many gigabytes over the time. Make sure to place this directory on a
+              file system with sufficient free space.</note></li>
+          <li dir="ltr">Create a directory that will contain the SSL certificates that are used for
+            Docker registry authentication. This example uses the directory
+              <codeph>/data/docker/certs</codeph>.<codeblock dir="ltr">mkdir -p /data/docker/certs</codeblock></li>
+          <li dir="ltr">Generate OpenSSL RSA certificates for the current host. In this example
+            command, replace <varname>FQDN_hostname</varname> with the fully-qualified domain name
+            (FQDN) of the host machine that is running Docker registry.
+              <codeblock>sudo openssl req -newkey rsa:4096 -nodes -sha256 \
+  -keyout /data/docker/certs/docker_registry.key \
+  -x509 -days 365 \
+  -out /data/docker/certs/docker_registry.crt \
+  -subj "/C=US/ST=No/L=No/O=No/CN=<varname>FQDN_hostname</varname>"</codeblock><p
+              dir="ltr">As a best practice, replace <codeph>-subj</codeph> with your company
+              information. Also, change <codeph>/data/docker/certs</codeph> to the directory where
+              you are storing certificates if needed.</p></li>
+          <li dir="ltr">Start the Docker registry
+              container:<codeblock>docker run -d -p 5000:5000 --restart=always \
+  --name mytestregistry \
+  -v /data/docker/certs:/certs \
+  -v /data/docker/registry:/var/lib/registry \
+  -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/docker_registry.crt \
+  -e REGISTRY_HTTP_TLS_KEY=/certs/docker_registry.key \
+  registry:2.3.1</codeblock><p>The
+                <codeph>docker run</codeph> command uses these options.<ul id="ul_prf_bhs_dw">
+                <li dir="ltr"><codeph>-d</codeph> runs the docker container in detached mode,
+                    <codeph>-p</codeph> maps host port 5000 to container port 5000,
+                    <codeph>--restart=always</codeph> always restart the Docker container regardless
+                  of exit status.</li>
+                <li dir="ltr"><codeph>-name</codeph> assigns a user-friendly name
+                    <codeph>mytestregistry</codeph> to the Docker Registry application. The name
+                  appears when you list Docker containers with the the <codeph>docker ps</codeph>
+                  command. The name can also be used to start and stop the container.</li>
+                <li dir="ltr"><codeph>-v /data/docker/certs:/certs</codeph> mounts the host
+                  directory <codeph>/data/docker/certs</codeph> to the Docker container directory
+                    <codeph>/certs</codeph>. If you store the certificates generated by OpenSSL in
+                  another directory on the host, change the host directory.</li>
+                <li dir="ltr"><codeph>-v /data/docker/registry:/var/lib/registry</codeph> mounts the
+                  host directory <codeph>/data/docker/registry</codeph> to the Docker container
+                  directory <codeph>/var/lib/registry</codeph>. This allows the registry container
+                  to store registry images in directory accessible and managed by the host.</li>
+                <li dir="ltr"><codeph>-e</codeph> options specify container application environment
+                  variables that define the location in the container where OpenSSL certificates are
+                  available. <note>Do not change the <codeph>-e</codeph> options unless you clearly
+                    understand the implication of changing them.</note></li>
+                <li dir="ltr"><codeph>registry:2.3.1</codeph> The Docker image name to run. The
+                  Docker Hub image <codeph>registry:2.3.1</codeph> is the version that is compatible
+                  with the Greenplum Database PL/Container extension.</li>
+              </ul></p></li>
+        </ol>
+        <p>The local Docker registry is running on the host system.</p>
+        <p>To view images stored in the repository, this <codeph>curl</codeph> example specifies the
+          location of the SSL certificate with the --cacert option.</p>
+        <codeblock>curl --cacert /etc/docker/certs.d/example.com:5000/ca.crt https://example.com:5000/v2/_catalog</codeblock>
+        <p>To view the tags for an images stored in the repository.</p>
+        <codeblock>curl --cacert /etc/docker/certs.d/example.com:5000/ca.crt http://localhost:5000/v2/<varname>image-name</varname>/tags/list</codeblock>
+      </body>
+    </topic>
+    <topic id="topic_pfm_srs_nw">
+      <title>Setting up Greenplum Database Hosts to Access a Local Registry</title>
+      <body>
+        <p dir="ltr">To allow Docker instances on remote Greenplum Database hosts access the local
+          Docker registry, add the SSL certificate to the hosts. </p>
+        <ol id="ol_xvw_5rs_nw">
+          <li dir="ltr">Connect to the machine that hosts connect to the host running the local
+            Docker registry.</li>
+          <li dir="ltr">As root, copy the SSL certificate to all the hosts in the Greenplum cluster
+            into <codeph>/tmp</codeph> directory. This command uses the Greenplum Database
+              <codeph>gpscp</codeph>
+              utility.<codeblock dir="ltr">gpscp -f <varname>host_file</varname> /data/docker/certs/docker_registry.crt =:/tmp</codeblock><p
+              dir="ltr">The <varname>host_file</varname> contains a list of Greenplum all hosts,
+              including both masters, and the system hosting Docker registry if the system is not a
+              Greenplum Database host.</p><p dir="ltr">If the Docker registry host does not have
+              Greenplum installed on it and <codeph>gpscp</codeph> is not available, you can execute
+              a series of <varname>scp</varname> commands, one for each Greenplum Database
+            host.</p></li>
+          <li dir="ltr">Create the directory named
+                <codeph>/etc/docker/certs.d/<varname>registry_host_FQDN</varname>:5000</codeph> on
+            each of the Greenplum cluster and on the Docker registry host. 5000 is the port of
+            Docker registry that was specified with the <codeph>-p</codeph> option when you started
+            the local Docker registry. This example uses <codeph>example.com</codeph> as the FDQN of
+            the local registry
+            host.<codeblock dir="ltr">gpssh -f <varname>host_file</varname> \
+  -e "mkdir -p /etc/docker/certs.d/example.com:5000"</codeblock></li>
+          <li dir="ltr">Move the SSL certificate to the directory on each of the hosts under the
+            name
+            <varname>ca.crt</varname>:<codeblock>gpssh -f <varname>host_file</varname> -e "mv /tmp/docker_registry.crt /etc/docker/certs.d/example.com:5000/ca.crt"</codeblock></li>
+        </ol>
+        <p dir="ltr">Using the SSL certificate, the Greenplum Database hosts can pull Docker images
+          from the local Docker registry.</p>
+      </body>
+    </topic>
+  </topic>
+  <topic id="topic10" xml:lang="en">
+    <title id="pz213965">References</title>
+    <body>
+      <p>Docker home page <xref href="https://www.docker.com/" format="html" scope="external"
+          >https://www.docker.com/</xref></p>
+      <p>Docker command line interface <xref
+          href="https://docs.docker.com/engine/reference/commandline/cli/" format="html"
+          scope="external">https://docs.docker.com/engine/reference/commandline/cli/</xref></p>
+      <p>Dockerfile reference <xref href="https://docs.docker.com/engine/reference/builder/"
+          format="html" scope="external"
+        >https://docs.docker.com/engine/reference/builder/</xref></p>
+      <p>Installing Docker on Linux systems <xref
+          href="https://docs.docker.com/engine/installation/linux/centos/" format="html"
+          scope="external">https://docs.docker.com/engine/installation/linux/centos/</xref></p>
+      <p>Control and configure Docker with systemd <xref
+          href="https://docs.docker.com/engine/admin/systemd/" format="html" scope="external"
+          >https://docs.docker.com/engine/admin/systemd/</xref></p>
+      <p>Docker Registry<ul id="ul_fhy_qwf_jw">
+          <li>Overview <xref href="https://docs.docker.com/registry/" format="html" scope="external"
+              >https://docs.docker.com/registry/</xref></li>
+          <li>Deploying Registry <xref href="https://docs.docker.com/registry/deploying/"
+              format="html" scope="external">https://docs.docker.com/registry/deploying/</xref></li>
+          <li>Registry Configuration <xref href="https://docs.docker.com/registry/configuration/"
+              format="html" scope="external"
+            >https://docs.docker.com/registry/configuration/</xref></li>
+          <li>Docker volumes and container data storage <xref
+              href="https://docs.docker.com/engine/tutorials/dockervolumes/" format="html"
+              scope="external">https://docs.docker.com/engine/tutorials/dockervolumes/</xref></li>
+        </ul></p>
+    </body>
+  </topic>
+</topic>
