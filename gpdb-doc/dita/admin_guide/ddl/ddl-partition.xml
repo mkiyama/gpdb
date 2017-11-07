@@ -722,9 +722,9 @@ WITH TABLE jan12;
       <body>
         <p>Splitting a partition divides a partition into two partitions. You can split a partition
           using the <codeph>ALTER TABLE</codeph> command. You can split partitions only at the
-          lowest level of your partition hierarchy (partitions that contain data) and only range
-          partitions can be split, not list partitions. The split value you specify goes into the
-            <i>latter</i> partition. </p>
+          lowest level of your partition hierarchy (partitions that contain data). For a multi-level
+          partition, only range partitions can be split, not list partitions. The split value you
+          specify goes into the <i>latter</i> partition. </p>
         <p>For example, to split a monthly partition into two with the first partition containing
           dates January 1-15 and the second partition containing dates January 16-31:</p>
         <p>
@@ -805,7 +805,7 @@ INTO (PARTITION jan17, default partition);
           less accessed data to external tables and exchange older partitions with the external
           tables. For queries that only access the newer data, you could create queries that use
           partition elimination to prevent scanning the older, unneeded partitions.</p>
-        <p>Exchanging a leaf child partition with an external table is not supported if the
+         <p>Exchanging a leaf child partition with an external table is not supported if the
           partitioned table contains a column with a check constraint or a <codeph>NOT NULL</codeph>
           constraint.</p>
         <p>For information about exchanging and altering a leaf child partition, see the
