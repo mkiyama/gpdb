@@ -66,13 +66,26 @@ run_resgroup_test() {
             --disable-pxf ${CONFIGURE_FLAGS}
 
         make -C /home/gpadmin/gpdb_src/src/test/regress
-        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/regress
-        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/isolation2
+        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/regress </dev/null
+        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/isolation2 </dev/null
         scp /home/gpadmin/gpdb_src/src/test/regress/regress.so \
             gpadmin@sdw1:/home/gpadmin/gpdb_src/src/test/regress/
 
-        trap "find src/test/isolation2 -name regression.diffs | xargs cat" ERR
-        make installcheck-resgroup
+        make installcheck-resgroup || (
+            errcode=\$?
+            find src/test/isolation2 -name regression.diffs \
+            | while read diff; do
+                cat <<EOF1
+
+======================================================================
+DIFF FILE: \$diff
+----------------------------------------------------------------------
+
+EOF1
+                cat \$diff
+              done
+            exit \$errcode
+        )
 EOF
 }
 
