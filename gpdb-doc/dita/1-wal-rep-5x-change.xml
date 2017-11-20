@@ -25,6 +25,9 @@
     <p>WAL sender process should have Gp_role GP_ROLE_UTILITY <xref
         href="https://github.com/greenplum-db/gpdb/pull/3012" format="html" scope="external"
         >gpdb/pull/3012</xref></p>
+    <p><xref href="https://www.pivotaltracker.com/story/show/151340667" format="html"
+        scope="external">151340667</xref> primary and mirror state transitions in
+      gp_segment_configuration</p>
     <p><xref href="https://docs.google.com/document/d/1d8xZ6NamScQY8LvEbQ0K17-MfzqBhRb6ZLYpcMKKSMg"
         format="html" scope="external">WALRep Failure Handling</xref> - google doc - mirroring
       states</p>
