@@ -4,10 +4,10 @@
  *	  handle clauses in parser
  *
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/parser/parse_clause.h,v 1.52 2008/08/07 01:11:52 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/parser/parse_clause.h,v 1.54 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -23,15 +23,15 @@ extern bool interpretInhOption(InhOption inhOpt);
 extern bool interpretOidsOption(List *defList);
 
 extern Node *transformWhereClause(ParseState *pstate, Node *clause,
-					 const char *constructName);
+					 ParseExprKind exprKind, const char *constructName);
 extern Node *transformLimitClause(ParseState *pstate, Node *clause,
-					 const char *constructName);
+					 ParseExprKind exprKind, const char *constructName);
 extern List *transformGroupClause(ParseState *pstate, List *grouplist,
 					 List **targetlist, List *sortClause,
-					 bool useSQL99);
+					 ParseExprKind exprKind, bool useSQL99);
 extern List *transformSortClause(ParseState *pstate, List *orderlist,
-                                 List **targetlist, bool resolveUnknown,
-                                 bool useSQL99);
+					List **targetlist, ParseExprKind exprKind,
+					bool resolveUnknown, bool useSQL99);
 
 extern List *transformWindowDefinitions(ParseState *pstate,
 						   List *windowdefs,
@@ -40,7 +40,7 @@ extern List *transformWindowDefinitions(ParseState *pstate,
 extern List *transformDistinctToGroupBy(ParseState *pstate, List **targetlist,
 						   List **sortClause, List **groupClause);
 extern List *transformDistinctClause(ParseState *pstate,
-						List **targetlist, List *sortClause);
+						List **targetlist, List *sortClause, bool is_agg);
 extern List *transformDistinctOnClause(ParseState *pstate, List *distinctlist,
 						List **targetlist, List *sortClause);
 extern List *transformScatterClause(ParseState *pstate, List *scatterlist,

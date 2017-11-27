@@ -3,12 +3,12 @@
  * varlena.c
  *	  Functions for the variable-length built-in types.
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/adt/varlena.c,v 1.168 2008/09/07 04:20:00 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/adt/varlena.c,v 1.169 2009/01/01 17:23:50 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -3475,12 +3475,11 @@ makeStringAggState(FunctionCallInfo fcinfo)
 	MemoryContext aggcontext;
 	MemoryContext oldcontext;
 
-	if (!(fcinfo->context && IsA(fcinfo->context, AggState)))
+	if (!AggCheckCallContext(fcinfo, &aggcontext))
 	{
 		/* cannot be called directly because of internal-type argument */
 		elog(ERROR, "string_agg_transfn called in non-aggregate context");
 	}
-	aggcontext = ((AggState*)fcinfo->context)->aggcontext;
 
 	/*
 	 * Create state in aggregate context.  It'll stay there across subsequent
@@ -3547,11 +3546,7 @@ string_agg_finalfn(PG_FUNCTION_ARGS)
 	StringInfo	state;
 
 	/* cannot be called directly because of internal-type argument */
-	if (!(fcinfo->context && IsA(fcinfo->context, AggState)))
-	{
-		/* cannot be called directly because of internal-type argument */
-		elog(ERROR, "string_agg_finalfn called in non-aggregate context");
-	}
+	Assert(AggCheckCallContext(fcinfo, NULL));
 
 	state = PG_ARGISNULL(0) ? NULL : (StringInfo) PG_GETARG_POINTER(0);
 

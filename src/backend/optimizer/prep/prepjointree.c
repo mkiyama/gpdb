@@ -18,12 +18,12 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/prep/prepjointree.c,v 1.60 2008/11/11 19:05:21 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/prep/prepjointree.c,v 1.62 2009/01/01 17:23:44 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -1041,8 +1041,11 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 	 * subquery->hasSubLinks anyway.  Perhaps this can be improved someday.
 	 */
 	parse->hasSubLinks |= subquery->hasSubLinks;
-	/* subquery won't be pulled up if it hasAggs, so no work there */
 
+	/*
+	 * subquery won't be pulled up if it hasAggs or hasWindowFuncs, so no work
+	 * needed on those flags
+	 */
 
     /*
      * CDB: Wipe old RTE so subquery parse tree won't be sent to QEs.

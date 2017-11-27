@@ -9,11 +9,11 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/path/pathkeys.c,v 1.95 2008/08/25 22:42:33 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/path/pathkeys.c,v 1.96 2009/01/01 17:23:44 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -197,7 +197,9 @@ gen_implied_qual(PlannerInfo *root,
 	 */
 	if (bms_membership(new_qualscope) == BMS_MULTIPLE)
 	{
-		List	   *vars = pull_var_clause(new_clause, true);
+		List	   *vars = pull_var_clause(new_clause,
+										   PVC_RECURSE_AGGREGATES,
+										   PVC_INCLUDE_PLACEHOLDERS);
 
 		add_vars_to_targetlist(root, vars, required_relids);
 		list_free(vars);

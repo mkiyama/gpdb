@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	pg_dump will read the system catalogs in a database and dump out a
@@ -27,7 +27,7 @@
  *	http://archives.postgresql.org/pgsql-bugs/2010-02/msg00187.php
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/bin/pg_dump/pg_dump.c,v 1.509 2008/12/19 16:25:18 petere Exp $
+ *	  $PostgreSQL: pgsql/src/bin/pg_dump/pg_dump.c,v 1.512 2009/01/05 16:54:37 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -218,7 +218,8 @@ static void getDomainConstraints(TypeInfo *tinfo);
 static void getTableData(TableInfo *tblinfo, int numTables, bool oids);
 static void makeTableDataInfo(TableInfo *tbinfo, bool oids);
 static void getTableDataFKConstraints(void);
-static char *format_function_arguments(FuncInfo *finfo, char *funcargs);
+static char *format_function_arguments(FuncInfo *finfo, char *funcargs,
+						  bool is_agg);
 static char *format_function_arguments_old(FuncInfo *finfo, int nallargs,
 						  char **allargtypes,
 						  char **argmodes,
@@ -408,6 +409,7 @@ main(int argc, char **argv)
 	bool		outputBlobs = false;
 	int			outputNoOwner = 0;
 	char	   *outputSuperuser = NULL;
+	char	   *use_role = NULL;
 	int			my_version;
 	int			optindex;
 	RestoreOptions *ropt;
@@ -466,6 +468,7 @@ main(int argc, char **argv)
 		{"inserts", no_argument, &dump_inserts, 1},
 		{"lock-wait-timeout", required_argument, NULL, 2},
 		{"no-tablespaces", no_argument, &outputNoTablespaces, 1},
+		{"role", required_argument, NULL, 3},
 		{"use-set-session-authorization", no_argument, &use_setsessauth, 1},
 
 		/* START MPP ADDITION */
@@ -664,9 +667,12 @@ main(int argc, char **argv)
 				/* This covers the long options equivalent to -X xxx. */
 				break;
 
-			case 2:
-				/* lock-wait-timeout */
+			case 2:				/* lock-wait-timeout */
 				lockWaitTimeout = optarg;
+				break;
+
+			case 3:				/* SET ROLE */
+				use_role = optarg;
 				break;
 
 			case 1000:				/* gp-syntax */
@@ -823,6 +829,16 @@ main(int argc, char **argv)
 
 	std_strings = PQparameterStatus(g_conn, "standard_conforming_strings");
 	g_fout->std_strings = (std_strings && strcmp(std_strings, "on") == 0);
+
+	/* Set the role if requested */
+	if (use_role && g_fout->remoteVersion >= 80100)
+	{
+		PQExpBuffer query = createPQExpBuffer();
+
+		appendPQExpBuffer(query, "SET ROLE %s", fmtId(use_role));
+		do_sql_command(g_conn, query->data);
+		destroyPQExpBuffer(query);
+	}
 
 	/* Set the datestyle to ISO to ensure the dump's portability */
 	do_sql_command(g_conn, "SET DATESTYLE = ISO");
@@ -1096,6 +1112,7 @@ help(const char *progname)
 	printf(_("  --disable-dollar-quoting    disable dollar quoting, use SQL standard quoting\n"));
 	printf(_("  --disable-triggers          disable triggers during data-only restore\n"));
 	printf(_("  --no-tablespaces            do not dump tablespace assignments\n"));
+	printf(_("  --role=ROLENAME             do SET ROLE before dump\n"));
 	printf(_("  --use-set-session-authorization\n"
 			 "                              use SESSION AUTHORIZATION commands instead of\n"
 	"                              ALTER OWNER commands to set ownership\n"));
@@ -7492,15 +7509,20 @@ dumpPlTemplateFunc(Oid funcOid, const char *templateField, PQExpBuffer buffer)
  * format_function_arguments: generate function name and argument list
  *
  * This is used when we can rely on pg_get_function_arguments to format
- * the argument list.
+ * the argument list.  Note, however, that pg_get_function_arguments
+ * does not special-case zero-argument aggregates.
  */
 static char *
-format_function_arguments(FuncInfo *finfo, char *funcargs)
+format_function_arguments(FuncInfo *finfo, char *funcargs, bool is_agg)
 {
 	PQExpBufferData fn;
 
 	initPQExpBuffer(&fn);
-	appendPQExpBuffer(&fn, "%s(%s)", fmtId(finfo->dobj.name), funcargs);
+	appendPQExpBufferStr(&fn, fmtId(finfo->dobj.name));
+	if (is_agg && finfo->nargs == 0)
+		appendPQExpBufferStr(&fn, "(*)");
+	else
+		appendPQExpBuffer(&fn, "(%s)", funcargs);
 	return fn.data;
 }
 
@@ -7710,6 +7732,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 	char	   *proallargtypes;
 	char	   *proargmodes;
 	char	   *proargnames;
+	char	   *proiswindow;
 	char	   *provolatile;
 	char	   *proisstrict;
 	char	   *prosecdef;
@@ -7753,7 +7776,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 						  "pg_catalog.pg_get_function_arguments(oid) as funcargs, "
 						  "pg_catalog.pg_get_function_identity_arguments(oid) as funciargs, "
 						  "pg_catalog.pg_get_function_result(oid) as funcresult, "
-						  "provolatile, proisstrict, prosecdef, "
+						  "proiswindow, provolatile, proisstrict, prosecdef, "
 						  "proconfig, procost, prorows, prodataaccess, "
 						  "proexeclocation, "
 						  "(SELECT lanname FROM pg_catalog.pg_language WHERE oid = prolang) as lanname "
@@ -7772,7 +7795,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 						  "pg_catalog.pg_get_function_arguments(oid) as funcargs, "
 						  "pg_catalog.pg_get_function_identity_arguments(oid) as funciargs, "
 						  "pg_catalog.pg_get_function_result(oid) as funcresult, "
-						  "provolatile, proisstrict, prosecdef, "
+						  "proiswindow, provolatile, proisstrict, prosecdef, "
 						  "proconfig, procost, prorows, prodataaccess, "
 						  "'a' as proexeclocation, "
 						  "(SELECT lanname FROM pg_catalog.pg_language WHERE oid = prolang) as lanname "
@@ -7785,6 +7808,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 		appendPQExpBuffer(query,
 						  "SELECT proretset, prosrc, probin, "
 						  "proallargtypes, proargmodes, proargnames, "
+						  "proiswindow, "
 						  "provolatile, proisstrict, prosecdef, "
 						  "null as proconfig, 0 as procost, 0 as prorows, %s"
 						  "'a' as proexeclocation, "
@@ -7824,6 +7848,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 		proargnames = PQgetvalue(res, 0, PQfnumber(res, "proargnames"));
 		funcargs = funciargs = funcresult = NULL;
 	}
+	proiswindow = PQgetvalue(res, 0, PQfnumber(res, "proiswindow"));
 	provolatile = PQgetvalue(res, 0, PQfnumber(res, "provolatile"));
 	proisstrict = PQgetvalue(res, 0, PQfnumber(res, "proisstrict"));
 	prosecdef = PQgetvalue(res, 0, PQfnumber(res, "prosecdef"));
@@ -7921,8 +7946,8 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 	if (funcargs)
 	{
 		/* GPDB 5.0 or later; we rely on server-side code for most of the work */
-		funcfullsig = format_function_arguments(finfo, funcargs);
-		funcsig = format_function_arguments(finfo, funciargs);
+		funcfullsig = format_function_arguments(finfo, funcargs, false);
+		funcsig = format_function_arguments(finfo, funciargs, false);
 	}
 	else
 	{
@@ -7978,6 +8003,9 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 	}
 
 	appendPQExpBuffer(q, "\n    LANGUAGE %s", fmtId(lanname));
+
+	if (proiswindow[0] == 't')
+		appendPQExpBuffer(q, " WINDOW");
 
 	if (provolatile[0] != PROVOLATILE_VOLATILE)
 	{
@@ -9373,26 +9401,29 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	PQExpBuffer delq;
 	PQExpBuffer labelq;
 	PQExpBuffer details;
-	char	   *aggsig;
+	char	   *aggsig;			/* identity signature */
+	char	   *aggfullsig = NULL;		/* full signature */
 	char	   *aggsig_tag;
 	PGresult   *res;
 	int			ntups;
 	int			i_aggtransfn;
 	int			i_aggfinalfn;
+	int			i_aggfinalextra;
 	int			i_aggsortop;
+	int			i_hypothetical;
 	int			i_aggtranstype;
 	int			i_agginitval;
 	int			i_aggprelimfn;
 	int			i_convertok;
-	int			i_aggordered;
 	const char *aggtransfn;
 	const char *aggfinalfn;
+	bool		aggfinalextra;
 	const char *aggsortop;
+	bool		hypothetical;
 	const char *aggtranstype;
 	const char *agginitval;
 	const char *aggprelimfn;
 	bool		convertok;
-	bool		aggordered;
 
 	/* Skip if not to be dumped */
 	if (!agginfo->aggfn.dobj.dump || dataOnly)
@@ -9408,15 +9439,36 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	selectSourceSchema(agginfo->aggfn.dobj.namespace->dobj.name);
 
 	/* Get aggregate-specific details */
-	if (g_fout->remoteVersion >= 80100)
+	if (g_fout->remoteVersion >= 80400)
 	{
 		appendPQExpBuffer(query, "SELECT aggtransfn, "
 						  "aggfinalfn, aggtranstype::pg_catalog.regtype, "
+						  "aggfinalextra, "
 						  "aggsortop::pg_catalog.regoperator, "
+						  "(aggkind = 'h') as hypothetical, " /* aggkind was backported to GPDB6 */
+						  "agginitval, "
+						  "%s, "
+						  "true AS convertok, "
+				  "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs, "
+		 "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs "
+					  "from pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
+						  "where a.aggfnoid = p.oid "
+						  "and p.oid = '%u'::pg_catalog.oid",
+						  (isGPbackend ? "aggprelimfn" : "NULL as aggprelimfn"),
+						  agginfo->aggfn.dobj.catId.oid);
+	}
+	else if (g_fout->remoteVersion >= 80100)
+	{
+		appendPQExpBuffer(query, "SELECT aggtransfn, "
+						  "aggfinalfn, aggtranstype::pg_catalog.regtype, "
+						  "false AS aggfinalextra, "
+						  "aggsortop::pg_catalog.regoperator, "
+						  "false as hypothetical, "
 						  "agginitval, "
 						  "%s, "
 						  "'t'::boolean as convertok, "
-						  "aggordered "
+						  "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs, "
+						  "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs "
 					  "from pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
 						  "where a.aggfnoid = p.oid "
 						  "and p.oid = '%u'::pg_catalog.oid",
@@ -9442,23 +9494,39 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 
 	i_aggtransfn = PQfnumber(res, "aggtransfn");
 	i_aggfinalfn = PQfnumber(res, "aggfinalfn");
+	i_aggfinalextra = PQfnumber(res, "aggfinalextra");
 	i_aggsortop = PQfnumber(res, "aggsortop");
+	i_hypothetical = PQfnumber(res, "hypothetical");
 	i_aggtranstype = PQfnumber(res, "aggtranstype");
 	i_agginitval = PQfnumber(res, "agginitval");
 	i_aggprelimfn = PQfnumber(res, "aggprelimfn");
 	i_convertok = PQfnumber(res, "convertok");
-	i_aggordered = PQfnumber(res, "aggordered");
 
 	aggtransfn = PQgetvalue(res, 0, i_aggtransfn);
 	aggfinalfn = PQgetvalue(res, 0, i_aggfinalfn);
+	aggfinalextra = (PQgetvalue(res, 0, i_aggfinalextra)[0] == 't');
 	aggsortop = PQgetvalue(res, 0, i_aggsortop);
+	hypothetical = (PQgetvalue(res, 0, i_hypothetical)[0] == 't');
 	aggtranstype = PQgetvalue(res, 0, i_aggtranstype);
 	agginitval = PQgetvalue(res, 0, i_agginitval);
 	aggprelimfn = PQgetvalue(res, 0, i_aggprelimfn);
 	convertok = (PQgetvalue(res, 0, i_convertok)[0] == 't');
-	aggordered = (PQgetvalue(res, 0, i_aggordered)[0] == 't');
 
-	aggsig = format_aggregate_signature(agginfo, fout, true);
+	if (fout->remoteVersion >= 80400)
+	{
+		/* 8.4 or later; we rely on server-side code for most of the work */
+		char	   *funcargs;
+		char	   *funciargs;
+
+		funcargs = PQgetvalue(res, 0, PQfnumber(res, "funcargs"));
+		funciargs = PQgetvalue(res, 0, PQfnumber(res, "funciargs"));
+		aggfullsig = format_function_arguments(&agginfo->aggfn, funcargs, true);
+		aggsig = format_function_arguments(&agginfo->aggfn, funciargs, true);
+	}
+	else
+		/* pre-8.4, do it ourselves */
+		aggsig = format_aggregate_signature(agginfo, fout, true);
+
 	aggsig_tag = format_aggregate_signature(agginfo, fout, false);
 
 	if (!convertok)
@@ -9497,6 +9565,8 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	{
 		appendPQExpBuffer(details, ",\n    FINALFUNC = %s",
 						  aggfinalfn);
+		if (aggfinalextra)
+			appendPQExpBufferStr(details, ",\n    FINALFUNC_EXTRA");
 	}
 
 	aggsortop = convertOperatorReference(aggsortop);
@@ -9506,6 +9576,9 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 						  aggsortop);
 	}
 
+	if (hypothetical)
+		appendPQExpBufferStr(details, ",\n    HYPOTHETICAL");
+
 	/*
 	 * DROP must be fully qualified in case same name appears in pg_catalog
 	 */
@@ -9513,9 +9586,8 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 					  fmtId(agginfo->aggfn.dobj.namespace->dobj.name),
 					  aggsig);
 
-	appendPQExpBuffer(q, "CREATE %s %s (\n%s\n);\n",
-					  aggordered == true ? "ORDERED AGGREGATE" : "AGGREGATE",
-					  aggsig, details->data);
+	appendPQExpBuffer(q, "CREATE AGGREGATE %s (\n%s\n);\n",
+					  aggfullsig ? aggfullsig : aggsig, details->data);
 
 	appendPQExpBuffer(labelq, "AGGREGATE %s", aggsig);
 
@@ -9539,7 +9611,7 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	/*
 	 * Since there is no GRANT ON AGGREGATE syntax, we have to make the ACL
 	 * command look like a function's GRANT; in particular this affects the
-	 * syntax for zero-argument aggregates.
+	 * syntax for zero-argument aggregates and ordered-set aggregates.
 	 */
 	free(aggsig);
 	free(aggsig_tag);
@@ -11102,16 +11174,18 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 			int i = 0;
 			int ntups = 0;
 			char *relname = NULL;
-			char *parname = NULL;
 			int i_relname = 0;
 			int i_parname = 0;
+			int i_partitionrank = 0;
 			resetPQExpBuffer(query);
 
-			appendPQExpBuffer(query, "SELECT "
-						      "c.relname, pr.parname FROM pg_partition_rule pr "
-						      "join pg_class c ON pr.parchildrelid = c.oid "
-						      "join pg_partition p ON p.oid = pr.paroid "
-						      "WHERE p.parrelid = %u AND c.relstorage = 'x';", tbinfo->dobj.catId.oid);
+			appendPQExpBuffer(query, "SELECT DISTINCT cc.relname, ps.partitionrank, pp.parname "
+					"FROM pg_partition p "
+					"JOIN pg_class c on (p.parrelid = c.oid) "
+					"JOIN pg_partitions ps on (c.relname = ps.tablename) "
+					"JOIN pg_class cc on (ps.partitiontablename = cc.relname) "
+					"JOIN pg_partition_rule pp on (cc.oid = pp.parchildrelid) "
+					"WHERE p.parrelid = %u AND cc.relstorage = '%c';", tbinfo->dobj.catId.oid, RELSTORAGE_EXTERNAL);
 
 			res = PQexec(g_conn, query->data);
 			check_sql_result(res, g_conn, query->data, PGRES_TUPLES_OK);
@@ -11119,16 +11193,28 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 			ntups = PQntuples(res);
 			i_relname = PQfnumber(res, "relname");
 			i_parname = PQfnumber(res, "parname");
-
+			i_partitionrank = PQfnumber(res, "partitionrank");
 
 			for (i = 0; i < ntups; i++)
 			{
 				char tmpExtTable[500] = {0};
 				relname = strdup(PQgetvalue(res, i, i_relname));
-				parname = strdup(PQgetvalue(res, i, i_parname));
 				snprintf(tmpExtTable, sizeof(tmpExtTable), "%s%s", relname, EXT_PARTITION_NAME_POSTFIX);
 				appendPQExpBuffer(q, "ALTER TABLE %s ", fmtId(tbinfo->dobj.name));
-				appendPQExpBuffer(q, "EXCHANGE PARTITION %s ", fmtId(parname));
+				/*
+				 * If it is an anonymous range partition we must exchange for
+				 * the rank rather than the parname.
+				 */
+				if (PQgetisnull(res, i, i_parname) || !strlen(PQgetvalue(res, i, i_parname)))
+				{
+					appendPQExpBuffer(q, "EXCHANGE PARTITION FOR (RANK(%s)) ",
+									  PQgetvalue(res, i, i_partitionrank));
+				}
+				else
+				{
+					appendPQExpBuffer(q, "EXCHANGE PARTITION %s ",
+									  fmtId(PQgetvalue(res, i, i_parname)));
+				}
 				appendPQExpBuffer(q, "WITH TABLE %s WITHOUT VALIDATION; ", fmtId(tmpExtTable));
 
 				appendPQExpBuffer(q, "\n");
@@ -11137,7 +11223,6 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 
 				appendPQExpBuffer(q, "\n");
 				free(relname);
-				free(parname);
 			}
 
 			PQclear(res);

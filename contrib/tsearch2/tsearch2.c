@@ -3,11 +3,11 @@
  * tsearch2.c
  *		Backwards-compatibility package for old contrib/tsearch2 API
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/contrib/tsearch2/tsearch2.c,v 1.6 2008/03/25 22:42:42 tgl Exp $
+ *	  $PostgreSQL: pgsql/contrib/tsearch2/tsearch2.c,v 1.8 2009/01/01 17:23:32 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -422,7 +422,15 @@ tsa_rewrite_accum(PG_FUNCTION_ARGS)
 	MemoryContext aggcontext;
 	MemoryContext oldcontext;
 
-	aggcontext = ((AggState *) fcinfo->context)->aggcontext;
+	if (fcinfo->context && IsA(fcinfo->context, AggState))
+		aggcontext = ((AggState *) fcinfo->context)->aggcontext;
+	else if (fcinfo->context && IsA(fcinfo->context, WindowAggState))
+		aggcontext = ((WindowAggState *) fcinfo->context)->wincontext;
+	else
+	{
+		elog(ERROR, "tsa_rewrite_accum called in non-aggregate context");
+		aggcontext = NULL;		/* keep compiler quiet */
+	}
 
 	if (PG_ARGISNULL(0) || PG_GETARG_POINTER(0) == NULL)
 	{

@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/parser/parse_func.h,v 1.62 2008/12/18 18:20:35 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/parser/parse_func.h,v 1.64 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -43,17 +43,14 @@ typedef enum
 
 
 extern Node *ParseFuncOrColumn(ParseState *pstate, List *funcname, List *fargs,
-				  List *agg_order, Expr *agg_filter,
-				  bool agg_star, bool agg_distinct, bool func_variadic,
-				  bool is_column,
-				  WindowDef *over, int location);
+				  FuncCall *fn, int location);
 
 extern FuncDetailCode func_get_detail(List *funcname, List *fargs,
 				int nargs, Oid *argtypes,
 				bool expand_variadic, bool expand_defaults,
 				Oid *funcid, Oid *rettype,
-				bool *retset, int *nvargs, Oid **true_typeids,
-				List **argdefaults);
+				bool *retset, int *nvargs, Oid *vatype,
+				Oid **true_typeids, List **argdefaults);
 
 extern int func_match_argtypes(int nargs,
 					Oid *input_typeids,

@@ -9,7 +9,7 @@
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/optimizer/planmain.h,v 1.114 2008/10/07 19:27:04 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/optimizer/planmain.h,v 1.117 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -96,16 +96,6 @@ extern Plan *make_distinctaggs_for_rollup(PlannerInfo *root, bool is_agg,
 										  Plan *lefttree);
 
 /*
- * prototypes for plan/planwindow.c
- */
-extern Plan *window_planner(PlannerInfo *root, double tuple_fraction, List **pathkeys_ptr);
-extern RangeTblEntry *package_plan_as_rte(Query *query, Plan *plan, Alias *eref, List *pathkeys);
-extern Value *get_tle_name(TargetEntry *tle, List* rtable, const char *default_name);
-extern Plan *wrap_plan(PlannerInfo *root, Plan *plan, Query *query, List **p_pathkeys,
-       const char *alias_name, List *col_names, Query **query_p);
-
-
-/*
  * prototype for plan/plangroupext.c
  */
 extern Plan *plan_grouping_extension(PlannerInfo *root,
@@ -180,8 +170,10 @@ extern MergeJoin *make_mergejoin(List *tlist,
 			   Plan *lefttree, Plan *righttree,
 			   JoinType jointype);
 extern WindowAgg *make_windowagg(PlannerInfo *root, List *tlist,
+			   List *windowFuncs, Index winref,
 			   int partNumCols, AttrNumber *partColIdx, Oid *partOperators,
 			   int ordNumCols, AttrNumber *ordColIdx, Oid *ordOperators,
+			   AttrNumber firstOrderCol, Oid firstOrderCmpOperator, bool firstOrderNullsFirst,
 			   int frameOptions, Node *startOffset, Node *endOffset,
 			   Plan *lefttree);
 extern Material *make_material(Plan *lefttree);

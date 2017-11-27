@@ -15,7 +15,7 @@
  *
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  *
- * $PostgreSQL: pgsql/src/backend/utils/adt/ri_triggers.c,v 1.110 2008/09/15 23:37:39 tgl Exp $
+ * $PostgreSQL: pgsql/src/backend/utils/adt/ri_triggers.c,v 1.111 2009/01/01 17:23:49 momjian Exp $
  *
  * ----------
  */
@@ -3963,7 +3963,7 @@ ri_HashCompareOp(Oid eq_opr, Oid typeid)
 				 * polymorphic type such as ANYARRAY or ANYENUM.  If so,
 				 * assume the coercion is valid; otherwise complain.
 				 */
-				if (!IsPolymorphicType(lefttype))
+				if (!IsBinaryCoercible(typeid, lefttype))
 					elog(ERROR, "no conversion function from %s to %s",
 						 format_type_be(typeid),
 						 format_type_be(lefttype));

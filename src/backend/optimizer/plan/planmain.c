@@ -11,12 +11,12 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/planmain.c,v 1.112 2008/10/22 20:17:51 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/plan/planmain.c,v 1.114 2009/01/01 17:23:44 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -74,9 +74,9 @@ static Bitmapset *distcols_in_groupclause(List *gc, Bitmapset *bms);
  * PlannerInfo field and not a passed parameter is that the low-level routines
  * in indxpath.c need to see it.)
  *
- * Note: the PlannerInfo node also includes group_pathkeys, distinct_pathkeys,
- * and sort_pathkeys, which like query_pathkeys need to be canonicalized once
- * the info is available.
+ * Note: the PlannerInfo node also includes group_pathkeys, window_pathkeys,
+ * distinct_pathkeys, and sort_pathkeys, which like query_pathkeys need to be
+ * canonicalized once the info is available.
  *
  * tuple_fraction is interpreted as follows:
  *	  0: expect all tuples to be retrieved (normal case)
@@ -128,6 +128,8 @@ query_planner(PlannerInfo *root, List *tlist,
 													 root->query_pathkeys);
 		root->group_pathkeys = canonicalize_pathkeys(root,
 													 root->group_pathkeys);
+		root->window_pathkeys = canonicalize_pathkeys(root,
+													  root->window_pathkeys);
 		root->distinct_pathkeys = canonicalize_pathkeys(root,
 													root->distinct_pathkeys);
 		root->sort_pathkeys = canonicalize_pathkeys(root,
@@ -257,11 +259,12 @@ query_planner(PlannerInfo *root, List *tlist,
 	/*
 	 * We have completed merging equivalence sets, so it's now possible to
 	 * convert the requested query_pathkeys to canonical form.	Also
-	 * canonicalize the groupClause, distinctClause and sortClause pathkeys
-	 * for use later.
+	 * canonicalize the groupClause, windowClause, distinctClause and
+	 * sortClause pathkeys for use later.
 	 */
 	root->query_pathkeys = canonicalize_pathkeys(root, root->query_pathkeys);
 	root->group_pathkeys = canonicalize_pathkeys(root, root->group_pathkeys);
+	root->window_pathkeys = canonicalize_pathkeys(root, root->window_pathkeys);
 	root->distinct_pathkeys = canonicalize_pathkeys(root, root->distinct_pathkeys);
 	root->sort_pathkeys = canonicalize_pathkeys(root, root->sort_pathkeys);
 

@@ -5,12 +5,12 @@
  *
  *
  * Portions Copyright (c) 2017, Pivotal Software Inc
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/util/placeholder.c,v 1.1 2008/10/21 20:42:53 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/util/placeholder.c,v 1.3 2009/01/01 17:23:45 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -203,7 +203,9 @@ find_placeholders_in_qual(PlannerInfo *root, Node *qual, Relids relids)
 	 * pull_var_clause does more than we need here, but it'll do and it's
 	 * convenient to use.
 	 */
-	vars = pull_var_clause(qual, true);
+	vars = pull_var_clause(qual,
+						   PVC_RECURSE_AGGREGATES,
+						   PVC_INCLUDE_PLACEHOLDERS);
 	foreach(vl, vars)
 	{
 		PlaceHolderVar *phv = (PlaceHolderVar *) lfirst(vl);
@@ -351,7 +353,8 @@ fix_placeholder_input_needed_levels(PlannerInfo *root)
 		if (bms_membership(eval_at) == BMS_MULTIPLE)
 		{
 			List	   *vars = pull_var_clause((Node *) phinfo->ph_var->phexpr,
-											   true);
+											   PVC_RECURSE_AGGREGATES,
+											   PVC_INCLUDE_PLACEHOLDERS);
 
 			add_vars_to_targetlist(root, vars, eval_at);
 			list_free(vars);

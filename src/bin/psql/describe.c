@@ -189,13 +189,20 @@ describeAggregates(const char *pattern, bool verbose, bool showSystem)
 					  gettext_noop("Name"),
 					  gettext_noop("Result data type"));
 
-	if (pset.sversion >= 80200)
-	    appendPQExpBuffer(&buf,
-					  "  CASE WHEN p.pronargs = 0\n"
-					  "    THEN CAST('*' AS pg_catalog.text)\n"
-					  "    ELSE\n"
-					  "    pg_catalog.array_to_string(ARRAY(\n"
-					  "      SELECT\n"
+	if (pset.sversion >= 80400)
+		appendPQExpBuffer(&buf,
+						  "  CASE WHEN p.pronargs = 0\n"
+						  "    THEN CAST('*' AS pg_catalog.text)\n"
+					 "    ELSE pg_catalog.pg_get_function_arguments(p.oid)\n"
+						  "  END AS \"%s\",\n",
+						  gettext_noop("Argument data types"));
+	else if (pset.sversion >= 80200)
+		appendPQExpBuffer(&buf,
+						  "  CASE WHEN p.pronargs = 0\n"
+						  "    THEN CAST('*' AS pg_catalog.text)\n"
+						  "    ELSE\n"
+						  "    pg_catalog.array_to_string(ARRAY(\n"
+						  "      SELECT\n"
 				 "        pg_catalog.format_type(p.proargtypes[s.i], NULL)\n"
 					  "      FROM\n"
 					  "        pg_catalog.generate_series(0, pg_catalog.array_upper(p.proargtypes, 1)) AS s(i)\n"
@@ -3524,7 +3531,7 @@ listSchemas(const char *pattern, bool verbose)
 		appendPQExpBuffer(&buf, ",\n  ");
 		printACLColumn(&buf, "n.nspacl");
 		appendPQExpBuffer(&buf,
-		  ",\n  pg_catalog.obj_description(n.oid, 'pg_namespace') AS \"%s\"",
+			",\n  pg_catalog.obj_description(n.oid, 'pg_namespace') AS \"%s\"",
 						  gettext_noop("Description"));
 	}
 
@@ -4133,25 +4140,34 @@ listForeignDataWrappers(const char *pattern, bool verbose)
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 
+	if (pset.sversion < 80400)
+	{
+		fprintf(stderr, _("The server (version %d.%d) does not support foreign-data wrappers.\n"),
+				pset.sversion / 10000, (pset.sversion / 100) % 100);
+		return true;
+	}
+
 	initPQExpBuffer(&buf);
 	printfPQExpBuffer(&buf,
 					  "SELECT fdwname AS \"%s\",\n"
 					  "  pg_catalog.pg_get_userbyid(fdwowner) AS \"%s\",\n"
-					  "  fdwlibrary AS \"%s\"\n",
+					  "  fdwlibrary AS \"%s\"",
 					  gettext_noop("Name"),
 					  gettext_noop("Owner"),
 					  gettext_noop("Library"));
 
 	if (verbose)
+	{
+		appendPQExpBuffer(&buf, ",\n  ");
+		printACLColumn(&buf, "fdwacl");
 		appendPQExpBuffer(&buf,
-						  ",\n  fdwacl AS \"%s\","
-						  "  fdwoptions AS \"%s\"",
-						  gettext_noop("Access privileges"),
+						  ",\n  fdwoptions AS \"%s\"",
 						  gettext_noop("Options"));
+	}
 
-	appendPQExpBuffer(&buf, "\nFROM pg_catalog.pg_foreign_data_wrapper WHERE 1=1\n");
+	appendPQExpBuffer(&buf, "\nFROM pg_catalog.pg_foreign_data_wrapper\n");
 
-	processSQLNamePattern(pset.db, &buf, pattern, true, false,
+	processSQLNamePattern(pset.db, &buf, pattern, false, false,
 						  NULL, "fdwname", NULL, NULL);
 
 	appendPQExpBuffer(&buf, "ORDER BY 1;");
@@ -4174,7 +4190,7 @@ listForeignDataWrappers(const char *pattern, bool verbose)
 /*
  * \des
  *
- * Describes servers.
+ * Describes foreign-data servers.
  */
 bool
 listForeignServers(const char *pattern, bool verbose)
@@ -4183,31 +4199,41 @@ listForeignServers(const char *pattern, bool verbose)
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 
+	if (pset.sversion < 80400)
+	{
+		fprintf(stderr, _("The server (version %d.%d) does not support foreign-data servers.\n"),
+				pset.sversion / 10000, (pset.sversion / 100) % 100);
+		return true;
+	}
+
 	initPQExpBuffer(&buf);
 	printfPQExpBuffer(&buf,
 					  "SELECT s.srvname AS \"%s\",\n"
 					  "  pg_catalog.pg_get_userbyid(s.srvowner) AS \"%s\",\n"
-					  "  f.fdwname AS \"%s\"\n",
+					  "  f.fdwname AS \"%s\"",
 					  gettext_noop("Name"),
 					  gettext_noop("Owner"),
 					  gettext_noop("Foreign-data wrapper"));
 
 	if (verbose)
+	{
+		appendPQExpBuffer(&buf, ",\n  ");
+		printACLColumn(&buf, "s.srvacl");
 		appendPQExpBuffer(&buf,
-						  ",\n  s.srvacl AS \"%s\","
-						  "  s.srvtype AS \"%s\","
-						  "  s.srvversion AS \"%s\","
+						  ",\n"
+						  "  s.srvtype AS \"%s\",\n"
+						  "  s.srvversion AS \"%s\",\n"
 						  "  s.srvoptions AS \"%s\"",
-						  gettext_noop("Access privileges"),
 						  gettext_noop("Type"),
 						  gettext_noop("Version"),
 						  gettext_noop("Options"));
+	}
 
 	appendPQExpBuffer(&buf,
-			  		  "\nFROM pg_foreign_server s\n"
-					  "JOIN pg_catalog.pg_foreign_data_wrapper f ON f.oid=s.srvfdw\n");
+			  		  "\nFROM pg_catalog.pg_foreign_server s\n"
+					  "     JOIN pg_catalog.pg_foreign_data_wrapper f ON f.oid=s.srvfdw\n");
 
-	processSQLNamePattern(pset.db, &buf, pattern, true, false,
+	processSQLNamePattern(pset.db, &buf, pattern, false, false,
 						  NULL, "s.srvname", NULL, NULL);
 
 	appendPQExpBuffer(&buf, "ORDER BY 1;");
@@ -4239,6 +4265,13 @@ listUserMappings(const char *pattern, bool verbose)
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 
+	if (pset.sversion < 80400)
+	{
+		fprintf(stderr, _("The server (version %d.%d) does not support foreign-data user mappings.\n"),
+				pset.sversion / 10000, (pset.sversion / 100) % 100);
+		return true;
+	}
+
 	initPQExpBuffer(&buf);
 	printfPQExpBuffer(&buf,
 					  "SELECT um.srvname AS \"%s\",\n"
@@ -4251,9 +4284,9 @@ listUserMappings(const char *pattern, bool verbose)
 						  ",\n  um.umoptions AS \"%s\"",
 						  gettext_noop("Options"));
 
-	appendPQExpBuffer(&buf, "\nFROM pg_catalog.pg_user_mappings um WHERE 1=1\n");
+	appendPQExpBuffer(&buf, "\nFROM pg_catalog.pg_user_mappings um\n");
 
-	processSQLNamePattern(pset.db, &buf, pattern, true, false,
+	processSQLNamePattern(pset.db, &buf, pattern, false, false,
 						  NULL, "um.srvname", "um.usename", NULL);
 
 	appendPQExpBuffer(&buf, "ORDER BY 1, 2;");
@@ -4451,7 +4484,7 @@ listOneExtensionContents(const char *extname, const char *oid)
  * printACLColumn
  *
  * Helper function for consistently formatting ACL (privilege) columns.
- * The proper targetlist entry is appended to buf.	Note lack of any
+ * The proper targetlist entry is appended to buf.  Note lack of any
  * whitespace or comma decoration.
  */
 static void

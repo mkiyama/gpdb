@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/catalog/pg_proc.c,v 1.157 2008/12/19 18:25:19 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/catalog/pg_proc.c,v 1.160 2009/01/01 17:23:37 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -61,7 +61,7 @@ static bool match_prosrc_to_literal(const char *prosrc, const char *literal,
  *
  * Note: allParameterTypes, parameterModes, parameterNames, and proconfig
  * are either arrays of the proper types or NULL.  We declare them Datum,
- * not "ArrayType *", to avoid importing array.h into pg_proc.h.
+ * not "ArrayType *", to avoid importing array.h into pg_proc_fn.h.
  * ----------------------------------------------------------------
  */
 Oid
@@ -76,7 +76,7 @@ ProcedureCreate(const char *procedureName,
 				const char *prosrc,
 				const char *probin,
 				bool isAgg,
-				bool isWin,
+				bool isWindowFunc,
 				bool security_definer,
 				bool isStrict,
 				char volatility,
@@ -285,6 +285,12 @@ ProcedureCreate(const char *procedureName,
 		}
 	}
 
+	/* Guard against a case the planner doesn't handle yet */
+	if (isWindowFunc && parameterDefaults != NIL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("window functions cannot have default arguments")));
+
 	/*
 	 * All seems OK; prepare the data to be inserted into pg_proc.
 	 */
@@ -305,7 +311,7 @@ ProcedureCreate(const char *procedureName,
 	values[Anum_pg_proc_prorows - 1] = Float4GetDatum(prorows);
 	values[Anum_pg_proc_provariadic - 1] = ObjectIdGetDatum(variadicType);
 	values[Anum_pg_proc_proisagg - 1] = BoolGetDatum(isAgg);
-	values[Anum_pg_proc_proiswindow - 1] = BoolGetDatum(isWin);
+	values[Anum_pg_proc_proiswindow - 1] = BoolGetDatum(isWindowFunc);
 	values[Anum_pg_proc_prosecdef - 1] = BoolGetDatum(security_definer);
 	values[Anum_pg_proc_proisstrict - 1] = BoolGetDatum(isStrict);
 	values[Anum_pg_proc_proretset - 1] = BoolGetDatum(returnsSet);
@@ -412,8 +418,6 @@ ProcedureCreate(const char *procedureName,
 		 * parameter is polymorphic, and in such cases a change of default
 		 * type might alter the resolved output type of existing calls.)
 		 */
-		/* GPDB_84_MERGE_FIXME: was it correct to get rid of the
-		 * SysCacheGetAttr() calls to retrieve pronargdefaults? */
 		if (oldproc->pronargdefaults != 0)
 		{
 			Datum		proargdefaults;
@@ -518,7 +522,7 @@ ProcedureCreate(const char *procedureName,
 						 errmsg("function \"%s\" is not an aggregate",
 								procedureName)));
 		}
-		if (oldproc->proiswindow != isWin)
+		if (oldproc->proiswindow != isWindowFunc)
 		{
 			if (oldproc->proiswindow)
 				ereport(ERROR,

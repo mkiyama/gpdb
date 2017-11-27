@@ -6,11 +6,11 @@
  * See src/backend/optimizer/README for discussion of EquivalenceClasses.
  *
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/optimizer/path/equivclass.c,v 1.14 2008/12/01 21:06:13 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/optimizer/path/equivclass.c,v 1.16 2009/01/01 17:23:43 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -461,8 +461,9 @@ get_eclass_for_sort_expr(PlannerInfo *root,
 
 	/*
 	 * add_eq_member doesn't check for volatile functions, set-returning
-	 * functions, or aggregates, but such could appear in sort expressions; so
-	 * we have to check whether its const-marking was correct.
+	 * functions, aggregates, or window functions, but such could appear in
+	 * sort expressions; so we have to check whether its const-marking was
+	 * correct.
 	 */
 	if (newec->ec_has_const)
 	{
@@ -721,7 +722,9 @@ generate_base_implied_equalities_no_const(PlannerInfo *root,
 	foreach(lc, ec->ec_members)
 	{
 		EquivalenceMember *cur_em = (EquivalenceMember *) lfirst(lc);
-		List	   *vars = pull_var_clause((Node *) cur_em->em_expr, true);
+		List	   *vars = pull_var_clause((Node *) cur_em->em_expr,
+										   PVC_RECURSE_AGGREGATES,
+										   PVC_INCLUDE_PLACEHOLDERS);
 
 		add_vars_to_targetlist(root, vars, ec->ec_relids);
 		list_free(vars);

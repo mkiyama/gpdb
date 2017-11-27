@@ -7,10 +7,10 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/nodes/plannodes.h,v 1.105 2008/10/07 19:27:04 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/nodes/plannodes.h,v 1.108 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -1028,13 +1028,29 @@ typedef struct Agg
 typedef struct WindowAgg
 {
 	Plan		plan;
+	Index		winref;			/* ID referenced by window functions */
 	int			partNumCols;	/* number of columns in partition clause */
 	AttrNumber *partColIdx;		/* their indexes in the target list */
 	Oid		   *partOperators;	/* equality operators for partition columns */
 	int			ordNumCols;		/* number of columns in ordering clause */
 	AttrNumber *ordColIdx;		/* their indexes in the target list */
 	Oid		   *ordOperators;	/* equality operators for ordering columns */
-	bool	   *nullsFirst;
+
+	/*
+	 * GPDB: Information on the first ORDER BY column. This is different from
+	 * simply taking the first element of the ordColIdx/ordOperators fields,
+	 * because those arrays don't include any columns that are also present
+	 * in the PARTITION BY. For example, in "OVER (PARTITION BY foo ORDER BY
+	 * foo, bar)", ordColIdx/ordOperators would not include column 'foo'. But
+	 * for computing with RANGE BETWEEN values correctly, we need the first
+	 * actual ORDER BY column, even if it's redundant with the PARTITION BY.
+	 * firstOrder* has that information. Also, we need a sort operator, not
+	 * equality operator, here.
+	 */
+	AttrNumber	firstOrderCol;
+	Oid			firstOrderCmpOperator; /* ordering op */
+	bool		firstOrderNullsFirst;
+
 	int			frameOptions;	/* frame_clause options, see WindowDef */
 	Node	   *startOffset;	/* expression for starting bound, if any */
 	Node	   *endOffset;		/* expression for ending bound, if any */

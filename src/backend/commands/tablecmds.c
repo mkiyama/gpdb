@@ -5,12 +5,12 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/commands/tablecmds.c,v 1.274 2008/12/15 21:35:31 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/commands/tablecmds.c,v 1.276 2009/01/01 17:23:39 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -3995,7 +3995,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 										   list_length(vals) > 1 ? "s" : "")));
 						}
 
-						vals = (List *)transformExpressionList(pstate, vals);
+						vals = (List *)transformExpressionList(pstate, vals,
+															   EXPR_KIND_PARTITION_EXPRESSION);
 
 						free_parsestate(pstate);
 
@@ -8749,28 +8750,14 @@ ATPrepAlterColumnType(List **wqueue,
 
 	if (cmd->transform)
 	{
-		transform = transformExpr(pstate, cmd->transform);
+		transform = transformExpr(pstate, cmd->transform,
+								  EXPR_KIND_ALTER_COL_TRANSFORM);
 
 		/* It can't return a set */
 		if (expression_returns_set(transform))
 			ereport(ERROR,
 					(errcode(ERRCODE_DATATYPE_MISMATCH),
 					 errmsg("transform expression must not return a set")));
-
-		/* No subplans or aggregates, either... */
-		if (pstate->p_hasSubLinks)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot use subquery in transform expression")));
-		if (pstate->p_hasAggs)
-			ereport(ERROR,
-					(errcode(ERRCODE_GROUPING_ERROR),
-			errmsg("cannot use aggregate function in transform expression")));
-		if (pstate->p_hasWindowFuncs)
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-			errmsg("cannot use window function in transform expression")));
-
 	}
 	else
 	{

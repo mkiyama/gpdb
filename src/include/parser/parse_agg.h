@@ -1,12 +1,12 @@
 /*-------------------------------------------------------------------------
  *
  * parse_agg.h
- *	  handle aggregates in parser
+ *	  handle aggregates and window functions in parser
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/parser/parse_agg.h,v 1.36 2008/01/01 19:45:58 momjian Exp $
+ * $PostgreSQL: pgsql/src/include/parser/parse_agg.h,v 1.38 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -15,16 +15,25 @@
 
 #include "parser/parse_node.h"
 
-extern void transformAggregateCall(ParseState *pstate, Aggref *agg, 
-                                   List *agg_order);
+extern void transformAggregateCall(ParseState *pstate, Aggref *agg,
+					   List *args, List *aggorder, bool agg_distinct);
 extern void transformWindowFuncCall(ParseState *pstate, WindowFunc *wfunc,
 						WindowDef *windef);
 
 extern void parseCheckAggregates(ParseState *pstate, Query *qry);
-extern void parseCheckWindowFuncs(ParseState *pstate, Query *qry);
+
+extern int	get_aggregate_argtypes(Aggref *aggref, Oid *inputTypes);
+
+extern Oid resolve_aggregate_transtype(Oid aggfuncid,
+							Oid aggtranstype,
+							Oid *inputTypes,
+							int numArguments);
 
 extern void build_aggregate_fnexprs(Oid *agg_input_types,
 						int agg_num_inputs,
+						int agg_num_direct_inputs,
+						int num_finalfn_inputs,
+						bool agg_variadic,
 						Oid agg_state_type,
 						Oid agg_result_type,
 						Oid transfn_oid,

@@ -10,7 +10,7 @@
  * Copyright (c) 2002-2009, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/commands/prepare.c,v 1.93 2008/12/13 02:29:21 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/commands/prepare.c,v 1.96 2009/01/02 20:42:00 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -362,17 +362,7 @@ EvaluateParams(PreparedStatement *pstmt, List *params,
 		Oid			expected_type_id = param_types[i];
 		Oid			given_type_id;
 
-		expr = transformExpr(pstate, expr);
-
-		/* Cannot contain subselects or aggregates */
-		if (pstate->p_hasSubLinks)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot use subquery in EXECUTE parameter")));
-		if (pstate->p_hasAggs)
-			ereport(ERROR,
-					(errcode(ERRCODE_GROUPING_ERROR),
-			  errmsg("cannot use aggregate function in EXECUTE parameter")));
+		expr = transformExpr(pstate, expr, EXPR_KIND_EXECUTE_PARAMETER);
 
 		given_type_id = exprType(expr);
 
@@ -662,6 +652,9 @@ DropAllPreparedStatements(void)
 
 /*
  * Implements the 'EXPLAIN EXECUTE' utility statement.
+ *
+ * Note: the passed-in queryString is that of the EXPLAIN EXECUTE,
+ * not the original PREPARE; we get the latter string from the plancache.
  */
 void
 ExplainExecuteQuery(ExecuteStmt *execstmt, ExplainStmt *stmt,
@@ -669,6 +662,7 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, ExplainStmt *stmt,
 					ParamListInfo params, TupOutputState *tstate)
 {
 	PreparedStatement *entry;
+	const char *query_string;
 	CachedPlan *cplan;
 	List	   *plan_list;
 	ListCell   *p;
@@ -685,6 +679,12 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, ExplainStmt *stmt,
 	if (!entry->plansource->fixed_result)
 		elog(ERROR, "EXPLAIN EXECUTE does not support variable-result cached plans");
 
+	/*
+	 * In Greenplum we first need to evaluate the parameters since we pass
+	 * paramLI to RevalidateCachedPlanWithParams(), while PostgreSQL uses
+	 * RevalidateCachedPlan().
+	 */
+
 	/* Evaluate parameters, if any */
 	if (entry->plansource->num_params)
 	{
@@ -697,6 +697,8 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, ExplainStmt *stmt,
 		paramLI = EvaluateParams(entry, execstmt->params,
 								 queryString, estate);
 	}
+
+	query_string = entry->plansource->query_string;
 
 	/* Replan if needed, and acquire a transient refcount */
 	cplan = RevalidateCachedPlanWithParams(entry->plansource, true,
@@ -728,11 +730,12 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, ExplainStmt *stmt,
 				pstmt->intoClause = execstmt->into;
 			}
 
-			ExplainOnePlan(pstmt, paramLI, stmt, queryString, tstate);
+			ExplainOnePlan(pstmt, stmt, query_string,
+						   paramLI, tstate);
 		}
 		else
 		{
-			ExplainOneUtility((Node *) pstmt, stmt, queryString,
+			ExplainOneUtility((Node *) pstmt, stmt, query_string,
 							  params, tstate);
 		}
 

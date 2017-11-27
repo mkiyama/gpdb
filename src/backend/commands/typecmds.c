@@ -3,12 +3,12 @@
  * typecmds.c
  *	  Routines for SQL commands that manipulate types (and domains).
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/commands/typecmds.c,v 1.127 2008/11/30 19:01:29 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/commands/typecmds.c,v 1.129 2009/01/01 17:23:40 momjian Exp $
  *
  * DESCRIPTION
  *	  The "DefineFoo" routines take the parse tree and pick out the
@@ -2359,7 +2359,7 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 
 	pstate->p_value_substitute = (Node *) domVal;
 
-	expr = transformExpr(pstate, constr->raw_expr);
+	expr = transformExpr(pstate, constr->raw_expr, EXPR_KIND_DOMAIN_CHECK);
 
 	/*
 	 * Make sure it yields a boolean result.
@@ -2369,35 +2369,11 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 	/*
 	 * Make sure no outside relations are referred to.
 	 */
-	if (list_length(pstate->p_rtable) != 0)
+	if (list_length(pstate->p_rtable) != 0 ||
+		contain_var_clause(expr))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
 		  errmsg("cannot use table references in domain check constraint")));
-
-	/*
-	 * Domains don't allow var clauses (this should be redundant with the
-	 * above check, but make it anyway)
-	 */
-	if (contain_var_clause(expr))
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
-		  errmsg("cannot use table references in domain check constraint")));
-
-	/*
-	 * No subplans or aggregates, either...
-	 */
-	if (pstate->p_hasSubLinks)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot use subquery in check constraint")));
-	if (pstate->p_hasAggs)
-		ereport(ERROR,
-				(errcode(ERRCODE_GROUPING_ERROR),
-			   errmsg("cannot use aggregate function in check constraint")));
-	if (pstate->p_hasWindowFuncs)
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-			   errmsg("cannot use window function in check constraint")));
 
 	free_parsestate(pstate);
 

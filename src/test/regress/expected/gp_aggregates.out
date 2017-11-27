@@ -27,11 +27,13 @@ ERROR:  syntax error at or near "order"
 LINE 1: SELECT count(order by a) from aggtest;
                      ^
 SELECT count(a order by a) from aggtest;     -- regular (non-orderd) aggregate
-ERROR:  ORDER BY specified, but count is not an ordered aggregate function
-LINE 1: SELECT count(a order by a) from aggtest;
-               ^
+ count 
+-------
+     4
+(1 row)
+
 SELECT abs(a order by a) from aggtest;       -- regular function
-ERROR:  ORDER BY specified, but abs is not an ordered aggregate function
+ERROR:  ORDER BY specified, but abs is not an aggregate function
 LINE 1: SELECT abs(a order by a) from aggtest;
                ^
 SELECT a(aggtest order by a) from aggtest;   -- function-like column reference
@@ -45,7 +47,7 @@ LINE 1: SELECT nosuchagg(a order by a) FROM aggtest;
                ^
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT lag(a order by a) from aggtest;       -- window function (no window clause)
-ERROR:  window function call requires an OVER clause
+ERROR:  window function lag requires an OVER clause
 LINE 1: SELECT lag(a order by a) from aggtest;
                ^
 SELECT lag(a order by a) over (order by a) FROM aggtest;  -- window function
@@ -158,6 +160,26 @@ select distinct t1.two, t2.two, t1.four, t2.four from tenk1 t1, tenk1 t2 where t
    1 |   1 |    1 |    1
    1 |   1 |    3 |    3
 (4 rows)
+
+-- A variant with more result rows. We had a bug at one point where the
+-- Motion Gather node on top of this was missing the Merge Key, and hence
+-- the output came out unsorted. But it was not visible if all the rows
+-- were processed on the same segment, as is the case with the above variant
+-- with only two distinct 'two' values.
+select distinct ten, sum(ten) over() from tenk1 order by ten;
+ ten |  sum  
+-----+-------
+   0 | 45000
+   1 | 45000
+   2 | 45000
+   3 | 45000
+   4 | 45000
+   5 | 45000
+   6 | 45000
+   7 | 45000
+   8 | 45000
+   9 | 45000
+(10 rows)
 
 -- Test for a planner bug we used to have, when this query gets planned
 -- as a merge join. This should perform a merge join between 'l' and 'ps',

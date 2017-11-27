@@ -7,10 +7,10 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/catalog/indexing.h,v 1.104 2008/12/19 16:25:18 petere Exp $
+ * $PostgreSQL: pgsql/src/include/catalog/indexing.h,v 1.105 2009/01/01 17:23:56 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -363,9 +363,6 @@ DECLARE_INDEX(pg_partition_rule_paroid_parentrule_ruleord_index, 5026, on pg_par
 
 DECLARE_UNIQUE_INDEX(pg_exttable_reloid_index, 6041, on pg_exttable using btree(reloid oid_ops));
 #define ExtTableReloidIndexId	6041
-
-DECLARE_UNIQUE_INDEX(pg_window_fnoid_index, 5005, on pg_window using btree(winfnoid oid_ops));
-#define WindowWinfnoidIndexId	5005
 
 DECLARE_INDEX(pg_filespace_entry_fs_index, 6090, on pg_filespace_entry using btree(fsefsoid oid_ops));
 #define FileSpaceEntryFsefsoidIndexId	6090

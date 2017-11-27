@@ -3,12 +3,12 @@
  * parse_coerce.c
  *		handle type coercions/conversions for parser
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/parser/parse_coerce.c,v 2.172 2008/12/14 19:45:52 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/parser/parse_coerce.c,v 2.174 2009/01/01 17:23:45 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -1126,6 +1126,7 @@ build_coercion_expression(Node *node,
 		/* Assert(targetTypeId == procstruct->prorettype); */
 		Assert(!procstruct->proretset);
 		Assert(!procstruct->proisagg);
+		Assert(!procstruct->proiswindow);
 		nargs = procstruct->pronargs;
 		Assert(nargs >= 1 && nargs <= 3);
 		/* Assert(procstruct->proargtypes.values[0] == exprType(node)); */
@@ -2176,6 +2177,10 @@ IsBinaryCoercible(Oid srctype, Oid targettype)
 
 	/* Fast path if same type */
 	if (srctype == targettype)
+		return true;
+
+	/* Anything is coercible to ANY or ANYELEMENT */
+	if (targettype == ANYOID || targettype == ANYELEMENTOID)
 		return true;
 
 	/* If srctype is a domain, reduce to its base type */

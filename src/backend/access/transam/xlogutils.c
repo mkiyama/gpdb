@@ -10,10 +10,10 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/backend/access/transam/xlogutils.c,v 1.65 2008/12/03 13:05:22 heikki Exp $
+ * $PostgreSQL: pgsql/src/backend/access/transam/xlogutils.c,v 1.66 2009/01/01 17:23:36 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -222,6 +222,7 @@ forget_invalid_segment_file(RelFileNode rnode, uint32 segmentFileNum)
 		return;					/* nothing to do */
 
 	key.node = rnode;
+	key.forkno = MAIN_FORKNUM;
 	key.blkno = segmentFileNum;
 	hash_search(invalid_page_tab,
 				(void *) &key,
@@ -430,7 +431,7 @@ XLogReadBufferExtended(RelFileNode rnode, ForkNumber forknum,
 void
 XLogAOSegmentFile(RelFileNode rnode, uint32 segmentFileNum)
 {
-	log_invalid_page(rnode, segmentFileNum, false);
+	log_invalid_page(rnode, MAIN_FORKNUM, segmentFileNum, false);
 }
 #endif
 

@@ -18,14 +18,13 @@
  * "x" to be considered equal() to another reference to "x" in the query.
  *
  *
- *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/nodes/equalfuncs.c,v 1.341 2008/12/19 16:25:17 petere Exp $
+ *	  $PostgreSQL: pgsql/src/backend/nodes/equalfuncs.c,v 1.344 2009/01/01 17:23:43 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -206,24 +205,17 @@ _equalAggref(Aggref *a, Aggref *b)
 {
 	COMPARE_SCALAR_FIELD(aggfnoid);
 	COMPARE_SCALAR_FIELD(aggtype);
+	COMPARE_NODE_FIELD(aggdirectargs);
 	COMPARE_NODE_FIELD(args);
-	COMPARE_NODE_FIELD(aggorder);
-	COMPARE_SCALAR_FIELD(aggdistinct);
+    COMPARE_NODE_FIELD(aggorder);
+	COMPARE_NODE_FIELD(aggdistinct);
 	COMPARE_NODE_FIELD(aggfilter);
 	COMPARE_SCALAR_FIELD(aggstar);
+	COMPARE_SCALAR_FIELD(aggvariadic);
+	COMPARE_SCALAR_FIELD(aggkind);
 	COMPARE_SCALAR_FIELD(aggstage);
 	COMPARE_SCALAR_FIELD(agglevelsup);
 	COMPARE_LOCATION_FIELD(location);
-
-	return true;
-}
-
-static bool
-_equalAggOrder(AggOrder *a, AggOrder *b)
-{
-    COMPARE_SCALAR_FIELD(sortImplicit);
-	COMPARE_NODE_FIELD(sortTargets);
-    COMPARE_NODE_FIELD(sortClause);
 
 	return true;
 }
@@ -266,6 +258,7 @@ _equalFuncExpr(FuncExpr *a, FuncExpr *b)
 	COMPARE_SCALAR_FIELD(funcid);
 	COMPARE_SCALAR_FIELD(funcresulttype);
 	COMPARE_SCALAR_FIELD(funcretset);
+	COMPARE_SCALAR_FIELD(funcvariadic);
 
 	/*
 	 * Special-case COERCE_DONTCARE, so that planner can build coercion nodes
@@ -1323,7 +1316,6 @@ _equalDefineStmt(DefineStmt *a, DefineStmt *b)
 	COMPARE_NODE_FIELD(defnames);
 	COMPARE_NODE_FIELD(args);
 	COMPARE_NODE_FIELD(definition);
-	COMPARE_SCALAR_FIELD(ordered);  /* CDB */
 	COMPARE_SCALAR_FIELD(trusted);  /* CDB */
 
 	return true;
@@ -2251,6 +2243,7 @@ _equalFuncCall(FuncCall *a, FuncCall *b)
 	COMPARE_NODE_FIELD(args);
 	COMPARE_NODE_FIELD(agg_order);
 	COMPARE_NODE_FIELD(agg_filter);
+	COMPARE_SCALAR_FIELD(agg_within_group);
 	COMPARE_SCALAR_FIELD(agg_star);
 	COMPARE_SCALAR_FIELD(agg_distinct);
 	COMPARE_SCALAR_FIELD(func_variadic);
@@ -2516,21 +2509,6 @@ _equalGroupId(GroupId *a __attribute__((unused)), GroupId *b __attribute__((unus
 }
 
 static bool
-_equalPercentileExpr(PercentileExpr *a, PercentileExpr *b)
-{
-	COMPARE_SCALAR_FIELD(perctype);
-	COMPARE_NODE_FIELD(args);
-	COMPARE_SCALAR_FIELD(perckind);
-	COMPARE_NODE_FIELD(sortClause);
-	COMPARE_NODE_FIELD(sortTargets);
-	COMPARE_NODE_FIELD(pcExpr);
-	COMPARE_NODE_FIELD(tcExpr);
-	/* do not compare 'location' field */
-
-	return true;
-}
-
-static bool
 _equalWindowClause(WindowClause *a, WindowClause *b)
 {
 	COMPARE_STRING_FIELD(name);
@@ -2771,9 +2749,6 @@ equal(void *a, void *b)
 			break;
 		case T_Aggref:
 			retval = _equalAggref(a, b);
-			break;
-		case T_AggOrder:
-			retval = _equalAggOrder(a, b);
 			break;
 		case T_WindowFunc:
 			retval = _equalWindowFunc(a, b);
@@ -3351,9 +3326,6 @@ equal(void *a, void *b)
 			break;
 		case T_GroupId:
 			retval = _equalGroupId(a, b);
-			break;
-		case T_PercentileExpr:
-			retval = _equalPercentileExpr(a, b);
 			break;
 		case T_WindowClause:
 			retval = _equalWindowClause(a, b);

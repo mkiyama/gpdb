@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/cache/syscache.c,v 1.118 2008/12/19 16:25:17 petere Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/cache/syscache.c,v 1.119 2009/01/01 17:23:50 momjian Exp $
  *
  * NOTES
  *	  These routines allow the parser/planner/executor to perform
@@ -56,7 +56,6 @@
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_user_mapping.h"
-#include "catalog/pg_window.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -721,17 +720,6 @@ static const struct cachedesc cacheinfo[] = {
 			0
 		},
 		128
-	},
-	{WindowRelationId,			/* WINFNOID */
-		WindowWinfnoidIndexId,
-		1,
-		{
-			Anum_pg_window_winfnoid,
-			0,
-			0,
-			0
-		},
-		32
 	}
 };
 

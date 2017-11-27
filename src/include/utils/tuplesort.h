@@ -30,10 +30,10 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/utils/tuplesort.h,v 1.31 2008/06/19 00:46:06 alvherre Exp $
+ * $PostgreSQL: pgsql/src/include/utils/tuplesort.h,v 1.32 2009/01/01 17:24:02 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -64,6 +64,7 @@
 #define tuplesort_gettupleslot tuplesort_gettupleslot_pg
 #define tuplesort_getindextuple tuplesort_getindextuple_pg
 #define tuplesort_getdatum tuplesort_getdatum_pg
+#define tuplesort_skiptuples tuplesort_skiptuples_pg
 #define tuplesort_end tuplesort_end_pg
 /* tuplesort_merge_order not switched */
 #define tuplesort_rescan tuplesort_rescan_pg
@@ -147,6 +148,8 @@ extern IndexTuple tuplesort_getindextuple(Tuplesortstate *state, bool forward,
 extern bool tuplesort_getdatum(Tuplesortstate *state, bool forward,
 				   Datum *val, bool *isNull);
 
+extern bool tuplesort_skiptuples(Tuplesortstate *state, int64 ntuples,
+					 bool forward);
 
 extern void tuplesort_end(Tuplesortstate *state);
 
@@ -203,6 +206,7 @@ extern int32 ApplySortFunction(FmgrInfo *sortFunction, int sortFlags,
 #undef tuplesort_gettupleslot
 #undef tuplesort_getindextuple
 #undef tuplesort_getdatum
+#undef tuplesort_skiptuples
 #undef tuplesort_end
 #undef tuplesort_rescan
 #undef tuplesort_markpos
@@ -390,6 +394,15 @@ switcheroo_tuplesort_getdatum(switcheroo_Tuplesortstate *state, bool forward, Da
 		return tuplesort_getdatum_pg((Tuplesortstate_pg *) state, forward, val, isNull);
 }
 
+static inline bool
+switcheroo_tuplesort_skiptuples(switcheroo_Tuplesortstate *state, int64 ntuples, bool forward)
+{
+	if (state->is_mk_tuplesortstate)
+		return tuplesort_skiptuples_mk((Tuplesortstate_mk *) state, ntuples, forward);
+	else
+		return tuplesort_skiptuples_pg((Tuplesortstate_pg *) state, ntuples, forward);
+}
+
 static inline void
 switcheroo_tuplesort_end(switcheroo_Tuplesortstate *state)
 {
@@ -571,6 +584,7 @@ switcheroo_tuplesort_set_gpmon(switcheroo_Tuplesortstate *state,
 #define tuplesort_gettupleslot switcheroo_tuplesort_gettupleslot
 #define tuplesort_getindextuple switcheroo_tuplesort_getindextuple
 #define tuplesort_getdatum switcheroo_tuplesort_getdatum
+#define tuplesort_skiptuples switcheroo_tuplesort_skiptuples
 #define tuplesort_end switcheroo_tuplesort_end
 #define tuplesort_rescan switcheroo_tuplesort_rescan
 #define tuplesort_markpos switcheroo_tuplesort_markpos

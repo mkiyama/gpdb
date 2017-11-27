@@ -9,7 +9,7 @@
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/nodes/relation.h,v 1.165 2008/12/01 21:06:13 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/nodes/relation.h,v 1.167 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -241,9 +241,10 @@ typedef struct PlannerInfo
 	List	   *query_pathkeys; /* desired pathkeys for query_planner(), and
 								 * actual pathkeys afterwards */
 
-	List	   *group_pathkeys;		/* groupClause pathkeys, if any */
-	List	   *distinct_pathkeys;	/* distinctClause pathkeys, if any */
-	List	   *sort_pathkeys;		/* sortClause pathkeys, if any */
+	List	   *group_pathkeys; /* groupClause pathkeys, if any */
+	List	   *window_pathkeys;	/* pathkeys of bottom window, if any */
+	List	   *distinct_pathkeys;		/* distinctClause pathkeys, if any */
+	List	   *sort_pathkeys;	/* sortClause pathkeys, if any */
 
 	List	   *initial_rels;	/* RelOptInfos we are now trying to join */
 

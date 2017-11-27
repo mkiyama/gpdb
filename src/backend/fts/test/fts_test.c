@@ -23,16 +23,16 @@
  * scenarios like mirror down, primary down, etc...
  */
 static CdbComponentDatabases *
-InitTestCdb(int segCnt, bool has_mirrors)
+InitTestCdb(int segCnt, bool has_mirrors, char default_mode)
 {
 	int			i = 0;
-	int 		mirror_multiplier = 1;
+	int			mirror_multiplier = 1;
 
 	if (has_mirrors)
 		mirror_multiplier = 2;
 
 	CdbComponentDatabases *cdb =
-			(CdbComponentDatabases *) palloc(sizeof(CdbComponentDatabases));
+	(CdbComponentDatabases *) palloc(sizeof(CdbComponentDatabases));
 
 	cdb->total_entry_dbs = 1;
 	cdb->total_segment_dbs = segCnt * mirror_multiplier;	/* with mirror? */
@@ -41,9 +41,9 @@ InitTestCdb(int segCnt, bool has_mirrors)
 	cdb->my_segindex = -1;
 	cdb->my_isprimary = true;
 	cdb->entry_db_info = palloc(
-			sizeof(CdbComponentDatabaseInfo) * cdb->total_entry_dbs);
+								sizeof(CdbComponentDatabaseInfo) * cdb->total_entry_dbs);
 	cdb->segment_db_info = palloc(
-			sizeof(CdbComponentDatabaseInfo) * cdb->total_segment_dbs);
+								  sizeof(CdbComponentDatabaseInfo) * cdb->total_segment_dbs);
 
 
 	/* create the master entry_db_info */
@@ -68,12 +68,12 @@ InitTestCdb(int segCnt, bool has_mirrors)
 		if (has_mirrors)
 		{
 			cdbinfo->role = i % 2 ?
-							GP_SEGMENT_CONFIGURATION_ROLE_MIRROR :
-							GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
+				GP_SEGMENT_CONFIGURATION_ROLE_MIRROR :
+				GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 
 			cdbinfo->preferred_role = i % 2 ?
-									  GP_SEGMENT_CONFIGURATION_ROLE_MIRROR :
-									  GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
+				GP_SEGMENT_CONFIGURATION_ROLE_MIRROR :
+				GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 		}
 		else
 		{
@@ -81,22 +81,23 @@ InitTestCdb(int segCnt, bool has_mirrors)
 			cdbinfo->preferred_role = GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 		}
 		cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_UP;
-
+		cdbinfo->mode = default_mode;
 	}
 
 	return cdb;
 }
 
-static CdbComponentDatabaseInfo*
+static CdbComponentDatabaseInfo *
 GetSegmentFromCdbComponentDatabases(CdbComponentDatabases *dbs,
 									int16 segindex, char role)
 {
-	int i;
+	int			i;
 
-	for(i = 0; i < dbs->total_segment_dbs; i++)
+	for (i = 0; i < dbs->total_segment_dbs; i++)
 	{
 		CdbComponentDatabaseInfo *cdb = &dbs->segment_db_info[i];
-		if(cdb->segindex == segindex && cdb->role == role)
+
+		if (cdb->segindex == segindex && cdb->role == role)
 			return cdb;
 	}
 	return NULL;
@@ -123,58 +124,64 @@ MockFtsIsActive(bool expected_return_value)
 
 static int
 CheckConfigVals(const Datum *value, /* from the function under test */
-				const Datum *check_value) /* from the test case */
+				const Datum *check_value)	/* from the test case */
 {
-	return datumIsEqual(value[Anum_gp_segment_configuration_status-1],
-						check_value[Anum_gp_segment_configuration_status-1],
-						true, false);
+	return datumIsEqual(value[Anum_gp_segment_configuration_status - 1],
+						check_value[Anum_gp_segment_configuration_status - 1],
+						true, false) &&
+		datumIsEqual(value[Anum_gp_segment_configuration_mode - 1],
+					 check_value[Anum_gp_segment_configuration_mode - 1],
+					 true, false);
 }
 
 static int
-CheckHistrelVals(const Datum *value, /* from the function under test */
-				 const Datum *check_value) /* from the test case */
+CheckHistrelVals(const Datum *value,	/* from the function under test */
+				 const Datum *check_value)	/* from the test case */
 {
-	return datumIsEqual(value[Anum_gp_configuration_history_dbid-1],
-						check_value[Anum_gp_configuration_history_dbid-1],
+	return datumIsEqual(value[Anum_gp_configuration_history_dbid - 1],
+						check_value[Anum_gp_configuration_history_dbid - 1],
 						true, false) &&
-		   datumIsEqual(value[Anum_gp_configuration_history_desc-1],
-						check_value[Anum_gp_configuration_history_desc-1],
-						false, -1);
+		datumIsEqual(value[Anum_gp_configuration_history_desc - 1],
+					 check_value[Anum_gp_configuration_history_desc - 1],
+					 false, -1);
 }
 
 static void
 probeWalRepUpdateConfig_will_be_called_with(
-		int16 dbid,
-		int16 segindex,
-		bool IsSegmentAlive)
+											int16 dbid,
+											int16 segindex,
+											char status,
+											char mode)
 {
 	/* Mock heap_open gp_configuration_history_relation */
 	static RelationData gp_configuration_history_relation;
+
 	expect_value(heap_open, relationId, GpConfigHistoryRelationId);
 	expect_any(heap_open, lockmode);
 	will_return(heap_open, &gp_configuration_history_relation);
 
 	/* Mock heap_open gp_segment_configuration_relation */
 	static RelationData gp_segment_configuration_relation;
+
 	expect_value(heap_open, relationId, GpSegmentConfigRelationId);
 	expect_any(heap_open, lockmode);
 	will_return(heap_open, &gp_segment_configuration_relation);
 
+	char		desc[SQL_CMD_BUF_SIZE];
+	Datum	   *histvals = palloc(sizeof(Datum) * Natts_gp_configuration_history);
 
-	char desc[SQL_CMD_BUF_SIZE];
-	Datum *histvals = palloc(sizeof(Datum) * Natts_gp_configuration_history);
-
-	histvals[Anum_gp_configuration_history_dbid-1] =
-			Int16GetDatum(dbid);
+	histvals[Anum_gp_configuration_history_dbid - 1] =
+		Int16GetDatum(dbid);
 
 	snprintf(desc, sizeof(desc),
-			 "FTS: update status for dbid %d with contentid %d to %c",
+			 "FTS: update status and mode for dbid %d with contentid %d to %c and %c",
 			 dbid, segindex,
-			 IsSegmentAlive ? GP_SEGMENT_CONFIGURATION_STATUS_UP :
-			 GP_SEGMENT_CONFIGURATION_STATUS_DOWN);
+			 status,
+			 mode
+		);
 
-	histvals[Anum_gp_configuration_history_desc-1] =
-			CStringGetTextDatum(desc);
+	histvals[Anum_gp_configuration_history_desc - 1] =
+		CStringGetTextDatum(desc);
 
 
 	/* Mock heap_form_tuple inline function */
@@ -218,14 +225,19 @@ probeWalRepUpdateConfig_will_be_called_with(
 	will_be_called_count(systable_beginscan, 1);
 
 	static HeapTupleData config_tuple;
+
 	expect_any(systable_getnext, sysscan);
 	will_return(systable_getnext, &config_tuple);
 
-	Datum *configvals = palloc(sizeof(Datum) * Natts_gp_segment_configuration);
-	configvals[Anum_gp_segment_configuration_status-1] =
-			CharGetDatum(IsSegmentAlive ? GP_SEGMENT_CONFIGURATION_STATUS_UP :
-						 GP_SEGMENT_CONFIGURATION_STATUS_DOWN);
-	HeapTuple new_tuple = palloc(sizeof(HeapTupleData));
+	Datum	   *configvals = palloc(sizeof(Datum) * Natts_gp_segment_configuration);
+
+	configvals[Anum_gp_segment_configuration_status - 1] =
+		CharGetDatum(status);
+	configvals[Anum_gp_segment_configuration_mode - 1] =
+		CharGetDatum(mode);
+
+	HeapTuple	new_tuple = palloc(sizeof(HeapTupleData));
+
 	expect_any(heap_modify_tuple, tuple);
 	expect_any(heap_modify_tuple, tupleDesc);
 	expect_check(heap_modify_tuple, replValues, CheckConfigVals, configvals);
@@ -243,44 +255,49 @@ probeWalRepUpdateConfig_will_be_called_with(
 }
 
 static void
-MockPrimaryAndMirrorProbeResponse(CdbComponentDatabases *cdbs,
-								  probe_response_per_segment *response,
-								  bool UpdatePrimary, bool UpdateMirror)
+ExpectedPrimaryAndMirrorConfiguration(CdbComponentDatabases *cdbs,
+									  CdbComponentDatabaseInfo *primary,
+									  char primaryStatus,
+									  char mirrorStatus,
+									  char mode,
+									  bool willUpdatePrimary,
+									  bool willUpdateMirror)
 {
-	CdbComponentDatabaseInfo *primary = response->segment_db_info;
-
-	CdbComponentDatabaseInfo *mirror =
-		FtsGetPeerSegment(cdbs, primary->segindex, primary->dbid);
-
 	/* mock FtsIsActive true */
 	MockFtsIsActive(true);
 
 	/* mock probeWalRepUpdateConfig */
-	if (UpdatePrimary) {
-		probeWalRepUpdateConfig_will_be_called_with(
-				primary->dbid,
-				primary->segindex,
-				response->result.isPrimaryAlive);
-	}
-	else if (UpdateMirror)
+	if (willUpdatePrimary)
 	{
 		probeWalRepUpdateConfig_will_be_called_with(
-				mirror->dbid,
-				mirror->segindex,
-				response->result.isMirrorAlive);
+													primary->dbid,
+													primary->segindex,
+													primaryStatus,
+													mode);
+	}
+
+	if (willUpdateMirror)
+	{
+		CdbComponentDatabaseInfo *mirror =
+		FtsGetPeerSegment(cdbs, primary->segindex, primary->dbid);
+
+		probeWalRepUpdateConfig_will_be_called_with(
+													mirror->dbid,
+													mirror->segindex,
+													mirrorStatus,
+													mode);
 	}
 }
 
 static void
 PrimaryOrMirrorWillBeUpdated(int count)
 {
-
 	will_be_called_count(StartTransactionCommand, count);
 	will_be_called_count(GetTransactionSnapshot, count);
 	will_be_called_count(CommitTransactionCommand, count);
 }
 
-/* Case: 0 segments, is_updated is always false */
+/* 0 segments, is_updated is always false */
 void
 test_probeWalRepPublishUpdate_for_zero_segment(void **state)
 {
@@ -288,44 +305,50 @@ test_probeWalRepPublishUpdate_for_zero_segment(void **state)
 
 	context.count = 0;
 
-	bool is_updated = probeWalRepPublishUpdate(NULL, &context);
+	bool		is_updated = probeWalRepPublishUpdate(NULL, &context);
 
 	assert_false(is_updated);
 }
 
 /*
- * Case: 1 segment, is_updated is false, because FtsIsActive failed
+ * 1 segment, is_updated is false, because FtsIsActive failed
  */
 void
 test_probeWalRepPublishUpdate_for_FtsIsActive_false(void **state)
 {
 	probe_context context;
+
 	context.count = 1;
 	probe_response_per_segment response;
+
 	context.responses = &response;
 	CdbComponentDatabaseInfo info;
+
 	response.segment_db_info = &info;
 	info.role = GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 
 	/* mock FtsIsActive false */
 	MockFtsIsActive(false);
 
-	bool is_updated = probeWalRepPublishUpdate(NULL, &context);
+	bool		is_updated = probeWalRepPublishUpdate(NULL, &context);
 
 	assert_false(is_updated);
 }
 
 /*
- * Case: 1 segment, is_updated is false, because shutdown_requested is true.
+ * 1 segment, is_updated is false, because shutdown_requested is true.
  */
 void
 test_probeWalRepPublishUpdate_for_shutdown_requested(void **state)
 {
 	probe_context context;
+
 	context.count = 1;
 	probe_response_per_segment response;
+
 	context.responses = &response;
 	CdbComponentDatabaseInfo info;
+
 	response.segment_db_info = &info;
 	info.role = GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 
@@ -333,7 +356,7 @@ test_probeWalRepPublishUpdate_for_shutdown_requested(void **state)
 	shutdown_requested = true;
 	MockFtsIsActive(true);
 
-	bool is_updated = probeWalRepPublishUpdate(NULL, &context);
+	bool		is_updated = probeWalRepPublishUpdate(NULL, &context);
 
 	/* restore the original value to let the rest of the test pass */
 	shutdown_requested = false;
@@ -342,31 +365,44 @@ test_probeWalRepPublishUpdate_for_shutdown_requested(void **state)
 }
 
 /*
- * Case: 2 segments, is_updated is false, because neither primary nor mirror
- * updated
+ * 2 segments, is_updated is false, because neither primary nor mirror
+ * state changed.
  */
 void
-test_probeWalRepPublishUpdate_no_update(void **state)
+test_PrimayUpMirrorUpNotInSync_to_PrimayUpMirrorUpNotInSync(void **state)
 {
 	probe_context context;
-	CdbComponentDatabases *cdb_component_dbs = InitTestCdb(2, true);
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(2,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
 	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
 
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[1].result.isPrimaryAlive = true;
+
 	/* probeWalRepPublishUpdate should not update a probe state */
-	bool is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
 
 	assert_false(is_updated);
 	pfree(cdb_component_dbs);
 }
 
 /*
- * Case: 2 segments, is_updated is true, because content 0 primary is updated
+ * 2 segments, is_updated is false, because its double fault scenario
+ * primary and mirror are not in sync hence cannot promote mirror, hence
+ * current primary needs to stay marked as up.
  */
 void
-test_probeWalRepPublishUpdate_primary_up_to_down(void **state)
+test_PrimayUpMirrorUpNotInSync_to_PrimaryDown(void **state)
 {
 	probe_context context;
-	CdbComponentDatabases *cdb_component_dbs = InitTestCdb(2, true);
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(2,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
 	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
 
 	/* No response received from first segment */
@@ -374,26 +410,26 @@ test_probeWalRepPublishUpdate_primary_up_to_down(void **state)
 	/* Response received from second segment */
 	context.responses[1].result.isPrimaryAlive = true;
 
-	/* Only one segment will be updated */
-	PrimaryOrMirrorWillBeUpdated(1);
+	/* No update must happen */
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
 
-	/* First segment will be updated and marked as down */
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[0], true, false);
-
-	bool is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
-
-	assert_true(is_updated);
+	assert_false(is_updated);
 	pfree(cdb_component_dbs);
 }
 
 /*
- * Case: 2 segments, is_updated is true, because content 0 mirror is updated
+ * 2 segments, is_updated is true, because content 0 mirror is updated
  */
 void
-test_probeWalRepPublishUpdate_mirror_up_to_down(void **state)
+test_PrimayUpMirrorUpNotInSync_to_PrimaryUpMirrorDownNotInSync(void **state)
 {
 	probe_context context;
-	CdbComponentDatabases *cdb_component_dbs = InitTestCdb(2, true);
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(2,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
+
 	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
 
 	/*
@@ -408,28 +444,39 @@ test_probeWalRepPublishUpdate_mirror_up_to_down(void **state)
 
 	/* the mirror will be updated */
 	PrimaryOrMirrorWillBeUpdated(1);
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[0], false, true);
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_DOWN,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ false,
+										   /* willUpdateMirror */ true);
 
-	bool is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
 
 	assert_true(is_updated);
 	pfree(cdb_component_dbs);
 }
 
 /*
- * Case: 3 segments, is_updated is true, because content 0 mirror is down and
+ * 3 segments, is_updated is true, because content 0 mirror is down and
  * probe response is up
  */
 void
-test_probeWalRepPublishUpdate_mirror_down_to_up(void **state)
+test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorUpNotInSync(void **state)
 {
 	probe_context context;
-	CdbComponentDatabases *cdb_component_dbs = InitTestCdb(3, true);
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(3,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
 
 	/* set the mirror down in config */
 	CdbComponentDatabaseInfo *cdbinfo =
-			GetSegmentFromCdbComponentDatabases(
-				cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+	GetSegmentFromCdbComponentDatabases(
+										cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+
 	cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_DOWN;
 
 	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
@@ -447,31 +494,42 @@ test_probeWalRepPublishUpdate_mirror_down_to_up(void **state)
 
 	/* the mirror will be updated */
 	PrimaryOrMirrorWillBeUpdated(1);
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[0], false, true);
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ false,
+										   /* willUpdateMirror */ true);
 
-	bool is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
 
 	assert_true(is_updated);
 	pfree(cdb_component_dbs);
 }
 
 /*
- * Case: 4 segments, is_updated is true, as we are changing the state of
+ * 4 segments, is_updated is true, as we are changing the state of
  * several segment pairs.
  */
 void
 test_probeWalRepPublishUpdate_multiple_segments(void **state)
 {
 	probe_context context;
-	CdbComponentDatabases *cdb_component_dbs = InitTestCdb(4, true);
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(4,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
 
 	/*
 	 * Mark the mirror for content 0 down in configuration, probe response
 	 * indicates it's up.
 	 */
 	CdbComponentDatabaseInfo *cdbinfo =
-			GetSegmentFromCdbComponentDatabases(
-				cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+	GetSegmentFromCdbComponentDatabases(
+										cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+
 	cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_DOWN;
 
 	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
@@ -480,46 +538,339 @@ test_probeWalRepPublishUpdate_multiple_segments(void **state)
 	context.responses[0].result.isPrimaryAlive = true;
 	context.responses[0].result.isMirrorAlive = true;
 
-	/* Second segment UP mirror, now reported DOWN */
-	context.responses[1].result.isPrimaryAlive = true;
-	context.responses[1].result.isMirrorAlive = false;
+	/* Second segment no response received */
 
-	/* Third segment no response received */
+	/* Third segment UP mirror, now reported DOWN */
+	context.responses[2].result.isPrimaryAlive = true;
+	context.responses[2].result.isMirrorAlive = false;
 
 	/* Fourth segment, response received no change */
 	context.responses[3].result.isPrimaryAlive = true;
 
-	/* we are updating three of the four segments */
-	PrimaryOrMirrorWillBeUpdated(3);
+	/* we are updating two of the four segments */
+	PrimaryOrMirrorWillBeUpdated(2);
 
-	/* the mirror will be updated */
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[0], false, true);
-	/* the mirror will be updated */
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[1], false, true);
-	/* the primary will be updated */
-	MockPrimaryAndMirrorProbeResponse(cdb_component_dbs, &context.responses[2], true, false);
-	/* the fourth segment will not change status */
+	/* First segment */
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ false,
+										   /* willUpdateMirror */ true);
 
-	bool is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+	/*
+	 * Second segment acts as double fault as not in sync and primary probe
+	 * failed
+	 */
+	/* Third segment */
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[2].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_DOWN,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ false,
+										   /* willUpdateMirror */ true);
+	/* Fourth segment will not change status */
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
 
 	assert_true(is_updated);
 	pfree(cdb_component_dbs);
 }
 
+/*
+ * 1 segment, is_updated is true, because primary and mirror will be
+ * marked not in sync
+ */
+void
+test_PrimayUpMirrorUpSync_to_PrimaryUpMirrorUpNotInSync(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	/* Start in SYNC state */
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_INSYNC);
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and Not In SYNC */
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[0].result.isInSync = false;
+
+	/* we are updating one segment pair */
+	PrimaryOrMirrorWillBeUpdated(1);
+
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ true,
+										   /* willUpdateMirror */ true);
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_true(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 1 segment, is_updated is true, because mirror will be marked down and
+ * both will be marked not in sync
+ */
+void
+test_PrimayUpMirrorUpSync_to_PrimaryUpMirrorDownNotInSync(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	/* Start in SYNC mode */
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_INSYNC);
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and Not In SYNC */
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[0].result.isMirrorAlive = false;
+	context.responses[0].result.isInSync = false;
+
+	/* we are updating one segment pair */
+	PrimaryOrMirrorWillBeUpdated(1);
+
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_DOWN,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ true,
+										   /* willUpdateMirror */ true);
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_true(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 1 segment, is_updated is true, because primary will be marked down and
+ * both will be marked not in sync
+ */
+void
+test_PrimayUpMirrorUpSync_to_PrimaryDown(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	/* set the mode to SYNC in config */
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_INSYNC);
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and Not In SYNC */
+	context.responses[0].result.isPrimaryAlive = false;
+
+	/* we are updating one segment pair */
+	PrimaryOrMirrorWillBeUpdated(1);
+
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_DOWN,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC,
+										   /* willUpdatePrimary */ true,
+										   /* willUpdateMirror */ true);
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_true(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 1 segment, is_updated is true, because primary and mirror will be
+ * marked in sync
+ */
+void
+test_PrimayUpMirrorUpNotInSync_to_PrimayUpMirrorUpSync(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and SYNC */
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[0].result.isInSync = true;
+
+	/* we are updating one segment pair */
+	PrimaryOrMirrorWillBeUpdated(1);
+
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_INSYNC,
+										   /* willUpdatePrimary */ true,
+										   /* willUpdateMirror */ true);
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_true(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 1 segment, is_updated is true, because mirror will be marked UP and
+ * both primary and mirror should get updated to SYNC
+ */
+void
+test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorUpSync(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
+
+	/* set the mirror down in config */
+	CdbComponentDatabaseInfo *cdbinfo =
+	GetSegmentFromCdbComponentDatabases(
+										cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+
+	cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_DOWN;
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and SYNC */
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[0].result.isMirrorAlive = true;
+	context.responses[0].result.isInSync = true;
+
+	/* we are updating one segment pair */
+	PrimaryOrMirrorWillBeUpdated(1);
+
+	ExpectedPrimaryAndMirrorConfiguration(cdb_component_dbs,
+										   /* primary */ context.responses[0].segment_db_info,
+										   /* primary status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mirror status */ GP_SEGMENT_CONFIGURATION_STATUS_UP,
+										   /* mode */ GP_SEGMENT_CONFIGURATION_MODE_INSYNC,
+										   /* willUpdatePrimary */ true,
+										   /* willUpdateMirror */ true);
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_true(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 1 segment, is_updated is false, because there is no status or mode change.
+ */
+void
+test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorDownNotInSync(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(1,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
+
+	/* set the mirror down in config */
+	CdbComponentDatabaseInfo *cdbinfo =
+	GetSegmentFromCdbComponentDatabases(
+										cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+
+	cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_DOWN;
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* Probe responded with Mirror Up and SYNC */
+	context.responses[0].result.isPrimaryAlive = true;
+	context.responses[0].result.isMirrorAlive = false;
+	context.responses[0].result.isInSync = false;
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_false(is_updated);
+	pfree(cdb_component_dbs);
+}
+
+/*
+ * 2 segments, is_updated is false, because content 0 mirror is already
+ * down and probe response fails. Means double fault scenario.
+ */
+void
+test_PrimaryUpMirrorDownNotInSync_to_PrimaryDown(void **state)
+{
+	probe_context context;
+	CdbComponentDatabases *cdb_component_dbs;
+
+	cdb_component_dbs = InitTestCdb(2,
+									true,
+									GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC);
+
+	/* set the mirror down in config */
+	CdbComponentDatabaseInfo *cdbinfo =
+	GetSegmentFromCdbComponentDatabases(
+										cdb_component_dbs, 0, GP_SEGMENT_CONFIGURATION_ROLE_MIRROR);
+
+	cdbinfo->status = GP_SEGMENT_CONFIGURATION_STATUS_DOWN;
+
+	FtsWalRepInitProbeContext(cdb_component_dbs, &context);
+
+	/* No response received from segment 1 (content 0 primary) */
+
+	/* no change for segment 2, probe returned */
+	context.responses[1].result.isPrimaryAlive = true;
+
+	bool		is_updated = probeWalRepPublishUpdate(cdb_component_dbs, &context);
+
+	assert_false(is_updated);
+	pfree(cdb_component_dbs);
+}
+
 int
-main(int argc, char* argv[])
+main(int argc, char *argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-	const UnitTest tests[] = {
+	const		UnitTest tests[] = {
+		/* -----------------------------------------------------------------------
+		 * Group of tests for probeWalRepPublishUpdate()
+		 * -----------------------------------------------------------------------
+		 */
 		unit_test(test_probeWalRepPublishUpdate_for_zero_segment),
 		unit_test(test_probeWalRepPublishUpdate_for_shutdown_requested),
 		unit_test(test_probeWalRepPublishUpdate_for_FtsIsActive_false),
-		unit_test(test_probeWalRepPublishUpdate_no_update),
-		unit_test(test_probeWalRepPublishUpdate_primary_up_to_down),
-		unit_test(test_probeWalRepPublishUpdate_mirror_up_to_down),
-		unit_test(test_probeWalRepPublishUpdate_mirror_down_to_up),
-		unit_test(test_probeWalRepPublishUpdate_multiple_segments)
+		unit_test(test_probeWalRepPublishUpdate_multiple_segments),
+
+		unit_test(test_PrimayUpMirrorUpSync_to_PrimaryUpMirrorUpNotInSync),
+		unit_test(test_PrimayUpMirrorUpSync_to_PrimaryUpMirrorDownNotInSync),
+		unit_test(test_PrimayUpMirrorUpSync_to_PrimaryDown),
+
+		unit_test(test_PrimayUpMirrorUpNotInSync_to_PrimayUpMirrorUpSync),
+		unit_test(test_PrimayUpMirrorUpNotInSync_to_PrimayUpMirrorUpNotInSync),
+		unit_test(test_PrimayUpMirrorUpNotInSync_to_PrimaryUpMirrorDownNotInSync),
+		unit_test(test_PrimayUpMirrorUpNotInSync_to_PrimaryDown),
+
+		unit_test(test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorUpSync),
+		unit_test(test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorUpNotInSync),
+		unit_test(test_PrimaryUpMirrorDownNotInSync_to_PrimayUpMirrorDownNotInSync),
+		unit_test(test_PrimaryUpMirrorDownNotInSync_to_PrimaryDown)
+		/*-----------------------------------------------------------------------*/
 	};
 
 	MemoryContextInit();

@@ -93,7 +93,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/sort/tuplesort.c,v 1.88 2008/10/28 15:51:03 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/sort/tuplesort.c,v 1.89 2009/01/01 17:23:53 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -1638,6 +1638,69 @@ tuplesort_getdatum(Tuplesortstate *state, bool forward,
 	MemoryContextSwitchTo(oldcontext);
 
 	return true;
+}
+
+/*
+ * Advance over N tuples in either forward or back direction,
+ * without returning any data.  N==0 is a no-op.
+ * Returns TRUE if successful, FALSE if ran out of tuples.
+ */
+bool
+tuplesort_skiptuples(Tuplesortstate *state, int64 ntuples, bool forward)
+{
+	/*
+	 * We don't actually support backwards skip yet, because no callers need
+	 * it.	The API is designed to allow for that later, though.
+	 */
+	Assert(forward);
+	Assert(ntuples >= 0);
+
+	switch (state->status)
+	{
+		case TSS_SORTEDINMEM:
+			if (state->memtupcount - state->pos.current >= ntuples)
+			{
+				state->pos.current += ntuples;
+				return true;
+			}
+			state->pos.current = state->memtupcount;
+			state->pos.eof_reached = true;
+
+			/*
+			 * Complain if caller tries to retrieve more tuples than
+			 * originally asked for in a bounded sort.	This is because
+			 * returning EOF here might be the wrong thing.
+			 */
+			if (state->bounded && state->pos.current >= state->bound)
+				elog(ERROR, "retrieved too many tuples in a bounded sort");
+
+			return false;
+
+		case TSS_SORTEDONTAPE:
+		case TSS_FINALMERGE:
+
+			/*
+			 * We could probably optimize these cases better, but for now it's
+			 * not worth the trouble.
+			 */
+			while (ntuples-- > 0)
+			{
+				SortTuple	stup;
+				bool		should_free;
+
+				if (!tuplesort_gettuple_common_pos(state, &state->pos, forward,
+											   &stup, &should_free))
+					return false;
+				if (should_free)
+					pfree(stup.tuple);
+				CHECK_FOR_INTERRUPTS();
+			}
+			return true;
+
+		default:
+			elog(ERROR, "invalid tuplesort state");
+			return false;		/* keep compiler quiet */
+	}
 }
 
 /*

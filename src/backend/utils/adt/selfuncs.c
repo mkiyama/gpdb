@@ -17,7 +17,7 @@
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/adt/selfuncs.c,v 1.257 2008/10/23 00:24:50 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/adt/selfuncs.c,v 1.258 2009/01/01 17:23:50 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -3035,9 +3035,14 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows)
 		ReleaseVariableStats(vardata);
 
 		/*
-		 * Else pull out the component Vars
+		 * Else pull out the component Vars.  Handle PlaceHolderVars by
+		 * recursing into their arguments (effectively assuming that the
+		 * PlaceHolderVar doesn't change the number of groups, which boils
+		 * down to ignoring the possible addition of nulls to the result set).
 		 */
-		varshere = pull_var_clause(groupexpr, true);
+		varshere = pull_var_clause(groupexpr,
+								   PVC_RECURSE_AGGREGATES,
+								   PVC_RECURSE_PLACEHOLDERS);
 
 		/*
 		 * If we find any variable-free GROUP BY item, then either it is a

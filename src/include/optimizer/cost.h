@@ -6,10 +6,10 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/optimizer/cost.h,v 1.93 2008/10/04 21:56:55 tgl Exp $
+ * $PostgreSQL: pgsql/src/include/optimizer/cost.h,v 1.95 2009/01/01 17:24:00 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -119,12 +119,12 @@ extern void cost_agg(Path *path, PlannerInfo *root,
 					 Cost input_startup_cost, Cost input_total_cost,
 					 double input_tuples, double input_width, double hash_batches,
 					 double hashentry_width, bool hash_streaming);
+extern void cost_windowagg(Path *path, PlannerInfo *root,
+			   int numWindowFuncs, int numPartCols, int numOrderCols,
+			   Cost input_startup_cost, Cost input_total_cost,
+			   double input_tuples);
 extern void cost_group(Path *path, PlannerInfo *root,
 		   int numGroupCols, double numGroups,
-		   Cost input_startup_cost, Cost input_total_cost,
-		   double input_tuples);
-extern void cost_window(Path *path, PlannerInfo *root,
-		   int numOrderCols,
 		   Cost input_startup_cost, Cost input_total_cost,
 		   double input_tuples);
 extern void cost_shareinputscan(Path *path, PlannerInfo *root, Cost sharecost, double ntuples, int width);

@@ -5,12 +5,12 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/nodes/readfuncs.c,v 1.217 2008/11/15 19:43:46 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/nodes/readfuncs.c,v 1.220 2009/01/01 17:23:43 momjian Exp $
  *
  * NOTES
  *	  Path and Plan nodes do not need to have any readfuncs support, because we
@@ -476,23 +476,6 @@ static GroupId *
 _readGroupId(void)
 {
 	READ_LOCALS_NO_FIELDS(GroupId);
-
-	READ_DONE();
-}
-
-static PercentileExpr *
-_readPercentileExpr(void)
-{
-	READ_LOCALS(PercentileExpr);
-
-	READ_OID_FIELD(perctype);
-	READ_NODE_FIELD(args);
-	READ_ENUM_FIELD(perckind, PercKind);
-	READ_NODE_FIELD(sortClause);
-	READ_NODE_FIELD(sortTargets);
-	READ_NODE_FIELD(pcExpr);
-	READ_NODE_FIELD(tcExpr);
-	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
 }
@@ -1075,11 +1058,12 @@ _readFuncCall(void)
 	READ_NODE_FIELD(args);
 	READ_NODE_FIELD(agg_order);
 	READ_NODE_FIELD(agg_filter);
+	READ_BOOL_FIELD(agg_within_group);
 	READ_BOOL_FIELD(agg_star);
 	READ_BOOL_FIELD(agg_distinct);
 	READ_BOOL_FIELD(func_variadic);
 	READ_NODE_FIELD(over);
-    READ_LOCATION_FIELD(location);
+	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
 }
@@ -1246,7 +1230,6 @@ _readParam(void)
 	READ_DONE();
 }
 
-#ifndef COMPILING_BINARY_FUNCS
 /*
  * _readAggref
  */
@@ -1257,31 +1240,19 @@ _readAggref(void)
 
 	READ_OID_FIELD(aggfnoid);
 	READ_OID_FIELD(aggtype);
+	READ_NODE_FIELD(aggdirectargs);
 	READ_NODE_FIELD(args);
-	READ_UINT_FIELD(agglevelsup);
-	READ_BOOL_FIELD(aggstar);
-	READ_BOOL_FIELD(aggdistinct);
-	READ_NODE_FIELD(aggfilter);
-	READ_ENUM_FIELD(aggstage, AggStage);
 	READ_NODE_FIELD(aggorder);
+	READ_NODE_FIELD(aggdistinct);
+	READ_NODE_FIELD(aggfilter);
+	READ_BOOL_FIELD(aggstar);
+	READ_BOOL_FIELD(aggvariadic);
+	READ_CHAR_FIELD(aggkind);
+	READ_ENUM_FIELD(aggstage, AggStage);
+	READ_UINT_FIELD(agglevelsup);
+	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
-}
-#endif /* COMPILING_BINARY_FUNCS */
-
-/*
- * _outAggOrder
- */
-static AggOrder *
-_readAggOrder(void)
-{
-	READ_LOCALS(AggOrder);
-
-    READ_BOOL_FIELD(sortImplicit);
-    READ_NODE_FIELD(sortTargets);
-    READ_NODE_FIELD(sortClause);
-
-    READ_DONE();
 }
 
 /*
@@ -1337,6 +1308,7 @@ _readFuncExpr(void)
 	READ_OID_FIELD(funcid);
 	READ_OID_FIELD(funcresulttype);
 	READ_BOOL_FIELD(funcretset);
+	READ_BOOL_FIELD(funcvariadic);
 	READ_ENUM_FIELD(funcformat, CoercionForm);
 	READ_NODE_FIELD(args);
 	READ_BOOL_FIELD(is_tablefunc);  /* GPDB */
@@ -2444,7 +2416,6 @@ _readDefineStmt(void)
 	READ_NODE_FIELD(defnames);
 	READ_NODE_FIELD(args);
 	READ_NODE_FIELD(definition);
-	READ_BOOL_FIELD(ordered);   /* CDB */
 	READ_BOOL_FIELD(trusted);   /* CDB */
 
 	READ_DONE();
@@ -2961,8 +2932,6 @@ parseNodeString(void)
 		return_value = _readAConst();
 	else if (MATCHX("AEXPR"))
 		return_value = _readAExpr();
-	else if (MATCHX("AGGORDER"))
-		return_value = _readAggOrder();
 	else if (MATCHX("ALTERDOMAINSTMT"))
 		return_value = _readAlterDomainStmt();
 	else if (MATCHX("ALTERFUNCTIONSTMT"))
@@ -3097,8 +3066,6 @@ parseNodeString(void)
 		return_value = _readPgPartRule();
 	else if (MATCHX("PARTITIONRULE"))
 		return_value = _readPartitionRule();
-	else if (MATCHX("PERCENTILEEXPR"))
-		return_value = _readPercentileExpr();
 	else if (MATCHX("PRIVGRANTEE"))
 		return_value = _readPrivGrantee();
 	else if (MATCHX("REINDEXSTMT"))

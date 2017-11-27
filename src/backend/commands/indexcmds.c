@@ -5,12 +5,12 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/commands/indexcmds.c,v 1.180 2008/10/13 16:25:19 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/commands/indexcmds.c,v 1.181 2009/01/01 17:23:38 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -937,21 +937,9 @@ static void
 CheckPredicate(Expr *predicate)
 {
 	/*
-	 * We don't currently support generation of an actual query plan for a
-	 * predicate, only simple scalar expressions; hence these restrictions.
+	 * transformExpr() should have already rejected subqueries, aggregates,
+	 * and window functions, based on the EXPR_KIND_ for a predicate.
 	 */
-	if (contain_subplans((Node *) predicate))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot use subquery in index predicate")));
-	if (contain_agg_clause((Node *) predicate))
-		ereport(ERROR,
-				(errcode(ERRCODE_GROUPING_ERROR),
-				 errmsg("cannot use aggregate in index predicate")));
-	if (checkExprHasWindowFuncs((Node *)predicate))
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("cannot use window function in index predicate")));
 
 	/*
 	 * A predicate using mutable functions is probably wrong, for the same
@@ -1038,23 +1026,10 @@ ComputeIndexAttrs(IndexInfo *indexInfo,
 			atttype = exprType(attribute->expr);
 
 			/*
-			 * We don't currently support generation of an actual query plan
-			 * for an index expression, only simple scalar expressions; hence
-			 * these restrictions.
+			 * transformExpr() should have already rejected subqueries,
+			 * aggregates, and window functions, based on the EXPR_KIND_
+			 * for an index expression.
 			 */
-			if (contain_subplans(attribute->expr))
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot use subquery in index expression")));
-			if (contain_agg_clause(attribute->expr))
-				ereport(ERROR,
-						(errcode(ERRCODE_GROUPING_ERROR),
-				errmsg("cannot use aggregate function in index expression")));
-			if (checkExprHasWindowFuncs(attribute->expr))
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("cannot use window function in index expression")));
-
 
 			/*
 			 * A expression using mutable functions is probably wrong, since

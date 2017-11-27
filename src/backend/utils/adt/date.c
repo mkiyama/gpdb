@@ -3,12 +3,12 @@
  * date.c
  *	  implements DATE and TIME data types specified in SQL-92 standard
  *
- * Portions Copyright (c) 1996-2008, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994-5, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/adt/date.c,v 1.143 2008/10/14 17:12:33 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/adt/date.c,v 1.144 2009/01/01 17:23:49 momjian Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -2609,10 +2609,6 @@ timetz_part(PG_FUNCTION_ARGS)
 /* timetz_zone()
  * Encode time with time zone type with specified time zone.
  * Applies DST rules as of the current date.
- *
- * We've pulled this function from 8_4_STABLE, but kept PG_GETARG_TEXT_P
- * instead of PG_GETARG_TEXT_PP which was used in 8_4_STABLE.
- * GPDB_84_MERGE_FIXME
  */
 Datum
 timetz_zone(PG_FUNCTION_ARGS)
