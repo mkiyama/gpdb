@@ -833,6 +833,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+with_extra_version
 with_template
 with_includes
 with_libraries
@@ -1565,6 +1566,8 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-extra-version=STRING
+                          append STRING to version
   --with-template=NAME    override operating system template
   --with-includes=DIRS    look for additional header files in DIRS
   --with-libraries=DIRS   look for additional libraries in DIRS
@@ -3044,16 +3047,41 @@ ac_configure="$SHELL $ac_aux_dir/configure"  # Please don't use this var.
 configure_args=$ac_configure_args
 
 
-
-cat >>confdefs.h <<_ACEOF
-#define PG_VERSION "$PG_PACKAGE_VERSION"
-_ACEOF
-
 PG_MAJORVERSION=`expr "$PG_PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`
 
 
 cat >>confdefs.h <<_ACEOF
 #define PG_MAJORVERSION "$PG_MAJORVERSION"
+_ACEOF
+
+
+
+pgac_args="$pgac_args with_extra_version"
+
+
+# Check whether --with-extra-version was given.
+if test "${with_extra_version+set}" = set; then :
+  withval=$with_extra_version;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-extra-version option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-extra-version option" "$LINENO" 5
+      ;;
+    *)
+      PG_VERSION="$PG_PACKAGE_VERSION$withval"
+      ;;
+  esac
+
+else
+  PG_VERSION="$PG_PACKAGE_VERSION"
+fi
+
+
+
+cat >>confdefs.h <<_ACEOF
+#define PG_VERSION "$PG_VERSION"
 _ACEOF
 
 
@@ -5360,6 +5388,34 @@ fi
 
 if test "$GCC" = yes -a "$ICC" = no; then
   CFLAGS="$CFLAGS -Wall -Wmissing-prototypes -Wpointer-arith"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports -Werror=uninitialized" >&5
+$as_echo_n "checking if $CC supports -Werror=uninitialized... " >&6; }
+pgac_save_CFLAGS=$CFLAGS
+CFLAGS="$pgac_save_CFLAGS -Werror=uninitialized"
+ac_save_c_werror_flag=$ac_c_werror_flag
+ac_c_werror_flag=yes
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+else
+  CFLAGS="$pgac_save_CFLAGS"
+                    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ac_c_werror_flag=$ac_save_c_werror_flag
+
   # These work in some but not all gcc versions
   # GPDB code is full of declarations after statement.
   #PGAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
@@ -6088,18 +6144,6 @@ GPTEST_PM="src/test/regress/GPTest.pm"
 if grep '##' $GPTEST_IN > /dev/null 2>&1 ; then
     sed "s,##.*##,$GP_VERSION," $GPTEST_IN > $GPTEST_PM
 fi
-
-# Create compiler version string
-if test x"$GCC" = x"yes" ; then
-  cc_string="GCC `${CC} --version | sed q`"
-else
-  cc_string=$CC
-fi
-
-cat >>confdefs.h <<_ACEOF
-#define PG_VERSION_STR "PostgreSQL $PG_PACKAGE_VERSION (Greenplum Database $GP_VERSION) on $host, compiled by $cc_string"
-_ACEOF
-
 
 
 cat >>confdefs.h <<_ACEOF
@@ -9733,16 +9777,6 @@ program to use during the build." "$LINENO" 5
 fi
 
 
-
-# Supply a numeric version string for use by 3rd party add-ons
-# awk -F is a regex on some platforms, and not on others, so make "." a tab
-PG_VERSION_NUM="`echo "$PG_PACKAGE_VERSION" | sed 's/[A-Za-z].*$//' |
-tr '.' '	' |
-$AWK '{printf "%d%02d%02d", $1, $2, (NF >= 3) ? $3 : 0}'`"
-
-cat >>confdefs.h <<_ACEOF
-#define PG_VERSION_NUM $PG_VERSION_NUM
-_ACEOF
 
 
 #
@@ -14835,8 +14869,8 @@ else
 int
 main ()
 {
-struct timeval *tp;
-struct timezone *tzp;
+struct timeval *tp = 0;
+struct timezone *tzp = 0;
 gettimeofday(tp,tzp);
   ;
   return 0;
@@ -16092,12 +16126,17 @@ $as_echo_n "checking for the pthreads library -l$flag... " >&6; }
         cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 #include <pthread.h>
+                     static void routine(void *a) { a = 0; }
+                     static void *start_routine(void *a) { return a; }
 int
 main ()
 {
-pthread_t th; pthread_join(th, 0);
-                     pthread_attr_init(0); pthread_cleanup_push(0, 0);
-                     pthread_create(0,0,0,0); pthread_cleanup_pop(0);
+pthread_t th; pthread_attr_t attr;
+                     pthread_create(&th, 0, start_routine, 0);
+                     pthread_join(th, 0);
+                     pthread_attr_init(&attr);
+                     pthread_cleanup_push(routine, 0);
+                     pthread_cleanup_pop(0);
   ;
   return 0;
 }
@@ -16351,11 +16390,11 @@ else
 int
 main ()
 {
-uid_t uid;
-struct passwd *space;
-char *buf;
-size_t bufsize;
-struct passwd **result;
+uid_t uid = 0;
+struct passwd *space = 0;
+char *buf = 0;
+size_t bufsize = 0;
+struct passwd **result = 0;
 getpwuid_r(uid, space, buf, bufsize, result);
   ;
   return 0;
@@ -18974,6 +19013,31 @@ $as_echo "$as_me: using CPPFLAGS=$CPPFLAGS" >&6;}
 $as_echo "$as_me: using LDFLAGS=$LDFLAGS" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using LIBS=$LIBS" >&5
 $as_echo "$as_me: using LIBS=$LIBS" >&6;}
+
+# Create compiler version string
+if test x"$GCC" = x"yes" ; then
+  cc_string="GCC `${CC} --version | sed q`"
+else
+  cc_string=$CC
+fi
+
+
+cat >>confdefs.h <<_ACEOF
+#define PG_VERSION_STR "PostgreSQL $PG_VERSION (Greenplum Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
+_ACEOF
+
+
+# Supply a numeric version string for use by 3rd party add-ons
+# awk -F is a regex on some platforms, and not on others, so make "." a tab
+PG_VERSION_NUM="`echo "$PG_PACKAGE_VERSION" | sed 's/[A-Za-z].*$//' |
+tr '.' '	' |
+$AWK '{printf "%d%02d%02d", $1, $2, (NF >= 3) ? $3 : 0}'`"
+
+cat >>confdefs.h <<_ACEOF
+#define PG_VERSION_NUM $PG_VERSION_NUM
+_ACEOF
+
+
 
 # prepare build tree if outside source tree
 # Note 1: test -ef might not exist, but it's more reliable than `pwd`.
