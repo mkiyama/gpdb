@@ -3055,6 +3055,7 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
+PG_VERSION="$PG_PACKAGE_VERSION"
 
 pgac_args="$pgac_args with_extra_version"
 
@@ -3070,18 +3071,16 @@ if test "${with_extra_version+set}" = set; then :
       as_fn_error $? "argument required for --with-extra-version option" "$LINENO" 5
       ;;
     *)
-      PG_VERSION="$PG_PACKAGE_VERSION$withval"
+
       ;;
   esac
 
-else
-  PG_VERSION="$PG_PACKAGE_VERSION"
 fi
 
 
 
 cat >>confdefs.h <<_ACEOF
-#define PG_VERSION "$PG_VERSION"
+#define PG_VERSION "$PG_PACKAGE_VERSION"
 _ACEOF
 
 
@@ -5388,34 +5387,6 @@ fi
 
 if test "$GCC" = yes -a "$ICC" = no; then
   CFLAGS="$CFLAGS -Wall -Wmissing-prototypes -Wpointer-arith"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports -Werror=uninitialized" >&5
-$as_echo_n "checking if $CC supports -Werror=uninitialized... " >&6; }
-pgac_save_CFLAGS=$CFLAGS
-CFLAGS="$pgac_save_CFLAGS -Werror=uninitialized"
-ac_save_c_werror_flag=$ac_c_werror_flag
-ac_c_werror_flag=yes
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-else
-  CFLAGS="$pgac_save_CFLAGS"
-                    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-ac_c_werror_flag=$ac_save_c_werror_flag
-
   # These work in some but not all gcc versions
   # GPDB code is full of declarations after statement.
   #PGAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
@@ -6121,10 +6092,20 @@ BLD_ARCH=`echo $BLD_ARCH`
 
 
 # Get the Greenplum version string from VERSION
-bash getversion > VERSION
+
+GP_VERSION_LONG=`bash ./getversion`
+
+if test "$with_extra_version" = "" ; then
+  with_extra_version="-oss"
+fi
+
+GP_VERSION_LONG="$GP_VERSION_LONG$with_extra_version"
+
+echo $GP_VERSION_LONG > VERSION
 GP_VERSION=`cat VERSION`
 
 GP_VERSION_SHORT=`bash ./getversion --short`
+GP_VERSION_SHORT="$GP_VERSION_SHORT$with_extra_version"
 
 
 GP_VERSION_IN="src/include/catalog/gp_version.in"
@@ -19000,6 +18981,42 @@ rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
   conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 
+
+fi
+
+# Many of the autoconf tests produce warnings, or even compiler errors, on
+# purpose as they run through the conftest programs. So, treating warning as
+# error should be last step after all autoconf checks are performed, otherwise
+# false side-effects happens.
+if test "$GCC" = yes -a "$ICC" = no; then
+  CFLAGS="$CFLAGS -Wall -Wmissing-prototypes -Wpointer-arith"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports -Werror=uninitialized" >&5
+$as_echo_n "checking if $CC supports -Werror=uninitialized... " >&6; }
+pgac_save_CFLAGS=$CFLAGS
+CFLAGS="$pgac_save_CFLAGS -Werror=uninitialized"
+ac_save_c_werror_flag=$ac_c_werror_flag
+ac_c_werror_flag=yes
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+else
+  CFLAGS="$pgac_save_CFLAGS"
+                    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ac_c_werror_flag=$ac_save_c_werror_flag
 
 fi
 

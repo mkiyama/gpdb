@@ -38,10 +38,10 @@ AC_SUBST(configure_args, [$ac_configure_args])
 AC_SUBST(PG_MAJORVERSION)
 AC_DEFINE_UNQUOTED(PG_MAJORVERSION, "$PG_MAJORVERSION", [PostgreSQL major version as a string])
 
-PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version],
-             [PG_VERSION="$PG_PACKAGE_VERSION$withval"],
-             [PG_VERSION="$PG_PACKAGE_VERSION"])
-AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_VERSION", [Postgres version Greenplum Database is based on])
+[PG_VERSION="$PG_PACKAGE_VERSION"]
+dnl Greenplum co-opts the --with-extra-version value to append to Only the Greenplum version
+PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version], [], [])
+AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greenplum Database is based on])
 
 AC_CANONICAL_HOST
 
@@ -596,7 +596,6 @@ fi
 
 if test "$GCC" = yes -a "$ICC" = no; then
   CFLAGS="$CFLAGS -Wall -Wmissing-prototypes -Wpointer-arith"
-  PGAC_PROG_CC_CFLAGS_OPT([-Werror=uninitialized])
   # These work in some but not all gcc versions
   # GPDB code is full of declarations after statement.
   #PGAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
@@ -725,10 +724,20 @@ AC_SUBST(GCC)
 AC_SUBST(BLD_ARCH)
 
 # Get the Greenplum version string from VERSION
-bash getversion > VERSION
+
+GP_VERSION_LONG=`bash ./getversion`
+
+if test "$with_extra_version" = "" ; then
+  with_extra_version="-oss"
+fi
+
+GP_VERSION_LONG="$GP_VERSION_LONG$with_extra_version"
+
+echo $GP_VERSION_LONG > VERSION
 GP_VERSION=`cat VERSION`
 
 GP_VERSION_SHORT=`bash ./getversion --short`
+GP_VERSION_SHORT="$GP_VERSION_SHORT$with_extra_version"
 AC_SUBST(GP_VERSION_SHORT)
 
 GP_VERSION_IN="src/include/catalog/gp_version.in"
@@ -2441,6 +2450,14 @@ elif test "$PORTNAME" = "openbsd"; then
   PGAC_PROG_CC_LDFLAGS_OPT([-Wl,-Bdynamic], $link_test_func)
 else
   PGAC_PROG_CC_LDFLAGS_OPT([-Wl,--as-needed], $link_test_func)
+fi
+
+# Many of the autoconf tests produce warnings, or even compiler errors, on
+# purpose as they run through the conftest programs. So, treating warning as
+# error should be last step after all autoconf checks are performed, otherwise
+# false side-effects happens.
+if test "$GCC" = yes -a "$ICC" = no; then
+  PGAC_PROG_CC_CFLAGS_OPT([-Werror=uninitialized])
 fi
 
 # Begin output steps
