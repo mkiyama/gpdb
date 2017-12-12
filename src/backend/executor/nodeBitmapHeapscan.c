@@ -90,15 +90,6 @@ freeScanDesc(BitmapHeapScanState *scanstate)
 }
 
 /*
- * Initialize the state relevant to bitmaps.
- */
-static inline void
-initBitmapState(BitmapHeapScanState *scanstate)
-{
-	/* GPDB_84_MERGE_FIXME: nothing to do? */
-}
-
-/*
  * Free the state relevant to bitmaps
  */
 static inline void
@@ -146,7 +137,6 @@ BitmapHeapNext(BitmapHeapScanState *node)
 	slot = node->ss.ss_ScanTupleSlot;
 
 	initScanDesc(node);
-	initBitmapState(node);
 
 	scan = node->ss_currentScanDesc;
 	scanrelid = ((BitmapHeapScan *) node->ss.ps.plan)->scan.scanrelid;
@@ -289,8 +279,8 @@ BitmapHeapNext(BitmapHeapScanState *node)
 			CheckSendPlanStateGpmonPkt(&node->ss.ps);
 
 			/*
-		 	* Set rs_cindex to first slot to examine
-		 	*/
+			 * Set rs_cindex to first slot to examine
+			 */
 			scan->rs_cindex = 0;
 
 #ifdef USE_PREFETCH
@@ -445,7 +435,6 @@ bitgetpage(HeapScanDesc scan, TBMIterateResult *tbmres)
 	scan->rs_cbuf = ReleaseAndReadBuffer(scan->rs_cbuf,
 										 scan->rs_rd,
 										 page);
-
 	buffer = scan->rs_cbuf;
 	snapshot = scan->rs_snapshot;
 
