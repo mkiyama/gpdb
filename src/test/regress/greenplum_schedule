@@ -15,7 +15,7 @@
 #   hitting max_connections limit on segments.
 #
 
-test: gp_aggregates gp_metadata variadic_parameters default_parameters function_extensions spi gp_xml pgoptions shared_scan null
+test: gp_aggregates gp_metadata variadic_parameters default_parameters function_extensions spi spi_processed64bit gp_xml pgoptions shared_scan null
 
 test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp notin percentile join_gp union_gp gpcopy gp_create_table gp_create_view window_views
 test: filter gpctas gpdist matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var guc_gp gp_explain
@@ -99,9 +99,9 @@ test: direct_dispatch bfv_dd bfv_dd_multicolumn bfv_dd_types
 # (https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=e5550d5fec66aa74caad1f79b79826ec64898688)
 test: catalog
 
-test: gporca
-
-test: bfv_catalog bfv_index bfv_olap bfv_aggregate bfv_partition bfv_partition_plans DML_over_joins bfv_statistic
+test: bfv_catalog bfv_index bfv_olap bfv_aggregate bfv_partition bfv_partition_plans DML_over_joins gporca bfv_statistic
+# NOTE: gporca_faults uses gp_fault_injector - so do not add to a parallel group
+test: gporca_faults
  
 test: aggregate_with_groupingsets 
 

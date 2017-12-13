@@ -24,6 +24,8 @@ groups:
   - icw_gporca_centos6
   - icw_gporca_centos7
   - icw_gporca_sles11
+  - icw_gporca_sles12
+  - icw_planner_sles12
   - icw_planner_ubuntu16
   - icw_gporca_conan_ubuntu16
   - icw_extensions_gpcloud
@@ -55,6 +57,7 @@ groups:
   - mpp_interconnect
   - mpp_resource_group_centos6
   - mpp_resource_group_centos7
+  - mpp_resource_group_sles12
   - gate_mpp_end
 ################################
   - gate_mm_start
@@ -121,6 +124,8 @@ groups:
   - icw_gporca_centos6
   - icw_gporca_centos7
   - icw_gporca_sles11
+  - icw_gporca_sles12
+  - icw_planner_sles12
   - icw_planner_ictcp_centos6
   - icw_extensions_gpcloud
   - icw_gporca_centos6_gpos_memory
@@ -154,6 +159,7 @@ groups:
   - mpp_interconnect
   - mpp_resource_group_centos6
   - mpp_resource_group_centos7
+  - mpp_resource_group_sles12
   - gate_mpp_end
 
 - name: G:MM
@@ -1090,6 +1096,100 @@ jobs:
       TEST_OS: sles
       CONFIGURE_FLAGS: {{configure_flags}}
 
+- name: icw_gporca_sles12
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      tags: ["ccp"]
+      passed: [gate_icw_start]
+    - get: gpdb_binary
+      tags: ["ccp"]
+      resource: bin_gpdb_sles11
+      passed: [gate_icw_start]
+      trigger: true
+    - get: ccp_src
+      tags: ["ccp"]
+    - get: centos-gpdb-dev-6
+      tags: ["ccp"]
+  - put: terraform
+    tags: ["ccp"]
+    params:
+      <<: *ccp_default_params
+      vars:
+        <<: *ccp_default_vars
+        platform: sles12
+        aws_instance-node-instance_type: m4.xlarge
+        number_of_nodes: 1
+  - task: gen_cluster
+    tags: ["ccp"]
+    file: ccp_src/ci/tasks/gen_cluster.yml
+    params:
+      <<: *ccp_gen_cluster_default_params
+      # platform is necessary to generate correct ssh config
+      platform: sles12
+    on_failure:
+      <<: *ccp_destroy
+  - task: run_tests
+    tags: ["ccp"]
+    file: gpdb_src/concourse/tasks/ic_gpdb_sles12.yml
+    image: centos-gpdb-dev-6
+    params:
+      MAKE_TEST_COMMAND: PGOPTIONS='-c optimizer=on' installcheck-world
+      TEST_OS: sles12
+    on_success:
+      <<: *ccp_destroy
+    on_failure:
+      <<: *set_failed
+  ensure:
+    <<: *set_failed
+
+- name: icw_planner_sles12
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      tags: ["ccp"]
+      passed: [gate_icw_start]
+    - get: gpdb_binary
+      tags: ["ccp"]
+      resource: bin_gpdb_sles11
+      passed: [gate_icw_start]
+      trigger: true
+    - get: ccp_src
+      tags: ["ccp"]
+    - get: centos-gpdb-dev-6
+      tags: ["ccp"]
+  - put: terraform
+    tags: ["ccp"]
+    params:
+      <<: *ccp_default_params
+      vars:
+        <<: *ccp_default_vars
+        platform: sles12
+        aws_instance-node-instance_type: m4.xlarge
+        number_of_nodes: 1
+  - task: gen_cluster
+    tags: ["ccp"]
+    file: ccp_src/ci/tasks/gen_cluster.yml
+    params:
+      <<: *ccp_gen_cluster_default_params
+      # platform is necessary to generate correct ssh config
+      platform: sles12
+    on_failure:
+      <<: *ccp_destroy
+  - task: run_tests
+    tags: ["ccp"]
+    file: gpdb_src/concourse/tasks/ic_gpdb_sles12.yml
+    image: centos-gpdb-dev-6
+    params:
+      MAKE_TEST_COMMAND: PGOPTIONS='-c optimizer=off' installcheck-world
+      TEST_OS: sles12
+    on_success:
+      <<: *ccp_destroy
+    on_failure:
+      <<: *set_failed
+  ensure:
+    <<: *set_failed
+
 - name: icw_planner_ubuntu16
   plan:
   - aggregate:
@@ -1254,6 +1354,8 @@ jobs:
       - icw_gporca_centos6
       - icw_gporca_centos7
       - icw_gporca_sles11
+      - icw_gporca_sles12
+      - icw_planner_sles12
       - icw_planner_ictcp_centos6
       - icw_extensions_gpcloud
       - icw_gporca_centos6_gpos_memory
@@ -1832,7 +1934,11 @@ jobs:
       passed:
       - gate_compile_end
     - get: bin_gpdb_centos7
-      passed: [gate_compile_end]
+      passed:
+      - gate_compile_end
+    - get: bin_gpdb_sles11
+      passed:
+      - gate_compile_end
 
 - name: mpp_interconnect
   plan:
@@ -1850,7 +1956,10 @@ jobs:
     - get: centos-gpdb-dev-6
       tags: ["ccp"]
   - put: terraform
-    <<: *cs_ccp_terraform_params
+    params:
+      <<: *ccp_default_params
+      vars:
+        <<: *ccp_default_vars
   - task: gen_cluster
     <<: *cs_ccp_gen_cluster_params
   - task: pre_run_test_setup
@@ -1886,7 +1995,7 @@ jobs:
     - get: gpdb_src
       tags: ["ccp"]
       passed: [gate_mpp_start]
-    - get: bin_gpdb
+    - get: gpdb_binary
       tags: ["ccp"]
       resource: bin_gpdb_centos6
       passed: [gate_mpp_start]
@@ -1906,8 +2015,6 @@ jobs:
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
-    input_mapping:
-      gpdb_binary: bin_gpdb
   - task: run_tests
     tags: ["ccp"]
     file: gpdb_src/concourse/tasks/ic_gpdb_resgroup.yml
@@ -1927,14 +2034,14 @@ jobs:
     - get: gpdb_src
       tags: ["ccp"]
       passed: [gate_mpp_start]
-    - get: bin_gpdb
+    - get: gpdb_binary
       tags: ["ccp"]
       resource: bin_gpdb_centos7
       passed: [gate_mpp_start]
       trigger: true
     - get: ccp_src
       tags: ["ccp"]
-    - get: centos-gpdb-dev-7
+    - get: centos-gpdb-dev-6
       tags: ["ccp"]
   - put: terraform
     tags: ["ccp"]
@@ -1948,14 +2055,54 @@ jobs:
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
-    input_mapping:
-      gpdb_binary: bin_gpdb
   - task: run_tests
     tags: ["ccp"]
     file: gpdb_src/concourse/tasks/ic_gpdb_resgroup.yml
-    image: centos-gpdb-dev-7
+    image: centos-gpdb-dev-6
     params:
       TEST_OS: centos7
+    on_success:
+      <<: *ccp_destroy
+    on_failure:
+      <<: *set_failed
+  ensure:
+    <<: *set_failed
+
+- name: mpp_resource_group_sles12
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      tags: ["ccp"]
+      passed: [gate_mpp_start]
+    - get: gpdb_binary
+      tags: ["ccp"]
+      resource: bin_gpdb_sles11
+      passed: [gate_mpp_start]
+      trigger: true
+    - get: ccp_src
+      tags: ["ccp"]
+    - get: centos-gpdb-dev-6
+      tags: ["ccp"]
+  - put: terraform
+    tags: ["ccp"]
+    params:
+      <<: *ccp_default_params
+      vars:
+        <<: *ccp_default_vars
+        platform: sles12
+  - task: gen_cluster
+    tags: ["ccp"]
+    file: ccp_src/ci/tasks/gen_cluster.yml
+    params:
+      <<: *ccp_gen_cluster_default_params
+      # platform is necessary to generate correct ssh config
+      platform: sles12
+  - task: run_tests
+    tags: ["ccp"]
+    file: gpdb_src/concourse/tasks/ic_gpdb_resgroup.yml
+    image: centos-gpdb-dev-6
+    params:
+      TEST_OS: sles12
     on_success:
       <<: *ccp_destroy
     on_failure:
@@ -1971,6 +2118,7 @@ jobs:
       - mpp_interconnect
       - mpp_resource_group_centos6
       - mpp_resource_group_centos7
+      - mpp_resource_group_sles12
       trigger: true
 ############### MPP End
 
@@ -2988,6 +3136,8 @@ jobs:
     - icw_gporca_centos6
     - icw_gporca_centos7
     - icw_gporca_sles11
+    - icw_gporca_sles12
+    - icw_planner_sles12
     - icw_planner_ubuntu16
     - icw_gporca_conan_ubuntu16
     - test_gpdb_debian_package
@@ -2996,6 +3146,7 @@ jobs:
     - client_loader_remote_test_aix
     - mpp_resource_group_centos6
     - mpp_resource_group_centos7
+    - mpp_resource_group_sles12
     - MU_check_centos
     - MM_analyzedb
     - MM_gpinitsystem
