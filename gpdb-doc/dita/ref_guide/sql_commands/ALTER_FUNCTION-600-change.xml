@@ -7,7 +7,7 @@
     <draft-comment author="msk">6.0.0 - EXECUTE ON - <xref
         href="https://github.com/greenplum-db/gpdb/pull/3312" format="html" scope="external"
         >gpdb/pull/3312</xref><p>fixed --Attribute is optional</p><p>TODO update definition, point
-        to to CREATE FUNCTION</p></draft-comment>
+        to CREATE FUNCTION</p></draft-comment>
     <p id="sql_command_desc">Changes the definition of a function.</p>
     <section id="section2"
         ><title>Synopsis</title><codeblock id="sql_command_synopsis">ALTER FUNCTION <varname>name</varname> ( [ [<varname>argmode</varname>] [<varname>argname</varname>] <varname>argtype</varname> [, ...] ] ) 
@@ -25,7 +25,7 @@ ALTER FUNCTION <varname>name</varname> ( [ [<varname>argmode</varname>] [<varnam
       of:</p><codeblock>{CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT}
 {IMMUTABLE | STABLE | VOLATILE}
 {[EXTERNAL] SECURITY INVOKER | [EXTERNAL] SECURITY DEFINER}
-{EXECUTE ON { ANY | MASTER | ALL SEGMENTS }}
+EXECUTE ON { ANY | MASTER | ALL SEGMENTS }
 COST <varname>execution_cost</varname>
 SET <varname>configuration_parameter</varname> { TO | = } { <varname>value</varname> | DEFAULT }
 SET <varname>configuration_parameter</varname> FROM CURRENT
@@ -107,22 +107,20 @@ RESET ALL</codeblock></section>
           <pt>EXECUTE ON ANY</pt>
           <pt>EXECUTE ON MASTER</pt>
           <pt>EXECUTE ON ALL SEGMENTS</pt>
-
-          <pd><codeph>EXECUTE ON ANY</codeph> (the default) indicates that the function may be
-            executed on the master, or any segment instance, and it will return the same result
-            regardless of where it is executed. </pd>
-
+          <pd>The <codeph>EXECUTE ON</codeph> attributes specify where (on which segment instance) a
+            function is executed when it is invoked during the query execution process.</pd>
+          <pd><codeph>EXECUTE ON ANY</codeph> (the default) indicates that the function can be
+            executed on the master, or any segment instance, and it returns the same result
+            regardless of where it is executed. Greenplum Database determines where the function is
+            executed.</pd>
           <pd><codeph>EXECUTE ON MASTER</codeph> indicates that the function must be executed on the
             master instance. </pd>
-
           <pd><codeph>EXECUTE ON ALL SEGMENTS</codeph> indicates that the function must be executed
-            on all segment instances. The overall result of the function is the UNION ALL of the
-            results from all segment instances. </pd>
-
-          <pd><codeph>ON MASTER</codeph> and <codeph>ALL SEGMENTS</codeph> are only allowed on
-            set-returning functions. </pd>
-          <pd>For more information about the <codeph>EXECUTE ON</codeph> attributes, see
-              <codeph>CREATE FUNCTION</codeph>.</pd>
+            on all primary segment instances, but not the master, for each invocation. The overall
+            result of the function is the <codeph>UNION ALL</codeph> of the results from all segment
+            instances. </pd>
+          <pd>For information about the <codeph>EXECUTE ON</codeph> attributes, see <codeph>CREATE
+              FUNCTION</codeph>.</pd>
         </plentry>
 
         <plentry>

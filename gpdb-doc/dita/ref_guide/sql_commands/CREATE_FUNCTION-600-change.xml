@@ -21,7 +21,7 @@
     | IMMUTABLE | STABLE | VOLATILE
     | CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
     | [EXTERNAL] SECURITY INVOKER | [EXTERNAL] SECURITY DEFINE
-    | [EXECUTE ON { ANY | MASTER | ALL SEGMENTS }]
+    | EXECUTE ON { ANY | MASTER | ALL SEGMENTS }
     | COST <varname>execution_cost</varname>
     | SET <varname>configuration_parameter</varname> { TO <varname>value</varname> | = <varname>value</varname> | FROM CURRENT }
     | AS '<varname>definition</varname>'
@@ -217,72 +217,7 @@ SELECT foo();</codeblock><p>In
                     <pt>EXECUTE ON MASTER</pt>
                     <pt>EXECUTE ON ALL SEGMENTS</pt>
                     <pd>
-                        <draft-comment author="msk"/>
-                        <p>There is no support for these new options in ORCA. Using any ON MASTER or
-                            ON ALL SEGMENTS functions in a query cause ORCA to fall back. </p>
-                        <p>The new attributes are only supported for set-returning functions. </p>
-                        <p>This is the same as with the prodataaccess='s' hack that this replaces,
-                            but now that it is more user-visible, it would be nice to teach ORCA
-                            about it.</p>
-                        <p>The new options are only supported for set-returning functions. There is
-                            mechanism to track where individual expressions should be executed, in
-                            the planner, so that would require much more work. </p>
-                        <p><b>FIXED</b> Likewise, they cannot be used in target list. So you cannot
-                            do "SELECT on_master_func()", you must do "SELECT * FROM
-                            on_master_funct()" instead. EXECUTE ON ANY functions, which is the
-                            default, work the same as before.</p>
-                        <p>Q: Can EXECUTE ON * be used with? IMMUTABLE | STABLE | VOLATILE</p>
-                        <p>Yes. I'm not sure sensible it is to mark a function as IMMUTABLE and also
-                            EXECUTE ON MASTER or EXECUTE ON ALL SEGMENTS. They are kind of
-                            contradictory, although I guess in principle you might have a function
-                            that only works in the master, e.g. because a library is missing from
-                            the other nodes, but which doesn't otherwise depend on where it's run. </p>
-                        <p>Q: If so, is there anything that to document about the interaction
-                            between the two? </p>
-                        <p>I'm not sure. One interaction between EXECUTE ON ANY and volatility is
-                            that if you use a function in the FROM clause, e.g. "SELECT ... FROM
-                            function()", the planner will always execute the function in the master
-                            unless it's also marked as IMMUTABLE. That's a pre-existing behavior and
-                            I kept that, since there might be applications that depend on that out
-                            there. That doesn't apply to functions used elsewhere in the query, only
-                            in the FROM clause, though. I'm not sure what, if anything, we should
-                            say about that in the documentation. It would be nice to document it,
-                            but OTOH, it's more of an implementation detail at the moment and I
-                            would not like to make it a hard promise to user, in case we want to
-                            change that in the future.</p>
-                        <p>Q: make IMMUTABLE | STABLE | VOLATILE attributes mutually exclusive to
-                            the EXECUTE * attributes?</p>
-                        <p>Hmm, no, I don't think that would be good. Even though there are some
-                            interactions, they're not really the same thing. For example, an
-                            IMMUTABLE function can be evaluated at planning time already, while a
-                            VOLATILE function needs to re-evaluated for every row in the query.
-                            That's orthogonal to *where* they're executed. </p>
-                        <p>Q: Some guidance is needed as to when to use the attributes, like your
-                            comments above. </p>
-                        <p>Yeah. Volatility and EXECUTE ON are mostly orthogonal. Roughly speaking,
-                            volatility means *when* the function needs to be evaluated, and EXECUTE
-                            ON means *where* it needs to be evaluated. Some combinations are quite
-                            far-fetched, it's hard to imagine a function that's IMMUTABLE but must
-                            be executed at a certain node, for example.</p>
-                        <p>EXECUTE ON SEGMENTS - run on all segments, but not master. </p>
-                        <p>EXECUTE ON MASTER - run on master only</p>
-                        <p>EXECUTE ON MASTER AND SEGMENTS - run on all segments, and in master </p>
-                        <codeblock>create function srftest_segments (text) returns setof text as $$
-    begin return next ('arg: ' || $1); end;
-$$ language plpgsql EXECUTE ON ALL SEGMENTS;
-
-select * from srftest_segments('foo');
-select srftest_segments('foo');</codeblock>
-                        <p>-----------</p>
-                        <p>CREATE FUNCTION ... EXECUTE ON [ANY | ALL SEGMENTS | MASTER] </p>
-                        <p>EXECUTE ON ANY is the default, which means that the function may be
-                            executed on the master, or on any segment. The planner is free to
-                            choose. </p>
-                        <p>EXECUTE ON ALL SEGMENTS means that the function should be executed on
-                            *all* segments, and all the results are combined. This is only possible
-                            for set-returning functions, because a non-set returning function can
-                            only return one result value. </p>
-                        <p>===============</p>
+                        <draft-comment author="msk">updates to EXECUTE ON</draft-comment>
                     </pd>
                     <pd>The <codeph>EXECUTE ON</codeph> attributes indicate where a function is
                         executed during the query execution process.</pd>
@@ -296,7 +231,7 @@ select srftest_segments('foo');</codeblock>
                         executed on all primary segment instances, but not the master. The overall
                         result of the function is the <codeph>UNION ALL</codeph> of the results from
                         all segment instances. </pd>
-                    <pd>Functions defined with the  <codeph>EXECUTE ON MASTER</codeph> or
+                    <pd>Functions defined with the <codeph>EXECUTE ON MASTER</codeph> or
                             <codeph>EXECUTE ON ALL SEGMENTS</codeph> attribute cannot be used in the
                             <codeph>SELECT</codeph> list of a query with a <codeph>FROM</codeph>
                         clause.</pd>
@@ -305,11 +240,12 @@ select srftest_segments('foo');</codeblock>
                     <pd>A query falls back from GPORCA to the legacy query planner if the query
                         contains a functions defined with the <codeph>ON MASTER</codeph> or
                             <codeph>ON ALL SEGMENTS</codeph> attribute. </pd>
-                    <pd>A function that executes queries that access any tables is only supported
-                        when a function is executed on the master. Such functions should be marked
-                        as <codeph>EXECUTE ON MASTER</codeph>. Otherwise, you might get an error if
-                        the function is used in a complicated query, and the planner thinks it would
-                        be beneficial to push the function invocation to segment instances. </pd>
+                    <pd>A function that executes queries to access tables is only supported when a
+                        function is executed on the master. Such functions should be defined with
+                        the <codeph>EXECUTE ON MASTER</codeph> attribute. Otherwise, you might get
+                        an error if the function is used in a complicated query, and the planner
+                        optimization determines it would be beneficial to push the function
+                        invocation to segment instances. </pd>
                 </plentry>
 
                 <plentry>
