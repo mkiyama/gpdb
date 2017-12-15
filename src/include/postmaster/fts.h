@@ -22,13 +22,15 @@
 #ifdef USE_SEGWALREP
 
 /* Queries for FTS messages */
-#define	FTS_MSG_TYPE_PROBE "PROBE"
+#define	FTS_MSG_PROBE "PROBE"
+#define FTS_MSG_SYNCREP_OFF "SYNCREP_OFF"
 
-#define Natts_fts_probe_response 2
-#define Anum_fts_probe_response_is_mirror_up 0
-#define Anum_fts_probe_response_is_in_sync 1
+#define Natts_fts_message_response 3
+#define Anum_fts_message_response_is_mirror_up 0
+#define Anum_fts_message_response_is_in_sync 1
+#define Anum_fts_message_response_is_syncrep_enabled 2
 
-#define FTS_PROBE_RESPONSE_NTUPLES 1
+#define FTS_MESSAGE_RESPONSE_NTUPLES 1
 
 typedef struct
 {
@@ -36,6 +38,7 @@ typedef struct
 	bool isPrimaryAlive;
 	bool isMirrorAlive;
 	bool isInSync;
+	bool isSyncRepEnabled;
 } probe_result;
 
 typedef struct
@@ -43,19 +46,21 @@ typedef struct
 	CdbComponentDatabaseInfo *segment_db_info;
 	probe_result result;
 	bool isScheduled;
+	const char *message;
 } probe_response_per_segment;
 
 typedef struct
 {
-	int count;
+	int num_primary_segments; /* total number of primary segments */
 	probe_response_per_segment *responses;
-} probe_context;
+} fts_context;
 
-typedef struct ProbeResponse
+typedef struct FtsResponse
 {
 	bool IsMirrorUp;
 	bool IsInSync;
-} ProbeResponse;
+	bool IsSyncRepEnabled;
+} FtsResponse;
 
 #endif
 
@@ -163,8 +168,8 @@ extern bool FtsIsActive(void);
 /*
  * Interface for WALREP specific checking
  */
-extern void HandleFtsWalRepProbe(void);
-extern void FtsWalRepProbeSegments(probe_context *context);
+extern void HandleFtsMessage(const char* query_string);
+extern void FtsWalRepMessageSegments(fts_context *context);
 #else
 extern bool probePublishUpdate(CdbComponentDatabases *dbs, uint8 *probe_results);
 
