@@ -4,6 +4,11 @@
 <topic id="topic1" xml:lang="en">
   <title id="pz212122">Greenplum PL/Container Extension</title>
   <body>
+    <draft-comment author="msk">5.2.x - quota information <xref
+        href="https://www.pivotaltracker.com/story/show/153180968" format="html" scope="external"
+        >#153180968</xref>
+      <p>Questions about install docker image:</p><p>version hard coded in container?</p><p>default
+        shared directory information?</p></draft-comment>
     <p>This section includes the following information:</p>
     <ul>
       <li id="pz219023"><xref href="#topic2" type="topic" format="dita"/></li>
@@ -22,8 +27,7 @@
     <note type="warning">PL/Container is an experimental feature and is not intended for use in a
       production environment. Experimental features are subject to change without notice in future
       releases. <p>PL/Container is compatible with Greenplum Database 5.2.0. PL/Container has not
-        been tested for compatibility with Greenplum Database 5.1.0 or 5.0.0.</p>
-    </note>
+        been tested for compatibility with Greenplum Database 5.1.0 or 5.0.0.</p></note>
   </body>
   <topic id="topic2" xml:lang="en">
     <title id="pz217886">About the PL/Container Extension</title>
@@ -293,7 +297,7 @@
         master and segment instances.</p>
       <p>Also, you can show all the configurations in the session by performing a
           <codeph>SELECT</codeph> command on the view <codeph>plcontainer_show_config</codeph>. For
-        example, this <codeph>SELECT</codeph> command returns the PL/Container configurations. </p>
+        example, this <codeph>SELECT</codeph> command returns the PL/Container configurations . </p>
       <codeblock>select * from plcontainer_show_config;</codeblock>
       <p>Running the command executes a PL/Container function that displays configuration
         information from the master and segment instances.</p>
@@ -422,9 +426,7 @@ $$ LANGUAGE plcontainer;</codeblock></p>
         Greenplum Database segments. However, PL/Container configurations of currently running
         sessions use the configuration that existed during session start up. To update the
         PL/Container configuration in a running session, execute this command in the session.</p>
-      <codeblock>select * from plcontainer_refresh_config;</codeblock>
-      <p>Running the command executes a PL/Container function that updates the configuration on the
-        master and segment instances.</p>
+      <codeblock>select * from plcontainer_refresh_config();</codeblock>
       <p>When you change the <codeph>plcontainer_configuration.xml</codeph> configuration file with
         the <codeph>plcontainer</codeph> utility, the utility creates a back up of the original
         configuration file in the same directory. The backup file name is
@@ -650,8 +652,8 @@ $$ LANGUAGE plcontainer;</codeblock></p>
           </plentry>
           <plentry>
             <pt>container</pt>
-            <pd>One element for each specific container available in the system. These are child
-              elements of the <codeph>configuration</codeph> element.</pd>
+            <pd>One element for each specific container available in the system. Child element of
+              the <codeph>configuration</codeph> element.</pd>
             <pd>
               <parml>
                 <plentry>
@@ -686,17 +688,6 @@ $$ LANGUAGE plcontainer;</codeblock></p>
                       starts.<note>This element cannot be set with the <codeph>plcontainer
                         install</codeph> command. You can update the configuration file with the
                       with the <codeph>plcontainer configure -e</codeph> command.</note></pd>
-                </plentry>
-                <plentry>
-                  <pt>logs</pt>
-                  <pd>Optional. This element enables PL/Container logging for the container. Specify
-                    the attribute <codeph>enable="yes"</codeph>. The attribute
-                      <codeph>enable="no"</codeph> disables logging (the default).
-                    <codeblock>&lt;logs enable="yes">&lt;/logs></codeblock></pd>
-                  <pd>or<codeblock>&lt;logs enable="yes" /></codeblock><p>On Red Hat 7 or  CentOS 7
-                      systems, the log is sent to the <codeph>journald</codeph> service. On Red Hat
-                      6 or CentOS 6 systems, the log is sent to <codeph>syslogd</codeph> service.
-                    </p></pd>
                 </plentry>
                 <plentry>
                   <pt>memory_mb</pt>
@@ -798,15 +789,16 @@ $$ LANGUAGE plcontainer;</codeblock></p>
               swap space and increase the Linux server kernel parameter
                 <codeph>overcommit_ratio</codeph>. If the issue still occurs after the changes,
               there might be memory shortage. You should check free memory on the system and add
-              more RAM if needed. You can also decrease the cluster load.</p></li>
+              more RAM if needed. You can also decrease the cluster load.</p><draft-comment
+              author="msk">PL/Container - size of docker container</draft-comment></li>
           <li>PL/Container does not limit the Docker base device size, the size of the Docker
             container. In some cases, the Docker daemon controls the base device size. For example,
             if the Docker storage driver is devicemapper, the Docker daemon
               <codeph>--storage-opt</codeph> option flag <codeph>dm.basesize</codeph> controls the
             base device size. The default base device size for devicemapper is 10GB. The Docker
             command <codeph>docker info</codeph> displays Docker system information including the
-            storage driver. The base device size is displayed in Docker 1.12 and later. For
-            information about Docker storage drivers, see the Docker information <xref
+            storage driver and base device size. For information about Docker storage drivers, see
+            the Docker information <xref
               href="https://docs.docker.com/engine/reference/commandline/dockerd/#daemon-storage-driver"
               format="html" scope="external">Daemon storage-driver</xref>. <p>When setting the
               Docker base device size, the size must be set on all Greenplum Database

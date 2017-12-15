@@ -4,6 +4,16 @@
 <topic id="topic1" xml:lang="en">
   <title id="pz212122">Greenplum PL/Container Extension</title>
   <body>
+    <p>
+      <draft-comment author="msk">5.3.x - logging information <xref
+          href="https://www.pivotaltracker.com/story/show/153001119" format="html" scope="external"
+          >#153001119</xref>
+        <xref href="https://github.com/greenplum-db/plcontainer/pull/172" format="html"
+          scope="external">plcontainer/pull/172</xref><p>Add configure option &lt;logs
+          enable="yes"|"no"></p><p>send client logs to journald or
+          syslogd</p><p>=====</p><p>Questions about install docker image:</p><p>version hard coded
+          in container?</p><p>default shared directory information?</p></draft-comment>
+    </p>
     <p>This section includes the following information:</p>
     <ul>
       <li id="pz219023"><xref href="#topic2" type="topic" format="dita"/></li>
@@ -650,8 +660,8 @@ $$ LANGUAGE plcontainer;</codeblock></p>
           </plentry>
           <plentry>
             <pt>container</pt>
-            <pd>One element for each specific container available in the system. These are child
-              elements of the <codeph>configuration</codeph> element.</pd>
+            <pd>One element for each specific container available in the system. Child element of
+              the <codeph>configuration</codeph> element.</pd>
             <pd>
               <parml>
                 <plentry>
@@ -689,11 +699,12 @@ $$ LANGUAGE plcontainer;</codeblock></p>
                 </plentry>
                 <plentry>
                   <pt>logs</pt>
-                  <pd>Optional. This element enables PL/Container logging for the container. Specify
-                    the attribute <codeph>enable="yes"</codeph>. The attribute
-                      <codeph>enable="no"</codeph> disables logging (the default).
+                  <pd><draft-comment author="msk">PL/Container logging</draft-comment>Optional. This
+                    element enables PL/Container logging for the container. Specify the attribute
+                      <codeph>enable="yes"</codeph>. The attribute <codeph>enable="no"</codeph>
+                    disables logging (the default).
                     <codeblock>&lt;logs enable="yes">&lt;/logs></codeblock></pd>
-                  <pd>or<codeblock>&lt;logs enable="yes" /></codeblock><p>On Red Hat 7 or  CentOS 7
+                  <pd>or<codeblock>&lt;logs enable="yes" /></codeblock><p>On Red Hat 7 or CentOS 7
                       systems, the log is sent to the <codeph>journald</codeph> service. On Red Hat
                       6 or CentOS 6 systems, the log is sent to <codeph>syslogd</codeph> service.
                     </p></pd>

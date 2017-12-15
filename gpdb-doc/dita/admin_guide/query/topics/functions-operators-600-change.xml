@@ -5,6 +5,7 @@
     <shortdesc>Description of user-defined and built-in functions and operators in Greenplum
         Database.</shortdesc>
     <body>
+        <draft-comment author="msk">ADD volitility vs. EXECUTE ON section</draft-comment>
         <ul>
             <li id="in140953">
                 <xref format="dita" href="#topic27" type="topic"/>
@@ -92,35 +93,20 @@
                 without a <codeph>FROM</codeph> clause):</p>
             <p>
                 <codeblock>SELECT setval('myseq', 201);
-SELECT foo();</codeblock>
+SELECT foo();
+</codeblock>
             </p>
             <p>If a statement has a <codeph>FROM</codeph> clause containing a distributed table
                     <i>and</i> the function in the <codeph>FROM</codeph> clause returns a set of
                 rows, the statement can run on the segments:</p>
             <p>
-                <codeblock>SELECT * from foo();</codeblock>
+                <codeblock>SELECT * from foo();
+</codeblock>
             </p>
             <p>Greenplum Database does not support functions that return a table reference
                     (<codeph>rangeFuncs</codeph>) or functions that use the
                     <codeph>refCursor</codeph> datatype.</p>
         </body>
-        <topic id="topic_kp3_ljw_2cb">
-            <title>Function Volitionality and EXECUTE ON Attributes</title>
-            <body>
-                <p>Volatility attributes (<codeph>IMMUTIBLE</codeph>, <codeph>STABLE</codeph>,
-                        <codeph>VOLITILE</codeph>) and <codeph>EXECUTE ON</codeph> attributes
-                    specify two different aspects of function execution. In general, volatility
-                    indicates when the function is executed, and <codeph>EXECUTE ON</codeph>
-                    indicates where it is executed. </p>
-                <p>For example, a function defined with the <codeph>IMMUTABLE</codeph> attribute can
-                    be executed at query planning time, while a function with the
-                        <codeph>VOLATILE</codeph> attribute must be executed for every row in the
-                    query. A function with the <codeph>EXECUTE ON MASTER</codeph> attribute is
-                    executed only on the master segment and a function with the <codeph>EXECUTE ON
-                        ALL SEGMENTS</codeph> attribute is executed on all primary segment instances
-                    (not the master).</p>
-            </body>
-        </topic>
         <topic id="topic281" xml:lang="en">
             <title id="in1414519">Function Volatility and Plan Caching</title>
             <body>
@@ -134,6 +120,23 @@ SELECT foo();</codeblock>
                     possibly reusing a stale value during subsequent execution of the plan. You may
                     run into this hazard when using <codeph>PREPARE</codeph>d statements, or when
                     using languages such as PL/pgSQL that cache plans.</p>
+            </body>
+        </topic>
+        <topic id="topic_wsx_yxp_2cb">
+            <title>Volitionality and EXECUTE ON Attributes</title>
+            <body>
+                <p>Volatility attributes (<codeph>IMMUTIBLE</codeph>, <codeph>STABLE</codeph>,
+                        <codeph>VOLITILE</codeph>) and <codeph>EXECUTE ON</codeph> attributes
+                    specify two different aspects of function execution. In general, volatility
+                    indicates when the function is executed, and <codeph>EXECUTE ON</codeph>
+                    indicates where it is executed. </p>
+                <p>For example, a function defined with the <codeph>IMMUTABLE</codeph> attribute can
+                    be executed at query planning time, while a function with the
+                        <codeph>VOLATILE</codeph> attribute must be executed for every row in the
+                    query. A function with the <codeph>EXECUTE ON MASTER</codeph> attribute is
+                    executed only on the master segment and a function with the <codeph>EXECUTE ON
+                        ALL SEGMENTS</codeph> attribute is executed on all primary segment instances
+                    (not the master).</p>
             </body>
         </topic>
     </topic>
