@@ -378,47 +378,6 @@ alter table mpp3542_0000000000111111111122222222223333333333444444444455555 rena
 -- MPP-3542
 alter table  mpp3542_0000000000111111111122222222223333333333444444444455555 rename to m; 
 
-
-CREATE TABLE MULTI_PART2(a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
-distributed by (a)
-partition by range (a)
-subpartition by range (b) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (c) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (d) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (e) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (f) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (g) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (h) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (i) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (j) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (k) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (l) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (m) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (n) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (o) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (p) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (q) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (r) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (s) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (t) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (u) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (v) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (w) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (x) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (y) subpartition template ( start (1) end (2) every (1)),
-subpartition by range (z) subpartition template ( start (1) end (2) every (1))
-( start (1) end (2) every (1));
-
-alter table multi_part2 rename to multi_part2_0000000;
-alter table multi_part2 rename to m_0000000;
-
--- We want to check both m and m_00000, thus I didn't put where clause
--- Assumes that there are no other partitions
--- order 2
-select tablename, partitionlevel, partitiontablename, partitionname, partitionrank, partitionboundary from pg_partitions where tablename like 'm_000%' order by tablename;
-
-drop table m;
-drop table m_0000000;
 create table mpp3466 (i int) partition by range(i) (start(1) end(10) every(2), default partition f);
 alter table mpp3466 split partition f at (3) into (partition f, partition new);
 drop table mpp3466;
@@ -1270,54 +1229,8 @@ insert into mpp3487 select i from generate_series(1, 9) i;
 vacuum analyze mpp3487;
 select  schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_freqs, histogram_bounds from pg_stats where tablename like 'mpp3487%' order by 2;
 drop table mpp3487;
--- Negative Test for Alter subpartition template
-CREATE TABLE qa147sales (trans_id int, date date, amount 
-decimal(9,2), region text)  
-DISTRIBUTED BY (trans_id) 
-PARTITION BY RANGE (date) 
-SUBPARTITION BY LIST (region) 
-SUBPARTITION TEMPLATE 
-( SUBPARTITION usa VALUES ('usa'), 
-  SUBPARTITION asia VALUES ('asia'), 
-  SUBPARTITION europe VALUES ('europe') ) 
-( START (date '2008-01-01') INCLUSIVE 
-   END (date '2009-01-01') EXCLUSIVE 
-   EVERY (INTERVAL '1 month') ); 
 
--- Invalid TEMPLATE
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (NULL);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (-1);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (10000);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE ('');
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE ("");
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (*);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (1*);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE ("1*");
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (ABC);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE ($);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (%%);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (#);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (!);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (&);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (^);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (@);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (<);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (>);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (.);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (?);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (/);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (|);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (~);
-ALTER TABLE qa147sales SET SUBPARTITION TEMPLATE (`);
-
-select * from pg_partition_templates where tablename='qa147sales';
-
-drop table qa147sales;
-
-select * from pg_partition_templates where tablename='qa147sales';;
-
--- Now with Schema
--- Negative Test for alter subpartition template with Schema
+-- Negative Tests for alter subpartition template syntax with Schema
 create schema qa147;
 CREATE TABLE qa147.sales (trans_id int, date date, amount
 decimal(9,2), region text)
