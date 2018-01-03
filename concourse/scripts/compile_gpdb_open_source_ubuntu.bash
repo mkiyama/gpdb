@@ -8,6 +8,8 @@ COMPILED_BITS_FILENAME=${COMPILED_BITS_FILENAME:="compiled_bits_ubuntu16.tar.gz"
 function build_external_depends() {
     pushd gpdb_src/depends
     ./configure
+    make  > build_external_depends.log 2>&1
+    grep -v "Installing:" build_external_depends.log
     make
     popd
 }
@@ -41,7 +43,7 @@ function export_gpdb() {
   TARBALL="$TRANSFER_DIR_ABSOLUTE_PATH"/$COMPILED_BITS_FILENAME
   pushd $GREENPLUM_INSTALL_DIR
     source greenplum_path.sh
-    python -m compileall -x test .
+    python -m compileall -q -x test .
     chmod -R 755 .
     tar -czf ${TARBALL} ./*
   popd

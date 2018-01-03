@@ -112,7 +112,7 @@ function build_pxf() {
   export BUILD_NUMBER="${TARGET_OS}"
   export PXF_HOME="${GREENPLUM_INSTALL_DIR}/pxf"
   export JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF8
-  make install -s DATABASE=gpdb
+  make install -s DATABASE=gpdb | grep -v "Download http"
   popd
 }
 
@@ -120,7 +120,7 @@ function export_gpdb() {
   TARBALL="$GPDB_ARTIFACTS_DIR"/$GPDB_BIN_FILENAME
   pushd $GREENPLUM_INSTALL_DIR
     source greenplum_path.sh
-    python -m compileall -x test .
+    python -m compileall -q -x test .
     chmod -R 755 .
     tar -czf "${TARBALL}" ./*
   popd
@@ -188,7 +188,7 @@ function _main() {
   # symlink and `cd`s to the actual directory. Currently the Makefile in the
   # addon directory assumes that it is located in a particular location under
   # the source tree and hence needs to be copied over.
-  rsync -auv gpaddon_src/ $GPDB_SRC_PATH/gpAux/$ADDON_DIR
+  rsync -au gpaddon_src/ $GPDB_SRC_PATH/gpAux/$ADDON_DIR
   build_gpdb "${BLD_TARGET_OPTION[@]}"
   build_gppkg
   if [ "$TARGET_OS" != "win32" ] ; then
