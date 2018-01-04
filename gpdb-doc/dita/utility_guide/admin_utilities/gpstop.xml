@@ -62,12 +62,12 @@
                 </plentry>
                 <plentry>
                     <pt>--host <varname>host_name</varname></pt>
-                    <pd>If segment mirroring is enabled, the utility shuts down the Greenplum
-                        Database segment instances on the specified host. The primary segment
-                        instances on the host are shut down and the associated mirror segment
-                        instances are promoted to primary segments. Mirror segment instances on the
-                        host are shut down.</pd>
-                    <pd>The segment instances are not shut down and utility returns an error in
+                    <pd>The utility shuts down the Greenplum Database segment instances on the
+                        specified host to allow maintenance on the host. Each primary segment
+                        instance on the host is shut down and the associated mirror segment instance
+                        is promoted to a primary segment if the mirror segment is on another host.
+                        Mirror segment instances on the host are shut down.</pd>
+                    <pd>The segment instances are not shut down and the utility returns an error in
                         these cases:<ul id="ul_at2_kk3_ccb">
                             <li>Segment mirroring is not enabled for the system.</li>
                             <li>The master or standby master is on the host.</li>
@@ -75,7 +75,10 @@
                         </ul></pd>
                     <pd>This option cannot be specified with the <codeph>-m</codeph>,
                             <codeph>-r</codeph>, <codeph>-u</codeph>, or <codeph>-y</codeph>
-                        options.</pd>
+                            options.<note>The <codeph>gprecoverseg</codeph> utility restores segment
+                            instances. Run <codeph>gprecoverseg</codeph> commands to start the
+                            segments as mirrors and then to return the segments to their preferred
+                            role (primary segments). </note></pd>
                 </plentry>
                 <plentry>
                     <pt>-l <varname>logfile_directory</varname></pt>
