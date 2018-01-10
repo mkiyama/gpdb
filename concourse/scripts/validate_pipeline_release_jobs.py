@@ -5,7 +5,12 @@ import re
 import yaml
 
 RELEASE_VALIDATOR_JOB = ['Release_Candidate']
-JOBS_THAT_SHOULD_NOT_BLOCK_RELEASE = ['compile_gpdb_binary_swap_centos6'] + RELEASE_VALIDATOR_JOB
+JOBS_THAT_ARE_GATES = ['gate_compile_start', 'gate_compile_end', 'gate_icw_start',
+                       'gate_icw_end', 'gate_cs_start', 'gate_cs_end', 'gate_mpp_start',
+                       'gate_mpp_end', 'gate_mm_start', 'gate_mm_end', 'gate_dpm_start',
+                       'gate_dpm_end', 'gate_ud_start', 'gate_ud_end', 'gate_advanced_analytics_start',
+                       'gate_advanced_analytics_end', 'gate_filerep_start', 'gate_filerep_end']
+JOBS_THAT_SHOULD_NOT_BLOCK_RELEASE = ['compile_gpdb_binary_swap_centos6'] + RELEASE_VALIDATOR_JOB + JOBS_THAT_ARE_GATES
 
 pipeline_raw = open(os.environ['PIPELINE_FILE'],'r').read()
 pipeline_buffer_cleaned = re.sub('{{', '', re.sub('}}', '', pipeline_raw)) # ignore concourse v2.x variable interpolation

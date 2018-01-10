@@ -2237,18 +2237,6 @@ StartTransaction(void)
 	}
 
 	/*
-	 * Acquire a resource group slot.
-	 *
-	 * AssignResGroupOnMaster() might throw error, so call it before touch
-	 * transaction state.
-	 * Slot is successfully acquired when AssignResGroupOnMaster() is returned,
-	 * this slot will be release when transaction is committed or abortted,
-	 * so don't error out before transaction state is set to TRANS_START.
-	 */
-	if (ShouldAssignResGroupOnMaster())
-		AssignResGroupOnMaster();
-
-	/*
 	 * Let's just make sure the state stack is empty
 	 */
 	s = &TopTransactionStateData;
@@ -2516,6 +2504,25 @@ StartTransaction(void)
 	 */
 	s->state = TRANS_INPROGRESS;
 
+	/*
+	 * Acquire a resource group slot.
+	 *
+	 * Slot is successfully acquired when AssignResGroupOnMaster() is returned.
+	 * This slot will be released when the transaction is committed or aborted.
+	 *
+	 * Note that AssignResGroupOnMaster() can throw a PG exception. Since we
+	 * have set the transaction state to TRANS_INPROGRESS by this point, any
+	 * exceptions thrown will trigger AbortTransaction() and free the slot.
+	 *
+	 * It's important that we acquire the resource group *after* starting the
+	 * transaction (i.e. setting up the per-transaction memory context).
+	 * As part of determining the resource group that the transaction should be
+	 * assigned to, AssignResGroupOnMaster() accesses pg_authid, and a
+	 * transaction should be in progress when it does so.
+	 */
+	if (ShouldAssignResGroupOnMaster())
+		AssignResGroupOnMaster();
+
 	ShowTransactionState("StartTransaction");
 
 	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
@@ -2747,9 +2754,6 @@ CommitTransaction(void)
 
 	/* All relations that are in the vacuum process are being commited now. */
 	ResetVacuumRels();
-
-	/* Process resource group related callbacks */
-	AtEOXact_ResGroup(true);
 
 	/* Check we've released all buffer pins */
 	AtEOXact_Buffers(true);
@@ -3053,9 +3057,6 @@ PrepareTransaction(void)
 						 RESOURCE_RELEASE_BEFORE_LOCKS,
 						 true, true);
 
-	/* Process resource group related callbacks */
-	AtEOXact_ResGroup(true);
-
 	/* Check we've released all buffer pins */
 	AtEOXact_Buffers(true);
 
@@ -3132,6 +3133,10 @@ PrepareTransaction(void)
 	s->state = TRANS_DEFAULT;
 
 	RESUME_INTERRUPTS();
+
+	/* Release resource group slot at the end of prepare transaction on segment */
+	if (ShouldUnassignResGroup())
+		UnassignResGroup();
 }
 
 
@@ -3279,7 +3284,6 @@ AbortTransaction(void)
 		ResourceOwnerRelease(TopTransactionResourceOwner,
 							 RESOURCE_RELEASE_BEFORE_LOCKS,
 							 false, true);
-		AtEOXact_ResGroup(false);
 		AtEOXact_Buffers(false);
 		AtEOXact_RelationCache(false);
 		AtEOXact_Inval(false);
@@ -3349,6 +3353,10 @@ AbortTransaction(void)
 	 */
 	if(elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
 		DisconnectAndDestroyAllGangs(true);
+
+	/* Release resource group slot at the end of a transaction */
+	if (ShouldUnassignResGroup())
+		UnassignResGroup();
 }
 
 /*

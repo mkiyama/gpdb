@@ -51,19 +51,17 @@ export HADOOP_HOME=/usr/lib/gphd</codeblock><p>The
                            <entry colname="col1">
                               <codeph>gp_hadoop_target_version</codeph>
                            </entry>
-                           <entry colname="col2">The Hadoop target. Choose one of the following. <p>
-                                 <codeph>cdh5</codeph>
+                           <entry colname="col2">The Hadoop target. Choose one of the following: <p>
+                                 <codeph>cdh</codeph>
                               </p><p>
-                                 <codeph>cdh4.1</codeph>
+                                 <codeph>hadoop</codeph>
                               </p><p>
-                                 <codeph>hdp2</codeph>
+                                 <codeph>hdp</codeph>
                               </p><p>
-                                 <codeph>gpmr-1.2</codeph>
-                              </p><p>
-                                 <codeph>hadoop2</codeph>
+                                 <codeph>mpr</codeph>
                               </p></entry>
                            <entry colname="col3">
-                              <codeph>gphd-1.1</codeph>
+                              <codeph>hadoop</codeph>
                            </entry>
                            <entry colname="col4">master<p>session</p>reload </entry>
                         </row>
@@ -71,11 +69,8 @@ export HADOOP_HOME=/usr/lib/gphd</codeblock><p>The
                            <entry colname="col1">
                               <codeph>gp_hadoop_home</codeph>
                            </entry>
-                           <entry colname="col2">With Pivotal HD, this parameter specifies the
-                              installation directory for Hadoop. For example, the default
-                              installation directory is <filepath>/usr/lib/gphd</filepath>.<p>When
-                                 using Greenplum HD 1.2 or earlier, specify the same value as the
-                                 HADOOP_HOME environment variable.</p></entry>
+                           <entry colname="col2">This parameter specifies the
+                              installation directory for Hadoop.</entry>
                            <entry colname="col3">
                               <codeph>NULL</codeph>
                            </entry>
@@ -83,10 +78,11 @@ export HADOOP_HOME=/usr/lib/gphd</codeblock><p>The
                         </row>
                      </tbody>
                   </tgroup>
-               </table> For example, the following commands use the Greenplum Database utilities
+               </table> 
+               For example, the following commands use the Greenplum Database utilities
                   <codeph>gpconfig</codeph> and <codeph>gpstop</codeph> to set the server
                configuration parameters and restart Greenplum
-               Database:<codeblock>gpconfig -c gp_hadoop_target_version -v 'hdb2'
+               Database:<codeblock>gpconfig -c gp_hadoop_target_version -v 'hdp'
 gpstop -u</codeblock>
                For information about the Greenplum Database utilities <codeph>gpconfig</codeph> and
                   <codeph>gpstop</codeph>, see the <cite>Greenplum Database Utility Guide</cite>. </li>
