@@ -21,7 +21,7 @@
 extern void XLogCheckInvalidPages(void);
 
 extern void XLogDropRelation(RelFileNode rnode, ForkNumber forknum);
-extern void XLogDropDatabase(Oid tblspc, Oid dbid);
+extern void XLogDropDatabase(Oid dbid);
 extern void XLogTruncateRelation(RelFileNode rnode, ForkNumber forkNum,
 					 BlockNumber nblocks);
 
@@ -32,9 +32,7 @@ extern Buffer XLogReadBufferExtended(RelFileNode rnode, ForkNumber forknum,
 extern Relation CreateFakeRelcacheEntry(RelFileNode rnode);
 extern void FreeFakeRelcacheEntry(Relation fakerel);
 
-#ifdef USE_SEGWALREP
 extern void XLogAOSegmentFile(RelFileNode rnode, uint32 segmentFileNum);
 extern void XLogAODropSegmentFile(RelFileNode rnode, uint32 segmentFileNum);
-#endif
 
 #endif

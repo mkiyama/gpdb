@@ -362,9 +362,6 @@ DATA(insert OID = 2966 (	pg_auth_members	   PGNSP PGUID -1 f c C f t \054 1261 0
 DATA(insert OID = 6996 (	pg_database	   PGNSP PGUID -1 f c C f t \054 1262 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_ ));
 #define PG_DATABASE_RELTYPE_OID 6996
 
-DATA(insert OID = 6995 (	gp_global_sequence	   PGNSP PGUID -1 f c C f t \054 5096 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_ ));
-#define GP_GLOBAL_SEQUENCE_RELTYPE_OID 6995
-
 /* OIDS 100 - 199 */
 DATA(insert OID = 142 ( xml		   PGNSP PGUID -1 f b U f t \054 0 0 143 xml_in xml_out xml_recv xml_send - - - i x f 0 -1 0 _null_ _null_ ));
 DESCR("XML content");
@@ -676,24 +673,6 @@ DATA(insert OID = 3500 ( anyenum		PGNSP PGUID  4 t p P f t \054 0 0 0 anyenum_in
 DATA(insert OID = 3053 ( anytable		PGNSP PGUID -1 f p P f t \054 0	0 0 anytable_in anytable_out - - - - - d x f 0 -1 0 _null_ _null_ ));
 DESCR("Represents a generic TABLE value expression");
 #define ANYTABLEOID     3053
-
-/* 
- * These tables must be created with standardized oids because they are
- * accessed by the cdbdirectopen.c mechanism.
- *
- * Note: For this to work correctly it requires some hackery in bootparse.y
- * When extending this list make sure to update there as well.
- */
-DATA(insert OID = 6990 (gp_persistent_relation_node PGNSP PGUID -1 f c C f t \054 5090 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_));
-#define GP_PERSISTENT_RELATION_NODE_OID 6990
-DATA(insert OID = 6991 (gp_persistent_database_node PGNSP PGUID -1 f c C f t \054 5091 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_));
-#define GP_PERSISTENT_DATABASE_NODE_OID 6991
-DATA(insert OID = 6992 (gp_persistent_tablespace_node PGNSP PGUID -1 f c C f t \054 5092 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_));
-#define GP_PERSISTENT_TABLESPACE_NODE_OID 6992
-DATA(insert OID = 6993 (gp_persistent_filespace_node PGNSP PGUID -1 f c C f t \054 5093 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_));
-#define GP_PERSISTENT_FILESPACE_NODE_OID 6993
-DATA(insert OID = 6994 (gp_relation_node PGNSP PGUID -1 f c C f t \054 5094 0 0 record_in record_out record_recv record_send - - - d x f 0 -1 0 _null_ _null_));
-#define GP_RELATION_NODE_OID 6994
 
 
 /*

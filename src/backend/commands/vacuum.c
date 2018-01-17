@@ -55,8 +55,6 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbsrlz.h"
 #include "cdb/cdbdispatchresult.h"      /* CdbDispatchResults */
-#include "cdb/cdbfilerepprimary.h"
-#include "cdb/cdbpersistentfilesysobj.h"
 #include "cdb/cdbappendonlyblockdirectory.h"
 #include "executor/executor.h"
 #include "lib/stringinfo.h"
@@ -1569,16 +1567,6 @@ get_rel_oids(Oid relid, VacuumStmt *vacstmt, const char *stmttype)
 					classForm->relstorage == RELSTORAGE_VIRTUAL))
 				continue;
 
-			/* Skip persistent tables for Vacuum full. Vacuum full could turn
-			 * out dangerous as it has potential to move tuples around causing
-			 * the TIDs for tuples to change, which violates its reference from
-			 * gp_relation_node. One scenario where this can happen is zero-page
-			 * due to failure after page extension but before page initialization.
-			 */
-			if (vacstmt->full &&
-				GpPersistent_IsPersistentRelation(HeapTupleGetOid(tuple)))
-				continue;
-
 			/* Make a relation list entry for this guy */
 			candidateOid = HeapTupleGetOid(tuple);
 
@@ -2633,7 +2621,7 @@ vacuum_heap_rel(Relation onerel, VacuumStmt *vacstmt,
 			BlockNumber relblocks;
 
 			relblocks = vacrelstats->rel_pages - vacuum_pages.empty_end_pages;
-			RelationTruncate(onerel, relblocks, true);
+			RelationTruncate(onerel, relblocks);
 			vacrelstats->rel_pages = relblocks;
 		}
 		vac_close_indexes(nindexes, Irel, NoLock);
@@ -2790,8 +2778,6 @@ static void
 scan_heap_for_truncate(VRelStats *vacrelstats, Relation onerel,
 					   VacPageList vacuum_pages)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	BlockNumber nblocks, blkno;
 	char	   *relname;
 	VacPage		vacpage;
@@ -2809,9 +2795,6 @@ scan_heap_for_truncate(VRelStats *vacrelstats, Relation onerel,
 	nblocks = RelationGetNumberOfBlocks(onerel);
 
 	vacpage = (VacPage) palloc(sizeof(VacPageData) + MaxOffsetNumber * sizeof(OffsetNumber));
-
-	/* Fetch gp_persistent_relation_node information for XLOG. */
-	RelationFetchGpRelationNodeForXLog(onerel);
 
 	/* Retrieve the relation stats info from the previous transaction. */
 	for (i = 0; i < VacFullInitialStatsSize; i++)
@@ -2838,9 +2821,6 @@ scan_heap_for_truncate(VRelStats *vacrelstats, Relation onerel,
 
 		vacuum_delay_point();
 
-		// -------- MirroredLock ----------
-		MIRROREDLOCK_BUFMGR_LOCK;
-
 		buf = ReadBufferExtended(onerel, MAIN_FORKNUM, blkno, RBM_NORMAL,
 								 vac_strategy);
 		page = BufferGetPage(buf);
@@ -2861,10 +2841,6 @@ scan_heap_for_truncate(VRelStats *vacrelstats, Relation onerel,
 			vacpagecopy = copy_vac_page(vacpage);
 			vpage_insert(vacuum_pages, vacpagecopy);
 			UnlockReleaseBuffer(buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 			continue;
 		}
 
@@ -2939,9 +2915,6 @@ scan_heap_for_truncate(VRelStats *vacrelstats, Relation onerel,
 		}
 
 		UnlockReleaseBuffer(buf);
-
-		MIRROREDLOCK_BUFMGR_UNLOCK;
-		// -------- MirroredLock ----------
 	}
 
 	pfree(vacpage);
@@ -2977,8 +2950,6 @@ static void
 scan_heap(VRelStats *vacrelstats, Relation onerel,
 		  VacPageList vacuum_pages, VacPageList fraged_pages)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	BlockNumber nblocks,
 				blkno;
 	char	   *relname;
@@ -3020,9 +2991,6 @@ scan_heap(VRelStats *vacrelstats, Relation onerel,
 	 */
 	vacpage = (VacPage) palloc(sizeof(VacPageData) + MaxOffsetNumber * sizeof(OffsetNumber));
 
-	/* Fetch gp_persistent_relation_node information for XLOG. */
-	RelationFetchGpRelationNodeForXLog(onerel);
-
 	for (blkno = 0; blkno < nblocks; blkno++)
 	{
 		Page		page,
@@ -3037,9 +3005,6 @@ scan_heap(VRelStats *vacrelstats, Relation onerel,
 		int			nfrozen;
 
 		vacuum_delay_point();
-
-		// -------- MirroredLock ----------
-		MIRROREDLOCK_BUFMGR_LOCK;
 
 		buf = ReadBufferExtended(onerel, MAIN_FORKNUM, blkno, RBM_NORMAL,
 								 vac_strategy);
@@ -3081,10 +3046,6 @@ scan_heap(VRelStats *vacrelstats, Relation onerel,
 			vpage_insert(vacuum_pages, vacpagecopy);
 			vpage_insert(fraged_pages, vacpagecopy);
 			UnlockReleaseBuffer(buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 			continue;
 		}
 
@@ -3100,10 +3061,6 @@ scan_heap(VRelStats *vacrelstats, Relation onerel,
 			vpage_insert(vacuum_pages, vacpagecopy);
 			vpage_insert(fraged_pages, vacpagecopy);
 			UnlockReleaseBuffer(buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 			continue;
 		}
 
@@ -3444,10 +3401,6 @@ scan_heap(VRelStats *vacrelstats, Relation onerel,
 		}
 
 		UnlockReleaseBuffer(buf);
-
-		MIRROREDLOCK_BUFMGR_UNLOCK;
-		// -------- MirroredLock ----------
-
 	}
 
 	pfree(vacpage);
@@ -3540,8 +3493,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 			int nindexes, Relation *Irel, List *updated_stats,
 			int reindex_count)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	TransactionId myXID = GetCurrentTransactionId();
 	Buffer		dst_buffer = InvalidBuffer;
 	BlockNumber nblocks,
@@ -3565,9 +3516,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 	bool		heldoff = false;
 
 	pg_rusage_init(&ru0);
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(onerel);
 
 	ExecContext_Init(&ec, onerel);
 
@@ -3634,10 +3582,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 		/*
 		 * Process this page of relation.
 		 */
-
-		// -------- MirroredLock ----------
-		MIRROREDLOCK_BUFMGR_LOCK;
-
 		buf = ReadBufferExtended(onerel, MAIN_FORKNUM, blkno, RBM_NORMAL,
 								 vac_strategy);
 		page = BufferGetPage(buf);
@@ -3673,10 +3617,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 			}
 			if (isempty)
 			{
-
-				MIRROREDLOCK_BUFMGR_UNLOCK;
-				// -------- MirroredLock ----------
-
 				ReleaseBuffer(buf);
 				continue;
 			}
@@ -4368,9 +4308,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 			vpage_insert(&Nvacpagelist, copy_vac_page(vacpage));
 		}
 
-		MIRROREDLOCK_BUFMGR_UNLOCK;
-		// -------- MirroredLock ----------
-
 		ReleaseBuffer(buf);
 
 		if (offnum <= maxoff)
@@ -4413,10 +4350,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 			Page		page;
 
 			/* this page was not used as a move target, so must clean it */
-
-			// -------- MirroredLock ----------
-			MIRROREDLOCK_BUFMGR_LOCK;
-
 			buf = ReadBufferExtended(onerel, MAIN_FORKNUM, (*curpage)->blkno,
 									 RBM_NORMAL, vac_strategy);
 			LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
@@ -4424,10 +4357,6 @@ repair_frag(VRelStats *vacrelstats, Relation onerel,
 			if (!PageIsEmpty(page))
 				vacuum_page(onerel, buf, *curpage);
 			UnlockReleaseBuffer(buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 		}
 	}
 
@@ -4489,11 +4418,6 @@ move_chain_tuple(Relation rel,
 	Size		tuple_len = old_tup->t_len;
 	bool		all_visible_cleared = false;
 	bool		all_visible_cleared_new = false;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(rel);
 
 	/*
 	 * make a modifiable copy of the source tuple.
@@ -4655,11 +4579,6 @@ move_plain_tuple(Relation rel,
 	bool		all_visible_cleared = false;
 	bool		all_visible_cleared_new = false;
 
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(rel);
-
 	/* copy tuple */
 	heap_copytuple_with_tuple(old_tup, &newtup);
 
@@ -4768,15 +4687,10 @@ move_plain_tuple(Relation rel,
 static void
 vacuum_heap(VRelStats *vacrelstats, Relation onerel, VacPageList vacuum_pages)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	Buffer		buf;
 	VacPage    *vacpage;
 	int			nblocks;
 	int			i;
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(onerel);
 
 	nblocks = vacuum_pages->num_pages;
 	nblocks -= vacuum_pages->empty_end_pages;	/* nothing to do with them */
@@ -4787,19 +4701,11 @@ vacuum_heap(VRelStats *vacrelstats, Relation onerel, VacPageList vacuum_pages)
 
 		if ((*vacpage)->offsets_free > 0)
 		{
-
-			// -------- MirroredLock ----------
-			MIRROREDLOCK_BUFMGR_LOCK;
-
 			buf = ReadBufferExtended(onerel, MAIN_FORKNUM, (*vacpage)->blkno,
 									 RBM_NORMAL, vac_strategy);
 			LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
 			vacuum_page(onerel, buf, *vacpage);
 			UnlockReleaseBuffer(buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 		}
 	}
 }
@@ -4815,8 +4721,6 @@ vacuum_page(Relation onerel, Buffer buffer, VacPage vacpage)
 {
 	Page		page = BufferGetPage(buffer);
 	int			i;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
 
 	/* There shouldn't be any tuples moved onto the page yet! */
 	Assert(vacpage->offsets_used == 0);
@@ -5646,11 +5550,10 @@ open_relation_and_check_permission(VacuumStmt *vacstmt,
 	 * seems safer to check after we've locked the relation.
 	 */
 	if (onerel->rd_rel->relkind != expected_relkind ||
-		RelationIsExternal(onerel) ||
-		(vacstmt->full && GpPersistent_IsPersistentRelation(RelationGetRelid(onerel))))
+		RelationIsExternal(onerel))
 	{
 		ereport(WARNING,
-				(errmsg("skipping \"%s\" --- cannot vacuum indexes, views, external tables, or special system tables",
+				(errmsg("skipping \"%s\" --- cannot vacuum indexes, views or external tables",
 						RelationGetRelationName(onerel))));
 		relation_close(onerel, lmode);
 		return NULL;

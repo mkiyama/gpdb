@@ -28,8 +28,6 @@
 #include "storage/relfilenode.h"
 #include "utils/relcache.h"
 
-#include "catalog/gp_persistent.h"
-
 
 /*
  * LockRelId and LockInfo really belong to lmgr.h, but it's more convenient
@@ -123,10 +121,6 @@ typedef struct RelationNodeInfo
 	bool	isPresent;
 
 	bool	tidAllowedToBeZero;
-				// Persistent TID allowed to be zero for "Before Persistence" or Recovery.
-
-	ItemPointerData		persistentTid;
-	int64				persistentSerialNum;
 } RelationNodeInfo;
 
 /*
@@ -151,14 +145,6 @@ typedef struct RelationData
 	SubTransactionId rd_createSubid;	/* rel was created in current xact */
 	SubTransactionId rd_newRelfilenodeSubid;	/* new relfilenode assigned in
 												 * current xact */
-
-	/*
-	 * Debugging information, Values from CREATE TABLE, if present.
-	 */
-	bool				rd_haveCreateDebugInfo;
-	bool				rd_createDebugIsZeroTid;
-	ItemPointerData		rd_createDebugPersistentTid;
-	int64				rd_createDebugPersistentSerialNum;
 
 	/*
 	 * rd_createSubid is the ID of the highest subtransaction the rel has
@@ -235,12 +221,6 @@ typedef struct RelationData
 	 */
 	Form_pg_appendonly rd_appendonly;
 	struct HeapTupleData *rd_aotuple;		/* all of pg_appendonly tuple */
-
-	/*
-	 * Physical file-system information.
-	 */
-	struct RelationNodeInfo rd_segfile0_relationnodeinfo;
-								/* Values from gp_relation_node, if present */
 
 	/* use "struct" here to avoid needing to include pgstat.h: */
 	struct PgStat_TableStatus *pgstat_info;		/* statistics collection area */
@@ -460,6 +440,5 @@ typedef struct StdRdOptions
 /* routines in utils/cache/relcache.c */
 extern void RelationIncrementReferenceCount(Relation rel);
 extern void RelationDecrementReferenceCount(Relation rel);
-extern void RelationGetPTInfo(Relation rel, ItemPointer persistentTid, int64 *persistentSerialNum);
 
 #endif   /* REL_H */

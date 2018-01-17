@@ -396,6 +396,7 @@ int			log_temp_files = -1;
 
 int			num_temp_buffers = 1000;
 
+char	   *data_directory;
 char	   *ConfigFileName;
 char	   *HbaFileName;
 char	   *IdentFileName;
@@ -2039,12 +2040,11 @@ static struct config_int ConfigureNamesInt[] =
 		0, 0, INT_MAX, assign_tcp_keepalives_count, show_tcp_keepalives_count
 	},
 
-	/* MPP-9413: gin indexes are disabled */
 	{
 		{"gin_fuzzy_search_limit", PGC_USERSET, CLIENT_CONN_OTHER,
 			gettext_noop("Sets the maximum allowed result for exact search by GIN."),
 			NULL,
-            GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			GUC_GPDB_ADDOPT
 		},
 		&GinFuzzySearchLimit,
 		0, 0, INT_MAX, NULL, NULL
@@ -2330,12 +2330,6 @@ static struct config_string ConfigureNamesString[] =
 		"", assign_default_tablespace, NULL
 	},
 
-/*
- * GPDB_83_MERGE_FIXME: what to do with temp tablespaces in GPDB? we
- * had something similar with filespaces, I think. See also comments in
- * OpenTemporaryFile()
- */
-#if 0
 	{
 		{"temp_tablespaces", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the tablespace(s) to use for temporary tables and sort files."),
@@ -2345,7 +2339,6 @@ static struct config_string ConfigureNamesString[] =
 		&temp_tablespaces,
 		"", assign_temp_tablespaces, NULL
 	},
-#endif
 	{
 		{"dynamic_library_path", PGC_SUSET, CLIENT_CONN_OTHER,
 			gettext_noop("Sets the path for dynamically loadable modules."),
@@ -3646,17 +3639,12 @@ InitializeGUCOptions(void)
 	int			i;
 	char	   *env;
 	long		stack_rlimit;
-	/*
-	 * Before log_line_prefix could possibly receive a nonempty setting, make
-	 * sure that timezone processing is minimally alive (see elog.c).
-	 */
-	pg_timezone_pre_initialize();
 
 	/*
 	 * Before log_line_prefix could possibly receive a nonempty setting, make
 	 * sure that timezone processing is minimally alive (see elog.c).
 	 */
-	pg_timezone_pre_initialize();
+	pg_timezone_initialize();
 
 	/*
 	 * Build sorted array of all GUC variables.
@@ -3893,11 +3881,9 @@ SelectConfigFiles(const char *userDoption, const char *progname)
 	SetConfigOption("config_file", fname, PGC_POSTMASTER, PGC_S_OVERRIDE);
 	free(fname);
 
-#ifdef USE_SEGWALREP
 	/* Perform similar processes for Greenplum-specific configuration files. */
 	if (!select_gp_replication_config_files(configdir, progname))
 		return false;
-#endif
 
 	/*
 	 * Now read the config file for the first time.

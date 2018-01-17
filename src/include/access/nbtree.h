@@ -227,43 +227,8 @@ typedef struct BTMetaPageData
 typedef struct xl_btreetid
 {
 	RelFileNode node;
-	ItemPointerData persistentTid;
-	int64 persistentSerialNum;
 	ItemPointerData tid;		/* changed tuple id */
 } xl_btreetid;
-
-inline static void xl_btreetid_set(
-	struct xl_btreetid	*btreeid,
-
-	Relation rel,
-
-	BlockNumber itup_blkno,
-	
-	OffsetNumber itup_off)
-{
-	btreeid->node = rel->rd_node;
-	btreeid->persistentTid = rel->rd_segfile0_relationnodeinfo.persistentTid;
-	btreeid->persistentSerialNum = rel->rd_segfile0_relationnodeinfo.persistentSerialNum;
-	ItemPointerSet(&(btreeid->tid), itup_blkno, itup_off);
-}
-
-typedef struct xl_btreenode
-{
-	RelFileNode node;
-	ItemPointerData persistentTid;
-	int64 persistentSerialNum;
-} xl_btreenode;
-
-inline static void xl_btreenode_set(
-	struct xl_btreenode	*btreenode,
-
-	Relation rel)
-{
-	btreenode->node = rel->rd_node;
-	btreenode->persistentTid = rel->rd_segfile0_relationnodeinfo.persistentTid;
-	btreenode->persistentSerialNum = rel->rd_segfile0_relationnodeinfo.persistentSerialNum;
-}
-
 
 /*
  * All that we need to regenerate the meta-data page
@@ -317,9 +282,6 @@ typedef struct xl_btree_split
 	uint32		level;			/* tree level of page being split */
 	OffsetNumber firstright;	/* first item moved to right page */
 
-	ItemPointerData persistentTid;
-	int64		persistentSerialNum;
-
 	/*
 	 * If level > 0, BlockIdData downlink follows.	(We use BlockIdData rather
 	 * than BlockNumber for alignment reasons: SizeOfBtreeSplit is only 16-bit
@@ -339,7 +301,7 @@ typedef struct xl_btree_split
 	 */
 } xl_btree_split;
 
-#define SizeOfBtreeSplit	(offsetof(xl_btree_split, persistentSerialNum) + sizeof(int64))
+#define SizeOfBtreeSplit	(offsetof(xl_btree_split, firstright) + sizeof(OffsetNumber))
 
 /*
  * This is what we need to know about delete of individual leaf index tuples.
@@ -348,7 +310,7 @@ typedef struct xl_btree_split
  */
 typedef struct xl_btree_delete
 {
-	xl_btreenode btreenode;
+	RelFileNode node;
 	BlockNumber block;
 	/* TARGET OFFSET NUMBERS FOLLOW AT THE END */
 } xl_btree_delete;
@@ -382,7 +344,7 @@ typedef struct xl_btree_delete_page
  */
 typedef struct xl_btree_newroot
 {
-	xl_btreenode btreenode;
+	RelFileNode node;
 	BlockNumber rootblk;		/* location of new root */
 	uint32		level;			/* its tree level */
 	/* 0 or 2 INDEX TUPLES FOLLOW AT END OF STRUCT */

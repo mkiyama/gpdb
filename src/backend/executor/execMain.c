@@ -102,9 +102,6 @@
 #include "cdb/cdbmotion.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdboidsync.h"
-#include "cdb/cdbmirroredbufferpool.h"
-#include "cdb/cdbpersistentstore.h"
-#include "cdb/cdbpersistentfilesysobj.h"
 #include "cdb/cdbllize.h"
 #include "cdb/memquota.h"
 #include "cdb/cdbtargeteddispatch.h"
@@ -4010,133 +4007,113 @@ lreplace:;
 	if (resultRelationDesc->rd_att->constr)
 		ExecConstraints(resultRelInfo, slot, estate);
 
-	if (!GpPersistent_IsPersistentRelation(resultRelationDesc->rd_id))
+	/*
+	 * replace the heap tuple
+	 *
+	 * Note: if es_crosscheck_snapshot isn't InvalidSnapshot, we check that
+	 * the row to be updated is visible to that snapshot, and throw a can't-
+	 * serialize error if not.	This is a special-case behavior needed for
+	 * referential integrity updates in serializable transactions.
+	 */
+	if (rel_is_heap)
 	{
-		/*
-		 * Normal UPDATE path.
-		 */
+		HeapTuple tuple;
 
-		/*
-		 * replace the heap tuple
-		 *
-		 * Note: if es_crosscheck_snapshot isn't InvalidSnapshot, we check that
-		 * the row to be updated is visible to that snapshot, and throw a can't-
-		 * serialize error if not.	This is a special-case behavior needed for
-		 * referential integrity updates in serializable transactions.
-		 */
-		if (rel_is_heap)
-		{
-			HeapTuple tuple;
+		tuple = ExecMaterializeSlot(slot);
 
-			tuple = ExecMaterializeSlot(slot);
-
-			result = heap_update(resultRelationDesc, tupleid, tuple,
+		result = heap_update(resultRelationDesc, tupleid, tuple,
 							 &update_ctid, &update_xmax,
 							 estate->es_output_cid,
 							 estate->es_crosscheck_snapshot,
 							 true /* wait for commit */ );
-			lastTid = tuple->t_self;
-			wasHotUpdate = HeapTupleIsHeapOnly(tuple) != 0;
-		}
-		else if (rel_is_aorows)
-		{
-			MemTuple mtuple;
+		lastTid = tuple->t_self;
+		wasHotUpdate = HeapTupleIsHeapOnly(tuple) != 0;
+	}
+	else if (rel_is_aorows)
+	{
+		MemTuple mtuple;
 
-			if (IsXactIsoLevelSerializable)
-			{
-				ereport(ERROR,
+		if (IsXactIsoLevelSerializable)
+		{
+			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("Updates on append-only tables are not supported in serializable transactions.")));
-			}
-
-			if (resultRelInfo->ri_updateDesc == NULL)
-			{
-				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-				resultRelInfo->ri_updateDesc = (AppendOnlyUpdateDesc)
-					appendonly_update_init(resultRelationDesc, GetActiveSnapshot(), resultRelInfo->ri_aosegno);
-			}
-
-			mtuple = ExecFetchSlotMemTuple(slot, false);
-
-			result = appendonly_update(resultRelInfo->ri_updateDesc,
-									   mtuple, (AOTupleId *) tupleid, (AOTupleId *) &lastTid);
-			wasHotUpdate = false;
+					 errmsg("Updates on append-only tables are not supported in serializable transactions.")));
 		}
-		else if (rel_is_aocols)
+
+		if (resultRelInfo->ri_updateDesc == NULL)
 		{
-			if (IsXactIsoLevelSerializable)
-			{
-				ereport(ERROR,
+			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
+			resultRelInfo->ri_updateDesc = (AppendOnlyUpdateDesc)
+				appendonly_update_init(resultRelationDesc, GetActiveSnapshot(), resultRelInfo->ri_aosegno);
+		}
+
+		mtuple = ExecFetchSlotMemTuple(slot, false);
+
+		result = appendonly_update(resultRelInfo->ri_updateDesc,
+								   mtuple, (AOTupleId *) tupleid, (AOTupleId *) &lastTid);
+		wasHotUpdate = false;
+	}
+	else if (rel_is_aocols)
+	{
+		if (IsXactIsoLevelSerializable)
+		{
+			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("Updates on append-only tables are not supported in serializable transactions.")));
-			}
-
-			if (resultRelInfo->ri_updateDesc == NULL)
-			{
-				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-				resultRelInfo->ri_updateDesc = (AppendOnlyUpdateDesc)
-					aocs_update_init(resultRelationDesc, resultRelInfo->ri_aosegno);
-			}
-			result = aocs_update(resultRelInfo->ri_updateDesc,
-								 slot, (AOTupleId *) tupleid, (AOTupleId *) &lastTid);
-			wasHotUpdate = false;
+					 errmsg("Updates on append-only tables are not supported in serializable transactions.")));
 		}
-		else
+
+		if (resultRelInfo->ri_updateDesc == NULL)
 		{
-			elog(ERROR, "invalid relation type");
+			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
+			resultRelInfo->ri_updateDesc = (AppendOnlyUpdateDesc)
+				aocs_update_init(resultRelationDesc, resultRelInfo->ri_aosegno);
 		}
-
-		switch (result)
-		{
-			case HeapTupleSelfUpdated:
-				/* already deleted by self; nothing to do */
-				return;
-
-			case HeapTupleMayBeUpdated:
-				break;
-
-			case HeapTupleUpdated:
-				if (IsXactIsoLevelSerializable)
-					ereport(ERROR,
-							(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-							 errmsg("could not serialize access due to concurrent update")));
-				else if (!ItemPointerEquals(tupleid, &update_ctid))
-				{
-					TupleTableSlot *epqslot;
-
-					Assert(update_xmax != InvalidTransactionId);
-
-					epqslot = EvalPlanQual(estate,
-										   resultRelInfo->ri_RangeTableIndex,
-										   &update_ctid,
-										   update_xmax);
-					if (!TupIsNull(epqslot))
-					{
-						*tupleid = update_ctid;
-						slot = ExecFilterJunk(estate->es_junkFilter, epqslot);
-						goto lreplace;
-					}
-				}
-				/* tuple already deleted; nothing to do */
-				return;
-
-			default:
-				elog(ERROR, "unrecognized heap_update status: %u", result);
-				return;
-		}
+		result = aocs_update(resultRelInfo->ri_updateDesc,
+							 slot, (AOTupleId *) tupleid, (AOTupleId *) &lastTid);
+		wasHotUpdate = false;
 	}
 	else
 	{
-		HeapTuple persistentTuple;
+		elog(ERROR, "invalid relation type");
+	}
 
-		/*
-		 * Persistent metadata path.
-		 */
-		persistentTuple = ExecMaterializeSlot(slot);
-		persistentTuple->t_self = *tupleid;
+	switch (result)
+	{
+		case HeapTupleSelfUpdated:
+			/* already deleted by self; nothing to do */
+			return;
 
-		frozen_heap_inplace_update(resultRelationDesc, persistentTuple);
-		wasHotUpdate = false;
+		case HeapTupleMayBeUpdated:
+			break;
+
+		case HeapTupleUpdated:
+			if (IsXactIsoLevelSerializable)
+				ereport(ERROR,
+						(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+						 errmsg("could not serialize access due to concurrent update")));
+			else if (!ItemPointerEquals(tupleid, &update_ctid))
+			{
+				TupleTableSlot *epqslot;
+
+				Assert(update_xmax != InvalidTransactionId);
+
+				epqslot = EvalPlanQual(estate,
+									   resultRelInfo->ri_RangeTableIndex,
+									   &update_ctid,
+									   update_xmax);
+				if (!TupIsNull(epqslot))
+				{
+					*tupleid = update_ctid;
+					slot = ExecFilterJunk(estate->es_junkFilter, epqslot);
+					goto lreplace;
+				}
+			}
+			/* tuple already deleted; nothing to do */
+			return;
+
+		default:
+			elog(ERROR, "unrecognized heap_update status: %u", result);
+			return;
 	}
 
 	(estate->es_processed)++;
@@ -4883,8 +4860,6 @@ typedef struct
 
 	ItemPointerData last_heap_tid;
 
-	struct MirroredBufferPoolBulkLoadInfo *bulkloadinfo;
-
 } DR_intorel;
 
 /*
@@ -4918,9 +4893,6 @@ OpenIntoRel(QueryDesc *queryDesc)
 	bool		validate_reloptions;
 
 	RelFileNode relFileNode;
-	
-	ItemPointerData persistentTid;
-	int64			persistentSerialNum;
 	
 	targetPolicy = queryDesc->plannedstmt->intoPolicy;
 
@@ -5061,9 +5033,7 @@ OpenIntoRel(QueryDesc *queryDesc)
 											  targetPolicy,  	/* MPP */
 											  reloptions,
 											  allowSystemTableModsDDL,
-											  /* valid_opts */ !validate_reloptions,
-						 					  &persistentTid,
-						 					  &persistentSerialNum);
+											  /* valid_opts */ !validate_reloptions);
 
 	FreeTupleDesc(tupdesc);
 
@@ -5131,39 +5101,9 @@ OpenIntoRel(QueryDesc *queryDesc)
 	/* Not using WAL requires rd_targblock be initially invalid */
 	Assert(intoRelationDesc->rd_targblock == InvalidBlockNumber);
 
-	myState->bulkloadinfo = (struct MirroredBufferPoolBulkLoadInfo *) palloc0(sizeof(MirroredBufferPoolBulkLoadInfo));
-
 	relFileNode.spcNode = tablespaceId;
 	relFileNode.dbNode = MyDatabaseId;
 	relFileNode.relNode = intoRelationId;
-	if (relstorage_is_buffer_pool(relstorage) && !use_wal)
-	{
-		MirroredBufferPool_BeginBulkLoad(
-								&relFileNode,
-								&persistentTid,
-								persistentSerialNum,
-								myState->bulkloadinfo);
-	}
-	else
-	{
-		/*
-		 * Save this information for tracing in CloseIntoRel.
-		 */
-		myState->bulkloadinfo->relFileNode = relFileNode;
-		myState->bulkloadinfo->persistentTid = persistentTid;
-		myState->bulkloadinfo->persistentSerialNum = persistentSerialNum;
-
-		if (Debug_persistent_print)
-		{
-			elog(Persistent_DebugPrintLevel(),
-				 "OpenIntoRel %u/%u/%u: not bypassing the WAL -- not using bulk load, persistent serial num " INT64_FORMAT ", TID %s",
-				 relFileNode.spcNode,
-				 relFileNode.dbNode,
-				 relFileNode.relNode,
-				 persistentSerialNum,
-				 ItemPointerToString(&persistentTid));
-		}
-	}
 }
 
 /*
@@ -5190,55 +5130,9 @@ CloseIntoRel(QueryDesc *queryDesc)
 		 */
 		if (RelationIsHeap(rel) && (myState->hi_options & HEAP_INSERT_SKIP_WAL) != 0)
 		{
-			int32 numOfBlocks;
-			bool mirrorDataLossOccurred;
-
 			FlushRelationBuffers(rel);
 			/* FlushRelationBuffers will have opened rd_smgr */
 			smgrimmedsync(rel->rd_smgr, MAIN_FORKNUM);
-
-			if (PersistentStore_IsZeroTid(&myState->last_heap_tid))
-				numOfBlocks = 0;
-			else
-				numOfBlocks = ItemPointerGetBlockNumber(&myState->last_heap_tid) + 1;
-
-			/*
-			 * We may have to catch-up the mirror since bulk loading of data is
-			 * ignored by resynchronize.
-			 */
-			while (true)
-			{
-				bool bulkLoadFinished;
-
-				bulkLoadFinished =
-					MirroredBufferPool_EvaluateBulkLoadFinish(
-						myState->bulkloadinfo);
-
-				if (bulkLoadFinished)
-				{
-					/*
-					 * The flush was successful to the mirror (or the mirror is
-					 * not configured).
-					 *
-					 * We have done a state-change from 'Bulk Load Create Pending'
-					 * to 'Create Pending'.
-					 */
-					break;
-				}
-
-				/*
-				 * Copy primary data to mirror and flush.
-				 */
-				MirroredBufferPool_CopyToMirror(
-					&myState->bulkloadinfo->relFileNode,
-					rel->rd_rel->relname.data,
-					&myState->bulkloadinfo->persistentTid,
-					myState->bulkloadinfo->persistentSerialNum,
-					myState->bulkloadinfo->mirrorDataLossTrackingState,
-					myState->bulkloadinfo->mirrorDataLossTrackingSessionNum,
-					numOfBlocks,
-					&mirrorDataLossOccurred);
-			}
 		}
 
 		/* close rel, but keep lock until commit */

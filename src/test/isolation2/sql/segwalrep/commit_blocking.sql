@@ -22,27 +22,40 @@ returns text as $$
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
 $$ language plpythonu;
 
+-- make sure we are in-sync for the primary we will be testing with
+select content, role, preferred_role, mode, status from gp_segment_configuration where content=2;
+
+-- print synchronous_standby_names should be set to '*' at start of test
+0U: show synchronous_standby_names;
+
 -- create table and show commits are not blocked
 create table segwalrep_commit_blocking (a int) distributed by (a);
 insert into segwalrep_commit_blocking values (1);
 
+-- WALREP_FIXME: we don't wait for the GUC to propagate to the ftsprobe process; it's
+-- possible that one final probe could get through after we shut down the mirror
+-- in the next line and throw off the test (since if the mirror is marked down,
+-- the primary won't block). As a temporary nasty hack, try to reduce possible
+-- flake by issuing a probe manually, which will delay the next one by a minute.
+select gp_request_fts_probe_scan();
+
 -- turn off fts
 ! gpconfig -c gp_fts_probe_pause -v true --masteronly --skipvalidation;
-1U: select pg_ctl((select fselocation from gp_segment_configuration c, pg_filespace_entry f where c.role='p' and c.content=-1 and c.dbid = f.fsedbid), 'reload', NULL, NULL);
+-1U: select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'reload', NULL, NULL);
 
 -- stop a mirror and show commit on dbid 2 will block
-1U: select pg_ctl((select fselocation from gp_segment_configuration c, pg_filespace_entry f where c.role='m' and c.content=0 and c.dbid = f.fsedbid), 'stop', NULL, NULL);
-2U&: insert into segwalrep_commit_blocking values (1);
+-1U: select pg_ctl((select datadir from gp_segment_configuration c where c.role='m' and c.content=0), 'stop', NULL, NULL);
+0U&: insert into segwalrep_commit_blocking values (1);
 
 -- restart primary dbid 2
-1U: select pg_ctl((select fselocation from gp_segment_configuration c, pg_filespace_entry f where c.role='p' and c.content=0 and c.dbid = f.fsedbid), 'restart', NULL, NULL);
+-1U: select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'restart', NULL, NULL);
 
 -- should show dbid 2 utility mode connection closed because of primary restart
-2U<:
-2Uq:
+0U<:
+0Uq:
 
 -- synchronous_standby_names should be set to '*' after primary restart
-2U: show synchronous_standby_names;
+0U: show synchronous_standby_names;
 
 -- this should block since mirror is not up and sync replication is on
 3: begin;
@@ -53,14 +66,14 @@ insert into segwalrep_commit_blocking values (1);
 4: insert into segwalrep_commit_blocking values (3);
 
 -- bring the mirror back up
-1U: select pg_ctl((select fselocation from gp_segment_configuration c, pg_filespace_entry f where c.role='m' and c.content=0 and c.dbid = f.fsedbid), 'start', (select port from gp_segment_configuration where content = 0 and preferred_role = 'm'), 0);
+-1U: select pg_ctl((select datadir from gp_segment_configuration c where c.role='m' and c.content=0), 'start', (select port from gp_segment_configuration where content = 0 and preferred_role = 'm'), 0);
 
 -- should unblock and commit now that mirror is back up and in-sync
 3<:
 
 -- turn on fts
 ! gpconfig -c gp_fts_probe_pause -v false --masteronly --skipvalidation;
-1U: select pg_ctl((select fselocation from gp_segment_configuration c, pg_filespace_entry f where c.role='p' and c.content=-1 and c.dbid = f.fsedbid), 'reload', NULL, NULL);
+-1U: select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'reload', NULL, NULL);
 
 -- everything should be back to normal
 4: insert into segwalrep_commit_blocking select i from generate_series(1,10)i;

@@ -13,7 +13,7 @@ from test.unit.gp_unittest import GpTestCase
 class GpRecoverSegmentProgramTestCase(GpTestCase):
     def setUp(self):
         raw_options = GpRecoverSegmentProgram.createParser()
-        (options, _) = raw_options.parse_args()
+        (options, _) = raw_options.parse_args(args=[])
         options.spareDataDirectoryFile = None
         options.newRecoverHosts = None
         self.subject = GpRecoverSegmentProgram(options)
@@ -64,33 +64,6 @@ class GpRecoverSegmentProgramTestCase(GpTestCase):
         # name mangled when specified with a "__" prefix. That workaround is to use _<class>__<attribute>
         # such as  self.subject._GpRecoverSegmentProgram__pool = mock_pool
         self.subject._GpRecoverSegmentProgram__pool = self.worker_pool
-
-    def test_check_persistent_tables__when_no_errors_detected__succeeds(self):
-        segments = [self._get_mock_segment('seg1', '1234', 'seg1', '/tmp/seg1'),
-                    self._get_mock_segment('seg2', '2345', 'seg2', '/tmp/seg2')]
-        command1 = Mock(spec=Command)
-        command1.get_results.return_value = ''
-        command2 = Mock(spec=Command)
-        command2.get_results.return_value = ''
-        self.execSqlResult.fetchall.return_value = [['template1']]
-        self.worker_pool.getCompletedItems.return_value = [command1, command2]
-        self.subject._check_persistent_tables(segments)
-
-    def test_check_persistent_tables__with_no_segments__succeeds(self):
-        self.execSqlResult.fetchall.return_value = [['template1']]
-        self.subject._check_persistent_tables([])
-
-    def test_check_persistent_tables__when_error_exists__raises(self):
-        self.execSqlResult.fetchall.return_value = [['template1']]
-        segments = [self._get_mock_segment('seg1', '1234', 'seg1', '/tmp/seg1'),
-                    self._get_mock_segment('seg2', '2345', 'seg2', '/tmp/seg2')]
-        command1 = Mock()
-        command1.get_results.return_value = ['sdfsdf']
-        command2 = Mock()
-        command2.get_results.return_value = ['asdfas']
-        self.worker_pool.getCompletedItems.return_value = [command1, command2]
-        with self.assertRaisesRegexp(Exception, 'Please fix the persistent tables issue'):
-            self.subject._check_persistent_tables(segments)
 
     def test_check_database_connection__when_all_segments_are_ready_to_connect__returns_true(self):
         self.gparray.getDbList.return_value = []

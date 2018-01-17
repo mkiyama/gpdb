@@ -99,11 +99,6 @@ static bool show_setting = false;
 static bool data_checksums = false;
 static char *xlog_dir = "";
 
-/**
- * Should we create persistent table entries needed for file replication?
- */
-static bool gIsFileRepMirrored = false;
-
 
 /* internal vars */
 static const char *progname;
@@ -151,8 +146,7 @@ static char *authwarning = NULL;
  * (no quoting to worry about).
  */
 static const char *boot_options = "-F";
-static char backend_options[200];
-static const char *backend_options_format = "--single -F -O -c gp_session_role=utility -c search_path=pg_catalog -c exit_on_error=true -c gp_initdb_mirrored=%s";
+static const char *backend_options = "--single -F -O -c gp_session_role=utility -c search_path=pg_catalog -c exit_on_error=true";
 
 
 /* path to 'initdb' binary directory */
@@ -177,16 +171,15 @@ static int	mkdir_p(char *path, mode_t omode);
 static void exit_nicely(void);
 static char *get_id(void);
 static char *get_encoding_id(char *encoding_name);
-static char *get_short_version(void);
 static int	check_data_dir(char *dir);
 static bool mkdatadir(const char *subdir);
 static void set_input(char **dest, char *filename);
 static void check_input(char *path);
-static void set_short_version(char *short_version, char *extrapath);
+static void write_version_file(char *extrapath);
 static void set_null_conf(const char *conf_name);
 static void test_config_settings(void);
 static void setup_config(void);
-static void bootstrap_template1(char *short_version);
+static void bootstrap_template1(void);
 static void setup_auth(void);
 static void get_set_pwd(void);
 static void setup_depend(void);
@@ -952,42 +945,6 @@ find_matching_ts_config(const char *lc_type)
 
 
 /*
- * get short version of VERSION
- */
-static char *
-get_short_version(void)
-{
-	bool		gotdot = false;
-	int			end;
-	char	   *vr;
-
-	vr = xstrdup(PG_VERSION);
-
-	for (end = 0; vr[end] != '\0'; end++)
-	{
-		if (vr[end] == '.')
-		{
-			if (end == 0)
-				return NULL;
-			else if (gotdot)
-				break;
-			else
-				gotdot = true;
-		}
-		else if (vr[end] < '0' || vr[end] > '9')
-		{
-			/* gone past digits and dots */
-			break;
-		}
-	}
-	if (end == 0 || vr[end - 1] == '.' || !gotdot)
-		return NULL;
-
-	vr[end] = '\0';
-	return vr;
-}
-
-/*
  * make sure the directory either doesn't exist or is empty
  *
  * Returns 0 if nonexistent, 1 if exists and empty, 2 if not empty,
@@ -1121,7 +1078,7 @@ check_input(char *path)
  * if extrapath is not NULL
  */
 static void
-set_short_version(char *short_version, char *extrapath)
+write_version_file(char *extrapath)
 {
 	FILE	   *version_file;
 	char	   *path;
@@ -1136,14 +1093,14 @@ set_short_version(char *short_version, char *extrapath)
 		path = pg_malloc(strlen(pg_data) + strlen(extrapath) + 13);
 		sprintf(path, "%s/%s/PG_VERSION", pg_data, extrapath);
 	}
-	version_file = fopen(path, PG_BINARY_W);
-	if (version_file == NULL)
+
+	if ((version_file = fopen(path, PG_BINARY_W)) == NULL)
 	{
 		fprintf(stderr, _("%s: could not open file \"%s\" for writing: %s\n"),
 				progname, path, strerror(errno));
 		exit_nicely();
 	}
-	if (fprintf(version_file, "%s\n", short_version) < 0 ||
+	if (fprintf(version_file, "%s\n", PG_MAJORVERSION) < 0 ||
 		fclose(version_file))
 	{
 		fprintf(stderr, _("%s: could not write file \"%s\": %s\n"),
@@ -1460,7 +1417,6 @@ setup_config(void)
 
 	free(conflines);
 
-#ifdef USE_SEGWALREP
 	/*
 	 * GPDB_94_MERGE_FIXME: once merged ALTER SYSTEM introduced by upstream
 	 * commit 65d6e4cb5c62371dae6c236a7e709d503ae6ddf8,
@@ -1480,7 +1436,6 @@ setup_config(void)
 	chmod(path, 0600);
 
 	free(conflines);
-#endif
 
 	check_ok();
 }
@@ -1490,7 +1445,7 @@ setup_config(void)
  * run the BKI script in bootstrap mode to create template1
  */
 static void
-bootstrap_template1(char *short_version)
+bootstrap_template1(void)
 {
 	PG_CMD_DECL;
 	char	  **line;
@@ -1510,7 +1465,7 @@ bootstrap_template1(char *short_version)
 	/* Check that bki file appears to be of the right version */
 
 	snprintf(headerline, sizeof(headerline), "# PostgreSQL %s\n",
-			 short_version);
+			 PG_MAJORVERSION);
 
 	if (strcmp(headerline, *bki_lines) != 0)
 	{
@@ -1565,7 +1520,7 @@ bootstrap_template1(char *short_version)
 	unsetenv("PGCLIENTENCODING");
 
 	snprintf(cmd, sizeof(cmd),
-			 "\"%s\" --boot -x1 %s %s -c gp_before_persistence_work=on %s",
+			 "\"%s\" --boot -x1 %s %s %s",
 			 backend_exec, 
 			 data_checksums ? "-k" : "",
 			 boot_options, talkargs);
@@ -2242,34 +2197,6 @@ setup_cdb_schema(void)
 }
 
 /*
- * Load persistent tables from pg_class, etc.
- */
-static void
-setup_gp_persistent_tables(void)
-{
-	PG_CMD_DECL;
-
-	fprintf(stdout, _("loading file-system persistent tables for template1 (mirrored = %s) ... \n"), 
-		    (gIsFileRepMirrored  ? "true" : "false"));
-	fflush(stdout);
-
-	snprintf(cmd, sizeof(cmd),
-			 "\"%s\" %s -c gp_before_persistence_work=on template1 >%s",
-			 backend_exec, backend_options,
-			 backend_output);
-
-	PG_CMD_OPEN;
-	
-	PG_CMD_PRINTF1("SELECT gp_persistent_build_db(%s);\n",
-				   (gIsFileRepMirrored  ? "true" : "false"));
-
-	PG_CMD_CLOSE;
-
-	check_ok();
-}
-
-
-/*
  * clean everything up in template1
  */
 static void
@@ -2912,7 +2839,6 @@ main(int argc, char *argv[])
 		{"username", required_argument, NULL, 'U'},
         {"max_connections", required_argument, NULL, 1001},     /*CDB*/
         {"shared_buffers", required_argument, NULL, 1003},      /*CDB*/
-        {"is_filerep_mirrored", required_argument, NULL, 1004},      /*CDB*/
         {"backend_output", optional_argument, NULL, 1005},      /*CDB*/
 		{"help", no_argument, NULL, '?'},
 		{"version", no_argument, NULL, 'V'},
@@ -2928,7 +2854,6 @@ main(int argc, char *argv[])
 				i,
 				ret;
 	int			option_index = -1;
-	char	   *short_version;
 	char	   *effective_user;
 	char	   *pgdenv;			/* PGDATA value gotten from and sent to
 								 * environment */
@@ -2945,7 +2870,6 @@ main(int argc, char *argv[])
 		"pg_xlog",
 		"pg_xlog/archive_status",
 		"pg_clog",
-		"pg_changetracking",
 		"pg_subtrans",
 		"pg_twophase",
 		"pg_multixact/members",
@@ -3082,19 +3006,6 @@ main(int argc, char *argv[])
 			case 1003:
                 n_buffers = parse_long(optarg, true, optname);
 				break;
-            case 1004:
-                if ( strcmp("yes", optarg) == 0  )
-                    gIsFileRepMirrored = true;
-                else if ( strcmp("no", optarg) == 0  )
-                    gIsFileRepMirrored = false;
-                else
-                {
-                    fprintf(stderr, "Invalid value for is_filerep_mirrored\n");
-                    fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
-						progname);
-    				exit(1);
-                }
-                break;
 			case 1005:
 				backend_output = xstrdup(optarg);
 				break;
@@ -3286,12 +3197,6 @@ main(int argc, char *argv[])
 	}
 
 	canonicalize_path(share_path);
-
-	if ((short_version = get_short_version()) == NULL)
-	{
-		fprintf(stderr, _("%s: could not determine valid short version string\n"), progname);
-		exit(1);
-	}
 
 	effective_user = get_id();
 	if (strlen(username) == 0)
@@ -3630,14 +3535,12 @@ main(int argc, char *argv[])
 	check_ok();
 
 	/* Top level PG_VERSION is checked by bootstrapper, so make it first */
-	set_short_version(short_version, NULL);
+	write_version_file(NULL);
 
 	/* Select suitable configuration settings */
 	set_null_conf("postgresql.conf");
 
-#ifdef USE_SEGWALREP
 	set_null_conf(GP_REPLICATION_CONFIG_FILENAME);
-#endif
 
 	test_config_settings();
 
@@ -3646,24 +3549,15 @@ main(int argc, char *argv[])
 
 	if ( ! forMirrorOnly)
 	{
-		sprintf(backend_options, backend_options_format,
-			    ((gIsFileRepMirrored  ? "true" : "false")));
-
 		/* Bootstrap template1 */
-		bootstrap_template1(short_version);
+		bootstrap_template1();
 
 		/*
 		 * Make the per-database PG_VERSION for template1 only after init'ing it
 		 */
-		set_short_version(short_version, "base/1");
+		write_version_file("base/1");
 
 		/* Create the stuff we don't need to use bootstrap mode for */
-
-		/*
-		 * Must be the first thing we do on template1 to make sure we capture all
-		 * relation creates.
-		 */
-		setup_gp_persistent_tables();
 
 		setup_auth();
 		if (pwprompt || pwfilename)

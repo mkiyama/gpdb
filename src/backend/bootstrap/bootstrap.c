@@ -27,7 +27,6 @@
 #include "bootstrap/bootstrap.h"
 #include "catalog/index.h"
 #include "catalog/pg_type.h"
-#include "cdb/cdbfilerep.h"
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -49,8 +48,6 @@ extern int	optind;
 extern char *optarg;
 
 uint32 bootstrap_data_checksum_version = 0;  /* No checksum */
-
-extern void FileRepResetPeer_Main(void);
 
 #define ALLOC(t, c)		((t *) calloc((unsigned)(c), sizeof(t)))
 
@@ -346,15 +343,6 @@ AuxiliaryProcessMain(int argc, char *argv[])
 			case StartupProcess:
 				statmsg = "startup process";
 				break;
-			case StartupPass2Process:
-				statmsg = "startup pass 2 process";
-				break;
-			case StartupPass3Process:
-				statmsg = "startup pass 3 process";
-				break;
-			case StartupPass4Process:
-				statmsg = "startup pass 4 process";
-				break;
 			case BgWriterProcess:
 				statmsg = "writer process";
 				break;
@@ -457,22 +445,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 
 		case StartupProcess:
 			/* don't set signals, startup process has its own agenda */
-			StartupProcessMain(1);
-			proc_exit(1);		/* should never return */
-
-		case StartupPass2Process:
-			/* don't set signals, startup process has its own agenda */
-			StartupProcessMain(2);
-			proc_exit(1);		/* should never return */
-
-		case StartupPass3Process:
-			/* don't set signals, startup process has its own agenda */
-			StartupProcessMain(3);
-			proc_exit(1);		/* should never return */
-
-		case StartupPass4Process:
-			/* don't set signals, startup process has its own agenda */
-			StartupProcessMain(4);
+			StartupProcessMain();
 			proc_exit(1);		/* should never return */
 
 		case BgWriterProcess:
@@ -496,14 +469,6 @@ AuxiliaryProcessMain(int argc, char *argv[])
 			InitXLOGAccess();
 			WalWriterMain();
 			proc_exit(1);		/* should never return */
-
-		case FilerepProcess:
-			FileRep_Main();
-			proc_exit(1); /* should never return */
-
-		case FilerepResetPeerProcess:
-			FileRepResetPeer_Main();
-			proc_exit(1); /* should never return */
 
 		default:
 			elog(PANIC, "unrecognized process type: %d", MyAuxProcType);

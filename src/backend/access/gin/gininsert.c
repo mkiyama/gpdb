@@ -40,12 +40,8 @@ static BlockNumber
 createPostingTree(Relation index, ItemPointerData *items, uint32 nitems)
 {
 	BlockNumber blkno;
-	Buffer		buffer;
+	Buffer		buffer = GinNewBuffer(index);
 	Page		page;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
-	buffer = GinNewBuffer(index);
 
 	START_CRIT_SECTION();
 

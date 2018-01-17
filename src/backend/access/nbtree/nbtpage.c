@@ -105,8 +105,6 @@ _bt_getroot(Relation rel, int access)
 	uint32		rootlevel;
 	BTMetaPageData *metad;
 
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
 	/*
 	 * Try to use previously-cached metapage data to find the root.  This
 	 * normally saves one buffer access per index search, which is a very
@@ -180,9 +178,6 @@ _bt_getroot(Relation rel, int access)
 			return InvalidBuffer;
 		}
 
-		// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-		RelationFetchGpRelationNodeForXLog(rel);
-		
 		/* trade in our read lock for a write lock */
 		LockBuffer(metabuf, BUFFER_LOCK_UNLOCK);
 		LockBuffer(metabuf, BT_WRITE);
@@ -236,7 +231,7 @@ _bt_getroot(Relation rel, int access)
 			XLogRecPtr	recptr;
 			XLogRecData rdata;
 
-			xl_btreenode_set(&(xlrec.btreenode), rel);
+			xlrec.node = rel->rd_node;
 			xlrec.rootblk = rootblkno;
 			xlrec.level = 0;
 
@@ -345,8 +340,6 @@ _bt_gettrueroot(Relation rel)
 	BlockNumber rootblkno;
 	uint32		rootlevel;
 	BTMetaPageData *metad;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
 
 	/*
 	 * We don't try to use cached metapage data here, since (a) this path is
@@ -469,8 +462,6 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 {
 	Buffer		buf;
 
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
 	if (blkno != P_NEW)
 	{
 		/* Read an existing block of the relation */
@@ -590,8 +581,6 @@ _bt_relandgetbuf(Relation rel, Buffer obuf, BlockNumber blkno, int access)
 {
 	Buffer		buf;
 
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
 	Assert(blkno != P_NEW);
 	if (BufferIsValid(obuf))
 		LockBuffer(obuf, BUFFER_LOCK_UNLOCK);
@@ -609,8 +598,6 @@ _bt_relandgetbuf(Relation rel, Buffer obuf, BlockNumber blkno, int access)
 void
 _bt_relbuf(Relation rel __attribute__((unused)), Buffer buf)
 {
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
 	UnlockReleaseBuffer(buf);
 }
 
@@ -675,12 +662,7 @@ _bt_delitems(Relation rel, Buffer buf,
 	Page		page;
 	BTPageOpaque opaque;
 
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
 	page = BufferGetPage(buf);
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(rel);
 
 	/* No ereport(ERROR) until changes are logged */
 	START_CRIT_SECTION();
@@ -714,7 +696,7 @@ _bt_delitems(Relation rel, Buffer buf,
 		XLogRecPtr	recptr;
 		XLogRecData rdata[2];
 
-		xl_btreenode_set(&(xlrec.btreenode), rel);
+		xlrec.node = rel->rd_node;
 		xlrec.block = BufferGetBlockNumber(buf);
 
 		rdata[0].data = (char *) &xlrec;
@@ -775,8 +757,6 @@ _bt_parent_deletion_safe(Relation rel, BlockNumber target, BTStack stack)
 	Buffer		pbuf;
 	Page		page;
 	BTPageOpaque opaque;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
 
 	/*
 	 * In recovery mode, assume the deletion being replayed is valid.  We
@@ -888,11 +868,6 @@ _bt_pagedel(Relation rel, Buffer buf, BTStack stack, bool vacuum_full)
 	BTMetaPageData *metad = NULL;
 	Page		page;
 	BTPageOpaque opaque;
-
-	MIRROREDLOCK_BUFMGR_MUST_ALREADY_BE_HELD;
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(rel);
 
 	/*
 	 * We can never delete rightmost pages nor root pages.	While at it, check
@@ -1261,7 +1236,8 @@ _bt_pagedel(Relation rel, Buffer buf, BTStack stack, bool vacuum_full)
 		XLogRecData rdata[5];
 		XLogRecData *nextrdata;
 
-		xl_btreetid_set(&(xlrec.target), rel, parent, poffset);
+		xlrec.target.node = rel->rd_node;
+		ItemPointerSet(&(xlrec.target.tid), parent, poffset);
 		xlrec.deadblk = target;
 		xlrec.leftblk = leftsib;
 		xlrec.rightblk = rightsib;

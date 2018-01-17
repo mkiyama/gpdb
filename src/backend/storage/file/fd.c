@@ -71,14 +71,15 @@
 
 #include "miscadmin.h"
 #include "access/xact.h"
+#include "catalog/catalog.h"
 #include "catalog/pg_tablespace.h"
-#include "cdb/cdbfilerep.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "utils/guc.h"
 #include "utils/resowner.h"
 #include "utils/workfile_mgr.h"
 #include "utils/faultinjector.h"
+#include "postmaster/primary_mirror_mode.h"
 
 // Provide some indirection here in case we have problems with lseek and
 // 64 bits on some platforms
@@ -969,6 +970,10 @@ FileNameOpenFile(FileName fileName, int fileFlags, int fileMode)
  * GPDB also has a concept of "temp filespace", and GPDB used
  * "getCurrentTempFilePath" instead of DatabasePath.
  *
+ * WALREP_FIXME: getCurrentTempFilePath was removed, and replaced with
+ * just "base/". We need to resurrect this upstream code, to make
+ * use of temp_tablespaces again.
+ *
  * So this upstream commit is not merged.
  */
 /*
@@ -1261,11 +1266,6 @@ FileRead(File file, char *buffer, int amount)
 			   (int64) VfdCache[file].seekPos,
 			   amount, buffer));
 
-	if (Debug_filerep_print)
-		elog(LOG, "FileRead: %d (%s) " INT64_FORMAT " %d %p",
-			  file, VfdCache[file].fileName,
-			  VfdCache[file].seekPos, amount, buffer);
-
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
 		return returnCode;
@@ -1403,8 +1403,6 @@ FileSync(File file)
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
 		return returnCode;
-
-	SIMPLE_FAULT_INJECTOR(FileRepFlush);
 
 	returnCode =  pg_fsync(VfdCache[file].fd);
 

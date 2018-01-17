@@ -24,25 +24,6 @@
 #include "replication/walsender.h"
 
 /*
- * REDO Tracking DEFINEs.
- */
-#define REDO_PRINT_READ_BUFFER_NOT_FOUND(rnode,blkno,buffer,lsn) \
-{ \
-	if (Debug_persistent_recovery_print && !BufferIsValid(buffer)) \
-	{ \
-		xlog_print_redo_read_buffer_not_found(rnode, blkno, lsn, PG_FUNCNAME_MACRO); \
-	} \
-}
-
-#define REDO_PRINT_LSN_APPLICATION(rnode,blkno,page,lsn) \
-{ \
-	if (Debug_persistent_recovery_print) \
-	{ \
-		xlog_print_redo_lsn_application(rnode, blkno, (void*)page, lsn, PG_FUNCNAME_MACRO); \
-	} \
-}
-
-/*
  * The overall layout of an XLOG record is:
  *		Fixed-size header (XLogRecord struct)
  *		rmgr-specific data
@@ -217,12 +198,6 @@ extern bool XLOG_DEBUG;
 /* These indicate the cause of a checkpoint request */
 #define CHECKPOINT_CAUSE_XLOG	0x0020	/* XLOG consumption */
 #define CHECKPOINT_CAUSE_TIME	0x0040	/* Elapsed time */
-/*
- * This falls in two categories, affects behavior of CreateCheckPoint and also
- * indicates request is coming from ResyncManager process to switch primary
- * segment from resync mode to sync mode.
- */
-#define CHECKPOINT_RESYNC_TO_INSYNC_TRANSITION 0x0400
 
 /* Checkpoint statistics */
 typedef struct CheckpointStatsData
@@ -242,17 +217,15 @@ typedef struct CheckpointStatsData
 
 extern CheckpointStatsData CheckpointStats;
 
+/* File path names (all relative to $PGDATA) */
+#define RECOVERY_COMMAND_FILE	"recovery.conf"
+#define RECOVERY_COMMAND_DONE	"recovery.done"
+#define PROMOTE_SIGNAL_FILE "promote"
 
 extern XLogRecPtr XLogInsert(RmgrId rmid, uint8 info, XLogRecData *rdata);
 extern XLogRecPtr XLogInsert_OverrideXid(RmgrId rmid, uint8 info, XLogRecData *rdata, TransactionId overrideXid);
 extern XLogRecPtr XLogLastInsertBeginLoc(void);
-extern XLogRecPtr XLogLastInsertEndLoc(void);
-extern XLogRecPtr XLogLastChangeTrackedLoc(void);
-extern uint32 XLogLastInsertTotalLen(void);
-extern uint32 XLogLastInsertDataLen(void);
 extern void XLogFlush(XLogRecPtr RecPtr);
-extern void XLogFileRepFlushCache(
-	XLogRecPtr	*lastChangeTrackingEndLoc);
 
 extern void XLogGetLastRemoved(uint32 *log, uint32 *seg);
 extern XLogRecPtr XLogSaveBufferForHint(Buffer buffer, Relation relation);
@@ -266,6 +239,9 @@ extern void issue_xlog_fsync(int fd, uint32 log, uint32 seg);
 extern void XLogBackgroundFlush(void);
 extern void XLogAsyncCommitFlush(void);
 extern bool XLogNeedsFlush(XLogRecPtr RecPtr);
+extern int XLogFileInit(uint32 log, uint32 seg,
+			 bool *use_existent, bool use_lock);
+extern int	XLogFileOpen(uint32 log, uint32 seg);
 
 extern void XLogSetAsyncCommitLSN(XLogRecPtr record);
 
@@ -282,9 +258,6 @@ extern void BootStrapXLOG(void);
 extern void StartupXLOG(void);
 extern bool XLogStartupMultipleRecoveryPassesNeeded(void);
 extern bool XLogStartupIntegrityCheckNeeded(void);
-extern void StartupXLOG_Pass2(void);
-extern void StartupXLOG_Pass3(void);
-extern void StartupXLOG_Pass4(void);
 extern void ShutdownXLOG(int code, Datum arg);
 extern void InitXLOGAccess(void);
 extern void CreateCheckPoint(int flags);
@@ -297,7 +270,6 @@ extern XLogRecPtr GetFlushRecPtr(void);
 extern void GetNextXidAndEpoch(TransactionId *xid, uint32 *epoch);
 
 extern void XLogGetRecoveryStart(char *callerStr, char *reasonStr, XLogRecPtr *redoCheckPointLoc, CheckPoint *redoCheckPoint);
-extern void XLogPrintLogNames(void);
 extern char *XLogLocationToString(XLogRecPtr *loc);
 extern char *XLogLocationToString2(XLogRecPtr *loc);
 extern char *XLogLocationToString3(XLogRecPtr *loc);
@@ -310,24 +282,8 @@ extern char *XLogLocationToString4_Long(XLogRecPtr *loc);
 extern char *XLogLocationToString5_Long(XLogRecPtr *loc);
 
 extern void HandleStartupProcInterrupts(void);
-extern void StartupProcessMain(int passNum);
+extern void StartupProcessMain(void);
 
-extern int XLogReconcileEofPrimary(void);
-
-extern int XLogReconcileEofMirror(
-					   XLogRecPtr	primaryEof,
-					   XLogRecPtr	*mirrorEof);
-
-extern int XLogRecoverMirrorControlFile(void);
-extern int XLogAddRecordsToChangeTracking(
-	XLogRecPtr	*lastChangeTrackingEndLoc);
-extern void XLogInChangeTrackingTransition(void);
-
-extern void xlog_print_redo_read_buffer_not_found(
-		RelFileNode		*reln,
-		BlockNumber 	blkno,
-		XLogRecPtr 		lsn,
-		const char		*funcName);
 extern void xlog_print_redo_lsn_application(
 		RelFileNode		*rnode,
 		BlockNumber 	blkno,
@@ -343,20 +299,15 @@ extern void XLogReadRecoveryCommandFile(int emode);
 
 extern List *XLogReadTimeLineHistory(TimeLineID targetTLI);
 
-extern int XLogRecoverMirror(void);
-
 extern XLogRecPtr GetStandbyFlushRecPtr(TimeLineID *targetTLI);
 extern XLogRecPtr GetXLogReplayRecPtr(TimeLineID *targetTLI);
 extern TimeLineID GetRecoveryTargetTLI(void);
-extern int XLogFileInitExt(
-	uint32 log, uint32 seg,
-	bool *use_existent, bool use_lock);
 
 extern bool CheckPromoteSignal(bool do_unlink);
 extern void WakeupRecovery(void);
-extern void SetStandbyDbid(int16 dbid);
-extern int16 GetStandbyDbid(void);
 extern bool IsStandbyMode(void);
+extern DBState GetCurrentDBState(void);
+extern bool IsRoleMirror(void);
 
 /*
  * Starting/stopping a base backup

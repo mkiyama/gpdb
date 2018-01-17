@@ -37,7 +37,6 @@
 #include <sys/poll.h>
 #endif
 
-#ifdef USE_SEGWALREP
 /* mutex used for pthread synchronization in parallel probing */
 static pthread_mutex_t worker_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -110,11 +109,23 @@ probeRecordResponse(FtsConnectionInfo *ftsInfo, PGresult *result)
 	Assert (isSyncRepEnabled);
 	ftsInfo->result->isSyncRepEnabled = *isSyncRepEnabled;
 
-	write_log("FTS: segment (content=%d, dbid=%d, role=%c) reported isMirrorUp %d, isInSync %d, and isSyncRepEnabled %d to the prober.",
+	int *isRoleMirror = (int *) PQgetvalue(result, 0,
+										   Anum_fts_message_response_is_role_mirror);
+	Assert (isRoleMirror);
+	ftsInfo->result->isRoleMirror = *isRoleMirror;
+
+	int *retryRequested = (int *) PQgetvalue(result, 0,
+											 Anum_fts_message_response_request_retry);
+	Assert (retryRequested);
+	ftsInfo->result->retryRequested = *retryRequested;
+
+	write_log("FTS: segment (content=%d, dbid=%d, role=%c) reported isMirrorUp %d, isInSync %d, isSyncRepEnabled %d, isRoleMirror %d, and retryRequested %d to the prober.",
 			  ftsInfo->segmentId, ftsInfo->dbId, ftsInfo->role,
 			  ftsInfo->result->isMirrorAlive,
 			  ftsInfo->result->isInSync,
-			  ftsInfo->result->isSyncRepEnabled);
+			  ftsInfo->result->isSyncRepEnabled,
+			  ftsInfo->result->isRoleMirror,
+			  ftsInfo->result->retryRequested);
 }
 
 /*
@@ -214,11 +225,15 @@ ftsReceive(FtsConnectionInfo *ftsInfo)
 	 * the gp_segment_configuration to avoid waiting the fts probe interval.
 	 */
 	if (strcmp(ftsInfo->message, FTS_MSG_PROBE) == 0)
+	{
 		probeRecordResponse(ftsInfo, lastResult);
-	/* Primary must have syncrep disabled in response to SYNCREP_OFF message. */
-	AssertImply(strcmp(ftsInfo->message, FTS_MSG_SYNCREP_OFF) == 0,
-				PQgetvalue(lastResult, 0, Anum_fts_message_response_is_syncrep_enabled) != NULL &&
-				*(PQgetvalue(lastResult, 0, Anum_fts_message_response_is_syncrep_enabled)) == false);
+		if (ftsInfo->result->retryRequested)
+		{
+			write_log("FTS: primary asked to retry the probe for (content=%d, dbid=%d)",
+					  ftsInfo->segmentId, ftsInfo->dbId);
+			return false;
+		}
+	}
 
 	return true;
 }
@@ -301,7 +316,7 @@ messageWalRepSegmentFromThread(void *arg)
 
 	int number_of_probed_segments = 0;
 
-	while(number_of_probed_segments < context->num_primary_segments)
+	while(number_of_probed_segments < context->num_of_requests)
 	{
 		/*
 		 * Look for the unprocessed context
@@ -309,7 +324,7 @@ messageWalRepSegmentFromThread(void *arg)
 		int response_index = number_of_probed_segments;
 
 		pthread_mutex_lock(&worker_thread_mutex);
-		while(response_index < context->num_primary_segments)
+		while(response_index < context->num_of_requests)
 		{
 			if (!context->responses[response_index].isScheduled)
 			{
@@ -324,7 +339,7 @@ messageWalRepSegmentFromThread(void *arg)
 		/*
 		 * If probed all the segments, we are done.
 		 */
-		if (response_index == context->num_primary_segments)
+		if (response_index == context->num_of_requests)
 			break;
 
 		/*
@@ -335,7 +350,8 @@ messageWalRepSegmentFromThread(void *arg)
 
 		/* now let's probe the primary. */
 		probe_response_per_segment *response = &context->responses[response_index];
-		Assert(SEGMENT_IS_ACTIVE_PRIMARY(response->segment_db_info));
+		AssertImply(strcmp(response->message, FTS_MSG_PROMOTE) != 0,
+					SEGMENT_IS_ACTIVE_PRIMARY(response->segment_db_info));
 		messageWalRepSegment(response);
 	}
 
@@ -371,7 +387,6 @@ FtsWalRepMessageSegments(fts_context *context)
 		}
 	}
 }
-#endif
 
 /*
  * Check if probe timeout has expired

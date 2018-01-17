@@ -35,7 +35,6 @@
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_database.h"
-#include "catalog/pg_filespace.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/toasting.h"
@@ -248,9 +247,7 @@ Boot_CreateStmt:
 													  NULL,			/*CDB*/
 													  (Datum) 0,
 													  true,
-													  /* valid_opts */ false,
-						 					  		  /* persistentTid */ NULL,
-						 					  		  /* persistentSerialNum */ NULL);
+													  /* valid_opts */ false);
 						elog(DEBUG4, "relation created with oid %u", id);
 					}
 					do_end();

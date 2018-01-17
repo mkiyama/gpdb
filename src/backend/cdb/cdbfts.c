@@ -105,6 +105,7 @@ FtsShmemInit(void)
 		shared->fts_probe_info.fts_pauseProbes = false;
 		shared->fts_probe_info.fts_discardResults = false;
 		shared->fts_probe_info.fts_statusVersion = 0;
+		shared->fts_probe_info.fts_status_initialized = false;
 
 		shared->ftsEnabled = true;	/* ??? */
 		shared->ftsShutdownMaster = false;
@@ -195,12 +196,25 @@ FtsTestConnection(CdbComponentDatabaseInfo *failedDBInfo, bool fullScan)
 
 	if (!fullScan)
 	{
-		return FTS_STATUS_ISALIVE(failedDBInfo->dbid, ftsProbeInfo->fts_status);
+		/*
+		 * if fullscan not requested, caller is just trying to optimize on
+		 * cached version but if we haven't populated yet the fts_status, we
+		 * don't have one and hence just return positively back. This is
+		 * mainly to avoid queries incorrectly failing just after QD restarts
+		 * if FTS process is yet to start and complete initializing the
+		 * fts_status. We shouldn't be checking against uninitialzed variable.
+		 */
+		if (ftsProbeInfo->fts_status_initialized)
+			return FTS_STATUS_IS_UP(ftsProbeInfo->fts_status[failedDBInfo->dbid]);
+
+		return true;
 	}
 
 	FtsNotifyProber();
 
-	return FTS_STATUS_ISALIVE(failedDBInfo->dbid, ftsProbeInfo->fts_status);
+	Assert(ftsProbeInfo->fts_status_initialized);
+
+	return FTS_STATUS_IS_UP(ftsProbeInfo->fts_status[failedDBInfo->dbid]);
 }
 
 /*

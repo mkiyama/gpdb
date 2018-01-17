@@ -186,8 +186,8 @@
                 <p>
                     <codeblock>sqrt(2)</codeblock>
                 </p>
-                <p>See the <cite>Greenplum Database Reference Guide</cite> for lists of the built-in
-                    functions by category. You can add custom functions, too.</p>
+                <p>For information about using and creating functions, see <xref
+                        href="functions-operators.xml#topic26"/>.</p>
             </body>
         </topic>
         <topic id="topic11" xml:lang="en">

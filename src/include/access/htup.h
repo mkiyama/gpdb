@@ -419,6 +419,7 @@ do { \
  */
 #define MaxAttrSize		(10 * 1024 * 1024)
 
+
 /*
  * MinimalTuple is an alternative representation that is used for transient
  * tuples inside the executor, in places where transaction status information
@@ -645,19 +646,10 @@ static inline uint32 heaptuple_get_size(HeapTuple htup)
 typedef struct xl_heaptid
 {
 	RelFileNode node;
-	ItemPointerData persistentTid;
-	int64 persistentSerialNum;
 	ItemPointerData tid;		/* changed tuple id */
 } xl_heaptid;
 
 #define SizeOfHeapTid		(offsetof(xl_heaptid, tid) + SizeOfIptrData)
-
-typedef struct xl_heapnode
-{
-	RelFileNode node;
-	ItemPointerData persistentTid;
-	int64 persistentSerialNum;
-} xl_heapnode;
 
 /* This is what we need to know about delete */
 typedef struct xl_heap_delete
@@ -728,7 +720,7 @@ typedef struct xl_heap_update
  */
 typedef struct xl_heap_clean
 {
-	xl_heapnode heapnode;
+	RelFileNode node;
 	BlockNumber block;
 	uint16		nredirected;
 	uint16		ndead;
@@ -741,7 +733,7 @@ typedef struct xl_heap_clean
 /* NB: this is used for indexes as well as heaps */
 typedef struct xl_heap_newpage
 {
-	xl_heapnode heapnode;
+	RelFileNode node;
 	ForkNumber	forknum;
 	BlockNumber blkno;			/* location of new page */
 	/* entire page contents follow at end of record */
@@ -772,7 +764,7 @@ typedef struct xl_heap_inplace
 /* This is what we need to know about tuple freezing during vacuum */
 typedef struct xl_heap_freeze
 {
-	xl_heapnode heapnode;
+	RelFileNode node;
 	BlockNumber block;
 	TransactionId cutoff_xid;
 	/* TUPLE OFFSET NUMBERS FOLLOW AT THE END */

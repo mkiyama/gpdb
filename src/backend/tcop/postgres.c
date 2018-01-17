@@ -100,7 +100,6 @@
 #include "pgstat.h"
 #include "executor/nodeFunctionscan.h"
 
-#include "cdb/cdbfilerep.h"
 #include "postmaster/primary_mirror_mode.h"
 #include "utils/session_state.h"
 #include "utils/vmem_tracker.h"
@@ -3396,14 +3395,6 @@ quickdie_impl()
 	 * being doubly sure.)
 	 */
 
-	/*
-	 * MPP-17167: We need to release any filrep or primary/mirror spin locks.
-	 * to allow the possibility that filerep itself has sent us a SIGQUIT
-	 * message as part of filerep transition.
-	 */
-	FileRep_resetSpinLocks();
-	primaryMirrorModeResetSpinLocks();
-
 	_exit(2);
 }
 
@@ -4082,7 +4073,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 	 * postmaster/postmaster.c (the option sets should not conflict) and with
 	 * the common help() function in main/main.c.
 	 */
-	while ((flag = getopt(argc, argv, "A:B:bc:D:d:EeFf:h:ijk:m:lN:nOo:Pp:r:S:sTt:Uv:W:x:y:-:")) != -1)
+	while ((flag = getopt(argc, argv, "A:B:bc:D:d:EeFf:h:ijk:m:lN:nOo:Pp:r:S:sTt:Uv:W:y:-:")) != -1)
 	{
 		switch (flag)
 		{
@@ -4222,7 +4213,6 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 				 * 3. TODO: disable the 4.1 xlog format (stick with the old)
 				 */
 				SetConfigOption("upgrade_mode",                         "true", ctx, gucsource);
-				SetConfigOption("gp_permit_persistent_metadata_update", "true", ctx, gucsource);
 				SetConfigOption("allow_segment_DML",  		            "true", ctx, gucsource);
 				SetConfigOption("allow_system_table_mods",              "all",  ctx, gucsource);
 				break;
@@ -4280,10 +4270,6 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 						free(value);
 					break;
 				}
-
-			case 'x': /* standby master dbid */
-				SetConfigOption("gp_standby_dbid", optarg, ctx, gucsource);
-				break;
 
 			default:
 				errs++;
@@ -4979,10 +4965,8 @@ PostgresMain(int argc, char *argv[],
 
 					if (am_walsender)
 						exec_replication_command(query_string);
-#ifdef USE_SEGWALREP
 					else if (am_ftshandler)
 						HandleFtsMessage(query_string);
-#endif
 					else
 						exec_simple_query(query_string, NULL, -1);
 

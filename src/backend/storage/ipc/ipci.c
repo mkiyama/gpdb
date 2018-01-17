@@ -24,17 +24,7 @@
 #include "access/twophase.h"
 #include "access/distributedlog.h"
 #include "access/appendonlywriter.h"
-#include "cdb/cdbfilerep.h"
-#include "cdb/cdbfilerepprimaryack.h"
-#include "cdb/cdbfilerepprimaryrecovery.h"
-#include "cdb/cdbfilerepresyncmanager.h"
 #include "cdb/cdblocaldistribxact.h"
-#include "cdb/cdbpersistentfilesysobj.h"
-#include "cdb/cdbpersistentfilespace.h"
-#include "cdb/cdbpersistenttablespace.h"
-#include "cdb/cdbpersistentdatabase.h"
-#include "cdb/cdbpersistentrelation.h"
-#include "cdb/cdbresynchronizechangetracking.h"
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -152,7 +142,6 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 		size = add_size(size, XLOGShmemSize());
 		size = add_size(size, DistributedLog_ShmemSize());
 		size = add_size(size, CLOGShmemSize());
-		size = add_size(size, ChangeTrackingShmemSize());
 		size = add_size(size, SUBTRANSShmemSize());
 		size = add_size(size, TwoPhaseShmemSize());
 		size = add_size(size, MultiXactShmemSize());
@@ -169,22 +158,7 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 		size = add_size(size, FtsShmemSize());
 		size = add_size(size, tmShmemSize());
 		size = add_size(size, SeqServerShmemSize());
-		size = add_size(size, PersistentFileSysObj_ShmemSize());
-		size = add_size(size, PersistentFilespace_ShmemSize());
-		size = add_size(size, PersistentTablespace_ShmemSize());
-		size = add_size(size, PersistentDatabase_ShmemSize());
-		size = add_size(size, PersistentRelation_ShmemSize());
 
-		if (GPAreFileReplicationStructuresRequired()) {
-			size = add_size(size, FileRep_SubProcShmemSize());
-			size = add_size(size, FileRep_ShmemSize());
-			size = add_size(size, FileRepAck_ShmemSize());
-			size = add_size(size, FileRepAckPrimary_ShmemSize());
-			size = add_size(size, FileRepResync_ShmemSize()); 
-			size = add_size(size, FileRepIpc_ShmemSize());
-			size = add_size(size, FileRepLog_ShmemSize());
-		}
-		
 #ifdef FAULT_INJECTOR
 		size = add_size(size, FaultInjector_ShmemSize());
 #endif			
@@ -229,11 +203,6 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 		numSemas = ProcGlobalSemas();
 		numSemas += SpinlockSemas();
 
-		if (GPAreFileReplicationStructuresRequired()) 
-		{
-			numSemas += FileRepSemas();
-		}
-		
 		elog(DEBUG3,"reserving %d semaphores",numSemas);
 		PGReserveSemaphores(numSemas, port);
 		
@@ -277,7 +246,6 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 	 */
 	XLOGShmemInit();
 	CLOGShmemInit();
-	ChangeTrackingShmemInit();
 	DistributedLog_ShmemInit();
 	SUBTRANSShmemInit();
 	TwoPhaseShmemInit();
@@ -296,12 +264,6 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 		InitAppendOnlyWriter();
-
-	PersistentFileSysObj_ShmemInit();
-	PersistentFilespace_ShmemInit();
-	PersistentTablespace_ShmemInit();
-	PersistentDatabase_ShmemInit();
-	PersistentRelation_ShmemInit();
 
 	/*
 	 * Set up resource manager 
@@ -348,17 +310,6 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 	//AutoVacuumShmemInit();
 	SeqServerShmemInit();
 
-	if (GPAreFileReplicationStructuresRequired()) {
-	
-		FileRep_SubProcShmemInit();
-		FileRep_ShmemInit();
-		FileRepAck_ShmemInit();
-		FileRepAckPrimary_ShmemInit();
-		FileRepResync_ShmemInit();
-		FileRepIpc_ShmemInit();
-		FileRepLog_ShmemInit();
-	}
-	
 #ifdef FAULT_INJECTOR
 	FaultInjector_ShmemInit();
 #endif

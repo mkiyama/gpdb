@@ -33,6 +33,8 @@
 #include "utils/memutils.h"
 #include "utils/guc.h"
 
+#include "catalog/indexing.h"
+
 
 /* Working state for btbuild and its callback */
 typedef struct
@@ -84,16 +86,12 @@ static void btvacuumpage(BTVacState *vstate, BlockNumber blkno,
 Datum
 btbuild(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	Relation	heap = (Relation) PG_GETARG_POINTER(0);
 	Relation	index = (Relation) PG_GETARG_POINTER(1);
 	IndexInfo  *indexInfo = (IndexInfo *) PG_GETARG_POINTER(2);
 	IndexBuildResult *result;
 	double		reltuples;
 	BTBuildState buildstate;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	buildstate.isUnique = indexInfo->ii_Unique;
 	buildstate.haveDead = false;
@@ -143,7 +141,6 @@ btbuild(PG_FUNCTION_ARGS)
 	 */
 	_bt_leafbuild(buildstate.spool, buildstate.spool2);
 	_bt_spooldestroy(buildstate.spool);
-
 	if (buildstate.spool2)
 		_bt_spooldestroy(buildstate.spool2);
 
@@ -171,8 +168,6 @@ btbuild(PG_FUNCTION_ARGS)
 	result->heap_tuples = reltuples;
 	result->index_tuples = buildstate.indtuples;
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_POINTER(result);
 }
 
@@ -187,12 +182,8 @@ btbuildCallback(Relation index,
 				bool tupleIsAlive,
 				void *state)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	BTBuildState *buildstate = (BTBuildState *) state;
 	IndexTuple	itup;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	/* form an index tuple and point it at the heap tuple */
 	itup = index_form_tuple(RelationGetDescr(index), values, isnull);
@@ -214,9 +205,6 @@ btbuildCallback(Relation index,
 	buildstate->indtuples += 1;
 
 	pfree(itup);
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 }
 
 /*
@@ -228,8 +216,6 @@ btbuildCallback(Relation index,
 void
 _bt_validate_vacuum(Relation irel, Relation hrel, TransactionId oldest_xmin)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	BlockNumber blkno;
 	BlockNumber num_pages;
 	Buffer ibuf = InvalidBuffer;
@@ -251,7 +237,6 @@ _bt_validate_vacuum(Relation irel, Relation hrel, TransactionId oldest_xmin)
 	elog(LOG, "btvalidatevacuum: index %s, heap %s",
 		 RelationGetRelationName(irel), RelationGetRelationName(hrel));
 
-	MIRROREDLOCK_BUFMGR_LOCK;
 	for (; blkno < num_pages; blkno++)
 	{
 		ibuf = ReadBuffer(irel, blkno);
@@ -343,30 +328,6 @@ _bt_validate_vacuum(Relation irel, Relation hrel, TransactionId oldest_xmin)
 								 RelationGetRelationName(irel));
 						}
 						break;
-					case GpRelationNodeOidIndexId:
-						hoid = heap_getattr(&htup, 1, RelationGetDescr(hrel), &isnull);
-						ioid = index_getattr(itup, 1, RelationGetDescr(irel), &isnull);
-						if (hoid != ioid)
-						{
-							elog(ERROR,
-								 "btvalidatevacuum: index oid(%d) != heap oid(%d)"
-								 " tuple (%d,%d) index %s", ioid, hoid,
-								 ItemPointerGetBlockNumber(&itup->t_tid),
-								 ItemPointerGetOffsetNumber(&itup->t_tid),
-								 RelationGetRelationName(irel));
-						}
-						int4 hsegno = heap_getattr(&htup, 2, RelationGetDescr(hrel), &isnull);
-						int4 isegno = index_getattr(itup, 2, RelationGetDescr(irel), &isnull);
-						if (isegno != hsegno)
-						{
-							elog(ERROR,
-								 "btvalidatevacuum: index segno(%d) != heap segno(%d)"
-								 " tuple (%d,%d) index %s", isegno, hsegno,
-								 ItemPointerGetBlockNumber(&itup->t_tid),
-								 ItemPointerGetOffsetNumber(&itup->t_tid),
-								 RelationGetRelationName(irel));
-						}
-						break;
 					default:
 						break;
 				}
@@ -391,7 +352,6 @@ _bt_validate_vacuum(Relation irel, Relation hrel, TransactionId oldest_xmin)
 	}
 	if (BufferIsValid(hbuf))
 		ReleaseBuffer(hbuf);
-	MIRROREDLOCK_BUFMGR_UNLOCK;
 }
 
 /*
@@ -402,8 +362,6 @@ _bt_validate_vacuum(Relation irel, Relation hrel, TransactionId oldest_xmin)
 static void
 _bt_validate_tid(Relation irel, ItemPointer h_tid)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	BlockNumber blkno;
 	BlockNumber num_pages;
 	Buffer buf;
@@ -421,7 +379,6 @@ _bt_validate_tid(Relation irel, ItemPointer h_tid)
 	blkno = BTREE_METAPAGE + 1;
 	num_pages = RelationGetNumberOfBlocks(irel);
 
-	MIRROREDLOCK_BUFMGR_LOCK;
 	for (; blkno < num_pages; blkno++)
 	{
 		buf = ReadBuffer(irel, blkno);
@@ -463,7 +420,6 @@ _bt_validate_tid(Relation irel, ItemPointer h_tid)
 		}
 		ReleaseBuffer(buf);
 	}
-	MIRROREDLOCK_BUFMGR_UNLOCK;
 }
 
 /*
@@ -475,8 +431,6 @@ _bt_validate_tid(Relation irel, ItemPointer h_tid)
 Datum
 btinsert(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	Relation	rel = (Relation) PG_GETARG_POINTER(0);
 	Datum	   *values = (Datum *) PG_GETARG_POINTER(1);
 	bool	   *isnull = (bool *) PG_GETARG_POINTER(2);
@@ -484,8 +438,6 @@ btinsert(PG_FUNCTION_ARGS)
 	Relation	heapRel = (Relation) PG_GETARG_POINTER(4);
 	bool		checkUnique = PG_GETARG_BOOL(5);
 	IndexTuple	itup;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	if (checkUnique && (
 				(gp_indexcheck_insert == INDEX_CHECK_ALL && RelationIsHeap(heapRel)) ||
@@ -503,8 +455,6 @@ btinsert(PG_FUNCTION_ARGS)
 
 	pfree(itup);
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_BOOL(true);
 }
 
@@ -514,14 +464,11 @@ btinsert(PG_FUNCTION_ARGS)
 Datum
 btgettuple(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	ScanDirection dir = (ScanDirection) PG_GETARG_INT32(1);
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
 	bool		res;
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 	/* btree indexes are never lossy */
 	scan->xs_recheck = false;
 
@@ -560,8 +507,6 @@ btgettuple(PG_FUNCTION_ARGS)
 	else
 		res = _bt_first(scan, dir);
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_BOOL(res);
 }
 
@@ -571,16 +516,12 @@ btgettuple(PG_FUNCTION_ARGS)
 Datum
 btgetbitmap(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	Node	   *n = (Node *) PG_GETARG_POINTER(1);
 	TIDBitmap  *tbm;
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
 	int64		ntids = 0;
 	ItemPointer heapTid;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	if (n == NULL)
 	{
@@ -608,11 +549,7 @@ btgetbitmap(PG_FUNCTION_ARGS)
 			ntids++;
 		}
 		else
-		{
-			MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 			PG_RETURN_POINTER(tbm);
-		}
 	}
 
 	for (;;)
@@ -634,8 +571,6 @@ btgetbitmap(PG_FUNCTION_ARGS)
 		ntids++;
 	}
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_POINTER(tbm);
 }
 
@@ -645,19 +580,13 @@ btgetbitmap(PG_FUNCTION_ARGS)
 Datum
 btbeginscan(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	Relation	rel = (Relation) PG_GETARG_POINTER(0);
 	int			keysz = PG_GETARG_INT32(1);
 	ScanKey		scankey = (ScanKey) PG_GETARG_POINTER(2);
 	IndexScanDesc scan;
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
-
 	/* get the scan */
 	scan = RelationGetIndexScan(rel, keysz, scankey);
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
 
 	PG_RETURN_POINTER(scan);
 }
@@ -668,13 +597,9 @@ btbeginscan(PG_FUNCTION_ARGS)
 Datum
 btrescan(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	ScanKey		scankey = (ScanKey) PG_GETARG_POINTER(1);
 	BTScanOpaque so;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	so = (BTScanOpaque) scan->opaque;
 
@@ -718,8 +643,6 @@ btrescan(PG_FUNCTION_ARGS)
 				scan->numberOfKeys * sizeof(ScanKeyData));
 	so->numberOfKeys = 0;		/* until _bt_preprocess_keys sets it */
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_VOID();
 }
 
@@ -729,12 +652,8 @@ btrescan(PG_FUNCTION_ARGS)
 Datum
 btendscan(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	/* we aren't holding any read locks, but gotta drop the pins */
 	if (BTScanPosIsValid(so->currPos))
@@ -759,8 +678,6 @@ btendscan(PG_FUNCTION_ARGS)
 		pfree(so->keyData);
 	pfree(so);
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_VOID();
 }
 
@@ -770,12 +687,8 @@ btendscan(PG_FUNCTION_ARGS)
 Datum
 btmarkpos(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	/* we aren't holding any read locks, but gotta drop the pin */
 	if (BTScanPosIsValid(so->markPos))
@@ -795,8 +708,6 @@ btmarkpos(PG_FUNCTION_ARGS)
 	else
 		so->markItemIndex = -1;
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_VOID();
 }
 
@@ -806,12 +717,8 @@ btmarkpos(PG_FUNCTION_ARGS)
 Datum
 btrestrpos(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexScanDesc scan = (IndexScanDesc) PG_GETARG_POINTER(0);
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	if (so->markItemIndex >= 0)
 	{
@@ -844,8 +751,6 @@ btrestrpos(PG_FUNCTION_ARGS)
 		}
 	}
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_VOID();
 }
 
@@ -859,19 +764,12 @@ btrestrpos(PG_FUNCTION_ARGS)
 Datum
 btbulkdelete(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexVacuumInfo *info = (IndexVacuumInfo *) PG_GETARG_POINTER(0);
 	IndexBulkDeleteResult *volatile stats = (IndexBulkDeleteResult *) PG_GETARG_POINTER(1);
 	IndexBulkDeleteCallback callback = (IndexBulkDeleteCallback) PG_GETARG_POINTER(2);
 	void	   *callback_state = (void *) PG_GETARG_POINTER(3);
 	Relation	rel = info->index;
 	BTCycleId	cycleid;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
-
-	// Fetch gp_persistent_relation_node information that will be added to XLOG record.
-	RelationFetchGpRelationNodeForXLog(rel);
 
 	/* allocate stats if first time through, else re-use existing struct */
 	if (stats == NULL)
@@ -888,8 +786,6 @@ btbulkdelete(PG_FUNCTION_ARGS)
 	PG_END_ENSURE_ERROR_CLEANUP(_bt_end_vacuum_callback, PointerGetDatum(rel));
 	_bt_end_vacuum(rel);
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_POINTER(stats);
 }
 
@@ -901,12 +797,8 @@ btbulkdelete(PG_FUNCTION_ARGS)
 Datum
 btvacuumcleanup(PG_FUNCTION_ARGS)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	IndexVacuumInfo *info = (IndexVacuumInfo *) PG_GETARG_POINTER(0);
 	IndexBulkDeleteResult *stats = (IndexBulkDeleteResult *) PG_GETARG_POINTER(1);
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	/* No-op in ANALYZE ONLY mode */
 	if (info->analyze_only)
@@ -942,8 +834,6 @@ btvacuumcleanup(PG_FUNCTION_ARGS)
 			stats->num_index_tuples = info->num_heap_tuples;
 	}
 
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 	PG_RETURN_POINTER(stats);
 }
 
@@ -964,15 +854,11 @@ btvacuumscan(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 			 IndexBulkDeleteCallback callback, void *callback_state,
 			 BTCycleId cycleid)
 {
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_DECLARE;
-
 	Relation	rel = info->index;
 	BTVacState	vstate;
 	BlockNumber num_pages;
 	BlockNumber blkno;
 	bool		needLock;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_ENTER;
 
 	/*
 	 * Reset counts that will be incremented during the scan; needed in case
@@ -1056,8 +942,7 @@ btvacuumscan(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		/*
 		 * Okay to truncate.
 		 */
-		RelationTruncate(rel, new_pages,
-						 /* markPersistentAsPhysicallyTruncated */ true);
+		RelationTruncate(rel, new_pages);
 
 		/* update statistics */
 		stats->pages_removed += num_pages - new_pages;
@@ -1070,9 +955,6 @@ btvacuumscan(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 	/* update statistics */
 	stats->num_pages = num_pages;
 	stats->pages_free = vstate.totFreePages;
-
-	MIRROREDLOCK_BUFMGR_VERIFY_NO_LOCK_LEAK_EXIT;
-
 }
 
 /*
@@ -1089,8 +971,6 @@ btvacuumscan(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 static void
 btvacuumpage(BTVacState *vstate, BlockNumber blkno, BlockNumber orig_blkno)
 {
-	MIRROREDLOCK_BUFMGR_DECLARE;
-
 	IndexVacuumInfo *info = vstate->info;
 	IndexBulkDeleteResult *stats = vstate->stats;
 	IndexBulkDeleteCallback callback = vstate->callback;
@@ -1101,6 +981,7 @@ btvacuumpage(BTVacState *vstate, BlockNumber blkno, BlockNumber orig_blkno)
 	Buffer		buf;
 	Page		page;
 	BTPageOpaque opaque;
+
 restart:
 	delete_now = false;
 	recurse_to = P_NONE;
@@ -1114,10 +995,6 @@ restart:
 	 * recycle all-zero pages, not fail.  Also, we want to use a nondefault
 	 * buffer access strategy.
 	 */
-	
-	// -------- MirroredLock ----------
-	MIRROREDLOCK_BUFMGR_LOCK;
-	
 	buf = ReadBufferExtended(rel, MAIN_FORKNUM, blkno, RBM_NORMAL,
 							 info->strategy);
 	LockBuffer(buf, BT_READ);
@@ -1139,10 +1016,6 @@ restart:
 			opaque->btpo_cycleid != vstate->cycleid)
 		{
 			_bt_relbuf(rel, buf);
-
-			MIRROREDLOCK_BUFMGR_UNLOCK;
-			// -------- MirroredLock ----------
-
 			return;
 		}
 	}
@@ -1301,10 +1174,6 @@ restart:
 	else
 		_bt_relbuf(rel, buf);
 
-	
-	MIRROREDLOCK_BUFMGR_UNLOCK;
-	// -------- MirroredLock ----------
-	
 	/*
 	 * This is really tail recursion, but if the compiler is too stupid to
 	 * optimize it as such, we'd eat an uncomfortably large amount of stack

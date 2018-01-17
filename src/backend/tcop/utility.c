@@ -37,7 +37,6 @@
 #include "commands/explain.h"
 #include "commands/extension.h"
 #include "commands/extprotocolcmds.h"
-#include "commands/filespace.h"
 #include "commands/lockcmds.h"
 #include "commands/portalcmds.h"
 #include "commands/prepare.h"
@@ -242,7 +241,6 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
 		case T_CreateExternalStmt:
-		case T_CreateFileSpaceStmt:
 		case T_CreateTableSpaceStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
@@ -251,7 +249,6 @@ check_xact_readonly(Node *parsetree)
 		case T_DropCastStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
-		case T_DropFileSpaceStmt:
 		case T_RemoveFuncStmt:
 		case T_DropQueueStmt:
 		case T_DropResourceGroupStmt:
@@ -710,24 +707,27 @@ ProcessUtility(Node *parsetree,
 			}
 			break;
 
-		case T_CreateFileSpaceStmt:
-			CreateFileSpace((CreateFileSpaceStmt *) parsetree);
-			break;
-
-		case T_DropFileSpaceStmt:
-			/* Note: This is allowed in a transaction */
-			DropFileSpace((DropFileSpaceStmt *) parsetree);
-			break;
-
 		case T_CreateTableSpaceStmt:
+			if (Gp_role != GP_ROLE_EXECUTE)
+			{
+				/*
+				 * Don't allow master to call this in a transaction block. Segments
+				 * are ok as distributed transaction participants.
+				 */
+				PreventTransactionChain(isTopLevel, "CREATE TABLESPACE");
+			}
 			CreateTableSpace((CreateTableSpaceStmt *) parsetree);
 			break;
 
 		case T_DropTableSpaceStmt:
-			/* In GPDB; this is allowed in a transaction */
-#if 0
-			PreventTransactionChain(isTopLevel, "DROP TABLESPACE");
-#endif
+			if (Gp_role != GP_ROLE_EXECUTE)
+			{
+				/*
+				 * Don't allow master to call this in a transaction block.  Segments are ok as
+				 * distributed transaction participants.
+				 */
+				PreventTransactionChain(isTopLevel, "DROP TABLESPACE");
+			}
 			DropTableSpace((DropTableSpaceStmt *) parsetree);
 			break;
 
@@ -1192,7 +1192,7 @@ ProcessUtility(Node *parsetree,
 			{
 				/*
 				 * Don't allow master to call this in a transaction block. Segments
-				 * are ok as distributed transaction participants. 
+				 * are ok as distributed transaction participants.
 				 */
 				PreventTransactionChain(isTopLevel, "CREATE DATABASE");
 			}
@@ -1214,7 +1214,7 @@ ProcessUtility(Node *parsetree,
 				if (Gp_role != GP_ROLE_EXECUTE)
 				{
 					/*
-					 * Don't allow master tp call this in a transaction block.  Segments are ok as
+					 * Don't allow master to call this in a transaction block.  Segments are ok as
 					 * distributed transaction participants. 
 					 */
 					PreventTransactionChain(isTopLevel, "DROP DATABASE");
@@ -1808,14 +1808,6 @@ CreateCommandTag(Node *parsetree)
 			tag = "CREATE EXTERNAL TABLE";
 			break;
 
-		case T_CreateFileSpaceStmt:
-			tag = "CREATE FILESPACE";
-			break;
-
-		case T_DropFileSpaceStmt:
-			tag = "DROP FILESPACE";
-			break;
-
 		case T_CreateTableSpaceStmt:
 			tag = "CREATE TABLESPACE";
 			break;
@@ -1889,9 +1881,6 @@ CreateCommandTag(Node *parsetree)
 					break;
 				case OBJECT_SCHEMA:
 					tag = "DROP SCHEMA";
-					break;
-				case OBJECT_FILESPACE:
-					tag = "DROP FILESPACE";
 					break;
 				case OBJECT_TABLESPACE:
 					tag = "DROP TABLESPACE";
@@ -1973,9 +1962,6 @@ CreateCommandTag(Node *parsetree)
 				case OBJECT_COLUMN:
 				case OBJECT_TABLE:
 					tag = "ALTER TABLE";
-					break;
-				case OBJECT_FILESPACE:
-					tag = "ALTER FILESPACE";
 					break;
 				case OBJECT_TABLESPACE:
 					tag = "ALTER TABLESPACE";
@@ -2087,9 +2073,6 @@ CreateCommandTag(Node *parsetree)
 					break;
 				case OBJECT_SCHEMA:
 					tag = "ALTER SCHEMA";
-					break;
-				case OBJECT_FILESPACE:
-					tag = "ALTER FILESPACE";
 					break;
 				case OBJECT_TABLESPACE:
 					tag = "ALTER TABLESPACE";
@@ -2674,14 +2657,6 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateExternalStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
-		case T_CreateFileSpaceStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
-		case T_DropFileSpaceStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

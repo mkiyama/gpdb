@@ -22,54 +22,14 @@
 #include "storage/bufpage.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"
-#include "utils/relationnode.h"
 #include "utils/snapshot.h"
-#include "utils/tqual.h"
+
 
 /* "options" flag bits for heap_insert */
 #define HEAP_INSERT_SKIP_WAL	0x0001
 #define HEAP_INSERT_SKIP_FSM	0x0002
 
 typedef struct BulkInsertStateData *BulkInsertState;
-
-// UNDONE: Temporarily.
-extern void RelationFetchGpRelationNodeForXLog_Index(Relation relation);
-
-/*
- * Check if we have the persistent TID and serial number for a relation.
- */
-static inline bool
-RelationNeedToFetchGpRelationNodeForXLog(Relation relation)
-{
-	if (!InRecovery && !GpPersistent_SkipXLogInfo(relation->rd_id))
-	{
-		return true;
-	}
-	else
-		return false;
-}
-
-/*
- * Fetch the persistent TID and serial number for a relation from the gp_relation_node
- * if needed to put in the XLOG record header.
- */
-static inline void
-RelationFetchGpRelationNodeForXLog(Relation relation)
-{
-	if (RelationNeedToFetchGpRelationNodeForXLog(relation))
-	{
-		if (relation->rd_rel->relkind == RELKIND_INDEX )
-		{
-			// UNDONE: Temporarily.
-			RelationFetchGpRelationNodeForXLog_Index(relation);
-			return;
-		}
-		RelationFetchSegFile0GpRelationNode(relation);
-	}
-}
-
-extern bool
-RelationAllowedToGenerateXLogRecord(Relation relation);
 
 typedef enum
 {
@@ -93,25 +53,6 @@ typedef enum
 	LockTupleNoWait,	/* if can't get lock right away, report error */
 	LockTupleIfNotLocked/* if can't get lock right away, give up. no error */
 } LockTupleWaitType;
-
-inline static void xl_heaptid_set(
-	struct xl_heaptid	*heaptid,
-	Relation rel,
-	ItemPointer tid)
-{
-	heaptid->node = rel->rd_node;
-	RelationGetPTInfo(rel, &heaptid->persistentTid, &heaptid->persistentSerialNum);
-	heaptid->tid = *tid;
-}
-
-inline static void xl_heapnode_set(
-	struct xl_heapnode	*heapnode,
-
-	Relation rel)
-{
-	heapnode->node = rel->rd_node;
-	RelationGetPTInfo(rel, &heapnode->persistentTid, &heapnode->persistentSerialNum);
-}
 
 /* in heap/heapam.c */
 extern Relation relation_open(Oid relationId, LOCKMODE lockmode);
@@ -190,15 +131,12 @@ extern HTSU_Result heap_lock_tuple(Relation relation, HeapTuple tuple,
 				TransactionId *update_xmax, CommandId cid,
 				LockTupleMode mode, LockTupleWaitType waittype);
 extern void heap_inplace_update(Relation relation, HeapTuple tuple);
-extern void frozen_heap_inplace_update(Relation relation, HeapTuple tuple);
 extern bool heap_freeze_tuple(HeapTupleHeader tuple, TransactionId *cutoff_xid,
 							  Buffer buf, bool xlog_replay);
 
 extern Oid	simple_heap_insert(Relation relation, HeapTuple tup);
 extern Oid frozen_heap_insert(Relation relation, HeapTuple tup);
-extern Oid frozen_heap_insert_directed(Relation relation, HeapTuple tup, BlockNumber blockNum);
 extern void simple_heap_delete(Relation relation, ItemPointer tid);
-extern void simple_heap_delete_xid(Relation relation, ItemPointer tid, TransactionId xid);
 extern void simple_heap_update(Relation relation, ItemPointer otid,
 				   HeapTuple tup);
 
@@ -238,9 +176,7 @@ extern XLogRecPtr log_newpage_rel(Relation rel, ForkNumber forkNum, BlockNumber 
 
 extern XLogRecPtr log_newpage_relFileNode(RelFileNode *relFileNode,
 										  ForkNumber forkNum,
-										  BlockNumber blkno, Page page,
-										  ItemPointer persistentTid,
-										  int64 persistentSerialNum);
+										  BlockNumber blkno, Page page);
 
 /* in heap/pruneheap.c */
 extern void heap_page_prune_opt(Relation relation, Buffer buffer,

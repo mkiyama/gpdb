@@ -341,9 +341,6 @@
 /* Define to 1 if you have the `crypto' library (-lcrypto). */
 #undef HAVE_LIBCRYPTO
 
-/* Define to 1 if you have the `DDBoost' library (-lDDBoost). */
-#undef HAVE_LIBDDBOOST
-
 /* Define to 1 if you have the `eay32' library (-leay32). */
 #undef HAVE_LIBEAY32
 
@@ -890,9 +887,6 @@
 /* Define to 1 to build with libcurl support. (--with-libcurl) */
 #undef USE_CURL
 
-/* Define to 1 to build with DD Boost capabilities. (--enable-ddboost) */
-#undef USE_DDBOOST
-
 /* Define to 1 to build with debug_ntuplestore. (--enable-ntuplestore) */
 #undef USE_DEBUG_NTUPLESTORE
 
@@ -938,9 +932,6 @@
 
 /* Use replacement snprintf() functions. */
 #undef USE_REPL_SNPRINTF
-
-/* Define to 1 to enable segment WAL replication. (--enable-segwalrep) */
-#undef USE_SEGWALREP
 
 /* Define to 1 to use Intel SSE 4.2 CRC instructions with a runtime check. */
 #undef USE_SLICING_BY_8_CRC32C
