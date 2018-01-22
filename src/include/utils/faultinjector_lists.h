@@ -188,6 +188,8 @@ FI_IDENT(QuickDie, "quickdie")
 FI_IDENT(AfterOneSliceDispatched, "after_one_slice_dispatched")
 /* inject fault in interconnect to skip sending the stop ack */
 FI_IDENT(InterconnectStopAckIsLost, "interconnect_stop_ack_is_lost")
+/* inject fault in interconnect to make palloc0 fail in setup */
+FI_IDENT(InterconnectSetupPalloc, "interconnect_setup_palloc")
 /* inject fault after qe got snapshot and interconnect*/
 FI_IDENT(QEGotSnapshotAndInterconnect, "qe_got_snapshot_and_interconnect")
 /* inject fault to 'skip' in order to flush all buffers in BgBufferSync() */
@@ -204,6 +206,8 @@ FI_IDENT(GangCreated, "gang_created")
 FI_IDENT(ResGroupAssignedOnMaster, "resgroup_assigned_on_master")
 /* inject fault before reading command */
 FI_IDENT(BeforeReadCommand, "before_read_command")
+/* inject fault before get checkpoint dtx information */
+FI_IDENT(CheckPointDtxInfo, "checkpoint_dtx_info")
 #endif
 
 /*
@@ -229,6 +233,7 @@ FI_TYPE(FaultInjectorTypeSegv, "segv")
 FI_TYPE(FaultInjectorTypeInterrupt, "interrupt")
 FI_TYPE(FaultInjectorTypeFinishPending, "finish_pending")
 FI_TYPE(FaultInjectorTypeCheckpointAndPanic, "checkpoint_and_panic")
+FI_TYPE(FaultInjectorTypeWaitUntilTriggered, "wait_until_triggered")
 #endif
 
 /*

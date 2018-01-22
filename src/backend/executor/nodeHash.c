@@ -338,7 +338,6 @@ ExecHashTableCreate(HashState *hashState, HashJoinState *hjstate, List *hashOper
 	hashtable->innerBatchFile = NULL;
 	hashtable->outerBatchFile = NULL;
 	hashtable->work_set = NULL;
-	hashtable->state_file = NULL;
 	hashtable->spaceUsed = 0;
 	hashtable->spaceAllowed = operatorMemKB * 1024L;
 	hashtable->spaceUsedSkew = 0;
@@ -678,13 +677,6 @@ ExecHashTableDestroy(HashState *hashState, HashJoinTable hashtable)
 			hashtable->innerBatchFile[i] = NULL;
 			hashtable->outerBatchFile[i] = NULL;
 		}
-	}
-
-	/* Close state file as well */
-	if (hashtable->state_file != NULL)
-	{
-		workfile_mgr_close_file(hashtable->work_set, hashtable->state_file);
-		hashtable->state_file = NULL;
 	}
 
 	if (hashtable->work_set != NULL)
@@ -1610,10 +1602,7 @@ static void
 ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 {
 	HeapTupleData *statsTuple;
-	Datum	   *values;
-	int			nvalues;
-	float4	   *numbers;
-	int			nnumbers;
+	AttStatsSlot sslot;
 
 	/* Do nothing if planner didn't identify the outer relation's join key */
 	if (!OidIsValid(node->skewTable))
@@ -1632,18 +1621,17 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 	if (!HeapTupleIsValid(statsTuple))
 		return;
 
-	if (get_attstatsslot(statsTuple, node->skewColType, node->skewColTypmod,
+	if (get_attstatsslot(&sslot, statsTuple,
 						 STATISTIC_KIND_MCV, InvalidOid,
-						 &values, &nvalues,
-						 &numbers, &nnumbers))
+						 ATTSTATSSLOT_VALUES | ATTSTATSSLOT_NUMBERS))
 	{
 		double		frac;
 		int			nbuckets;
 		FmgrInfo   *hashfunctions;
 		int			i;
 
-		if (mcvsToUse > nvalues)
-			mcvsToUse = nvalues;
+		if (mcvsToUse > sslot.nvalues)
+			mcvsToUse = sslot.nvalues;
 
 		/*
 		 * Calculate the expected fraction of outer relation that will
@@ -1652,11 +1640,10 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 		 */
 		frac = 0;
 		for (i = 0; i < mcvsToUse; i++)
-			frac += numbers[i];
+			frac += sslot.numbers[i];
 		if (frac < SKEW_MIN_OUTER_FRACTION)
 		{
-			free_attstatsslot(node->skewColType,
-							  values, nvalues, numbers, nnumbers);
+			free_attstatsslot(&sslot);
 			ReleaseSysCache(statsTuple);
 			return;
 		}
@@ -1716,7 +1703,7 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 			int			bucket;
 
 			hashvalue = DatumGetUInt32(FunctionCall1(&hashfunctions[0],
-													 values[i]));
+													 sslot.values[i]));
 
 			/*
 			 * While we have not hit a hole in the hashtable and have not hit
@@ -1748,8 +1735,7 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 			hashtable->spaceUsedSkew += SKEW_BUCKET_OVERHEAD;
 		}
 
-		free_attstatsslot(node->skewColType,
-						  values, nvalues, numbers, nnumbers);
+		free_attstatsslot(&sslot);
 	}
 
 	ReleaseSysCache(statsTuple);

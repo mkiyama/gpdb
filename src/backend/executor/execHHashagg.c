@@ -37,7 +37,6 @@
 
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
-#include "postmaster/primary_mirror_mode.h"
 
 
 #define HHA_MSG_LVL DEBUG2
@@ -938,7 +937,7 @@ agg_hash_initial_pass(AggState *aggstate)
 		}
 			
 		/* Advance the aggregates */
-		call_AdvanceAggregates(aggstate, hashtable->groupaggs->aggs, &(aggstate->mem_manager));
+		advance_aggregates(aggstate, hashtable->groupaggs->aggs, &(aggstate->mem_manager));
 		
 		hashtable->num_tuples++;
 
@@ -1276,7 +1275,6 @@ spill_hash_table(AggState *aggstate)
 	if (hashtable->work_set == NULL)
 	{
 		hashtable->work_set = workfile_mgr_create_set(BFZ, true /* can_be_reused */, &aggstate->ss.ps);
-		hashtable->work_set->metadata.buckets = hashtable->nbuckets;
 		//aggstate->workfiles_created = true;
 	}
 

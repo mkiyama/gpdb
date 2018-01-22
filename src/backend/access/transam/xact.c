@@ -335,20 +335,6 @@ static bool IsCurrentTransactionIdForReader(TransactionId xid);
 
 extern void FtsCondSetTxnReadOnly(bool *);
 
-char *
-XactInfoKind_Name(const XactInfoKind		kind)
-{
-	switch (kind)
-	{
-		case XACT_INFOKIND_NONE: 		return "None";
-		case XACT_INFOKIND_COMMIT: 		return "Commit";
-		case XACT_INFOKIND_ABORT: 		return "Abort";
-		case XACT_INFOKIND_PREPARE: 	return "Prepare";
-		default:
-			return "Unknown";
-	}
-}
-
 /* ----------------------------------------------------------------
  *	transaction state accessors
  * ----------------------------------------------------------------
@@ -542,7 +528,7 @@ AssignTransactionId(TransactionState s)
 	 * PG_PROC, the subtrans entry is needed to ensure that other backends see
 	 * the Xid as "running".  See GetNewTransactionId.
 	 */
-	s->transactionId = GetNewTransactionId(isSubXact, true);
+	s->transactionId = GetNewTransactionId(isSubXact);
 	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
 			(errmsg("AssignTransactionId(): assigned xid %u", s->transactionId)));
 
@@ -1175,9 +1161,28 @@ RecordTransactionCommit(void)
 
 			rdata[1].next = NULL;
 
+			/*
+			 * Checkpoint process should hold off obtaining the REDO
+			 * pointer while a backend is writing distributed commit
+			 * xlog record and changing state of the distributed
+			 * trasaction.  Otherwise, it is possible that a commit
+			 * record is written by a transaction and the checkpointer
+			 * determines REDO pointer to be after this commit record.
+			 * But the transaction is yet to chance its state to
+			 * INSERTED_DISRIBUTED_COMMITTED and the checkpoint process
+			 * fails to record this transaction in the checkpoint.
+			 * Crash recovery will never see the commit record for this
+			 * transaction and the second phase of 2PC will never
+			 * happen.  The inCommit flag avoids the situation by
+			 * blocking checkpointer untill a backend has finished
+			 * updating the state.
+			 */
+			save_inCommit = MyProc->inCommit;
+			MyProc->inCommit = true;
 			insertingDistributedCommitted();
 			recptr = XLogInsert(RM_XACT_ID, XLOG_XACT_DISTRIBUTED_COMMIT, rdata);
 			insertedDistributedCommitted();
+			MyProc->inCommit = save_inCommit;
 		}
 
 		/*
@@ -1267,6 +1272,11 @@ RecordTransactionCommit(void)
 		{
 			insertingDistributedCommitted();
 
+			/*
+			 * MyProc->inCommit flag is already set, checkpointer will
+			 * be able to see this transaction only after distributed
+			 * commit xlog is written and the state is changed.
+			 */
 			recptr = XLogInsert(RM_XACT_ID, XLOG_XACT_DISTRIBUTED_COMMIT, rdata);
 
 			insertedDistributedCommitted();
@@ -2041,7 +2051,8 @@ StartTransaction(void)
 			 * distributed transaction to a local transaction id for the
 			 * master database.
 			 */
-			createDtx(&currentDistribXid);
+			setCurrentGxact();
+			currentDistribXid = MyProc->gxact.gxid;
 
 			if (SharedLocalSnapshotSlot != NULL)
 			{

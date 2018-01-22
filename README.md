@@ -133,6 +133,24 @@ make installcheck-world
   upstream. We try to keep the upstream tests identical to the upstream
   versions, to make merging with newer PostgreSQL releases easier.
 
+### Running TINC tests
+
+* create TINC test cluster
+
+It's different from the `create-demo-cluster` to pass the ICW tests. It has
+less number of primaries and also support more connections.
+
+```
+# assuming repo cloned under ~/workspace/gpdb
+cd ~/workspace/gpdb
+source /usr/local/gpdb/greenplum_path.sh
+make create-tinc-test-cluster
+source gpAux/gpdemo/gpdemo-env.sh
+make -C src/test/tinc walrep_2 # to run walrep_2 tinc tests
+```
+
+To understand more about TINC, please refer to `src/test/tinc/README`.
+
 ## Alternative Configurations
 
 ### Building GPDB without GPORCA
@@ -156,22 +174,6 @@ Refer to [PXF extension](https://github.com/greenplum-db/gpdb/tree/master/gpAux/
 Currently, GPDPB is built with PXF by default (--enable-pxf is on).
 In order to build GPDB without pxf, simply invoke `./configure` with additional option `--disable-pxf`.
 PXF requires curl, so `--enable-pxf` is not compatible with the `--without-libcurl` option.
-
-### Building GPDB with code generation enabled
-
-To build GPDB with code generation (codegen) enabled, you will need cmake 2.8 or higher
-and a recent version of llvm and clang (include headers and developer libraries). Codegen utils
-is currently developed against the LLVM 3.7.X release series. You can find more details about the codegen feature,
-including details about obtaining the prerequisites, building and testing GPDB with codegen in the [Codegen README](src/backend/codegen).
-
-In short, you can change the `configure` with additional option
-`--enable-codegen`, optionally giving the path to llvm and clang libraries on
-your system.
-```
-# Configure build environment to install at /usr/local/gpdb
-# Enable CODEGEN
-./configure --with-perl --with-python --with-libxml --enable-codegen --prefix=/usr/local/gpdb --with-codegen-prefix="/path/to/llvm;/path/to/clang"
-```
 
 ### Building GPDB with gpperfmon enabled
 

@@ -16,21 +16,6 @@
 #include "access/xlogdefs.h"
 #include "storage/lwlock.h"
 
-#define CLOG_DIR				"pg_clog"
-#define DISTRIBUTEDLOG_DIR		"pg_distributedlog"
-#define DISTRIBUTEDXIDMAP_DIR	"pg_distributedxidmap" 
-#define MULTIXACT_MEMBERS_DIR	"pg_multixact/members"
-#define MULTIXACT_OFFSETS_DIR	"pg_multixact/offsets"
-#define SUBTRANS_DIR			"pg_subtrans" 
-
-#define SLRU_FILENAME_LEN		4     /* SLRU filenames are 4 characters each */
-#define SLRU_CHECKSUM_FILENAME 	"slru_checksum_file"
-#define SLRU_MD5_BUFLEN			33     /* MD5 is 32 bytes + 1 null-terminator */
-
-                           /* room for filename + ":" + " " + md5 hash + "\n" */
-#define SLRU_CKSUM_LINE_LEN		(SLRU_FILENAME_LEN + 3 + SLRU_MD5_BUFLEN)
-
-#define SLRU_CKSUM_LINE_DELIM	"\n"
 
 /*
  * Page status codes.  Note that these do not include the "dirty" bit.

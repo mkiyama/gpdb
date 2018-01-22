@@ -33,7 +33,6 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "gpmon/gpmon.h"
 
 #include "access/heapam.h"
 #include "access/aosegfiles.h"
@@ -5027,7 +5026,6 @@ OpenIntoRel(QueryDesc *queryDesc)
 											  relstorage,
 											  false,
 											  true,
-											  relstorage_is_buffer_pool(relstorage) ? !use_wal:false,
 											  0,
 											  into->onCommit,
 											  targetPolicy,  	/* MPP */

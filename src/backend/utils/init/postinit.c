@@ -30,6 +30,7 @@
 #include "libpq/auth.h"
 #include "libpq/hba.h"
 #include "libpq/libpq-be.h"
+#include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
 #include "mb/pg_wchar.h"
@@ -65,7 +66,6 @@
 #include "utils/tqual.h"
 
 #include "utils/session_state.h"
-#include "codegen/codegen_wrapper.h"
 
 
 static HeapTuple GetDatabaseTuple(const char *dbname);
@@ -577,9 +577,6 @@ BaseInit(void)
 	InitFileAccess();
 	smgrinit();
 	InitBufferPoolAccess();
-
-	/* Initialize llvm library if USE_CODEGEN is defined */
-	init_codegen();
 }
 
 /*
