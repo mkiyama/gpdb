@@ -415,6 +415,12 @@ resources:
     private_key: {{pxf_infra-git-key}}
     uri: {{pxf_infra-git-remote}}
 
+- name: centos6-gpdb-dev-pxf-hdp
+  type: docker-image
+  source:
+    repository: pivotaldata/gpdb-dev
+    tag: centos6-pxf-hdp-server
+
 {% endif %}
 - name: debian_release
   type: git
@@ -460,6 +466,17 @@ resources:
     secret_access_key: {{bucket-secret-access-key}}
     versioned_file: {{bin_gpdb_centos_versioned_file}}
 
+{% if pipeline_type == "prod" %}
+- name: bin_gpdb_centos6_icw_green
+  type: s3
+  source:
+    access_key_id: {{bucket-access-key-id}}
+    bucket: {{bucket-name}}
+    region_name: {{aws-region}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: bin_gpdb_centos6/gpdb_branch_5X_STABLE/icw_green/bin_gpdb.tar.gz
+
+{% endif %}
 {% if "UD" in test_sections %}
 - name: pxf_tarball
   type: s3
@@ -617,17 +634,6 @@ resources:
     secret_access_key: {{bucket-secret-access-key}}
     versioned_file: {{deb_package_ubuntu16_versioned_file}}
 
-{% if "UD" in test_sections %}
-- name: singlecluster
-  type: s3
-  source:
-    access_key_id: {{bucket-access-key-id}}
-    secret_access_key: {{bucket-secret-access-key}}
-    bucket: {{pxf-aws-bucket-name}}
-    region_name: {{aws-region}}
-    versioned_file: singlecluster/singlecluster-HDP.tar.gz
-
-{% endif %}
 {% if "DPM" in test_sections %}
 - name: nightly-trigger
   type: time
@@ -1566,12 +1572,20 @@ jobs:
       - icw_planner_centos6
       - icw_gporca_centos6
       - icw_planner_ictcp_centos6
+      - icw_extensions_gpcloud
+      - QP_memory-accounting
+      - QP_optimizer-functional
     - get: bin_gpdb_centos7
       passed:
       - icw_gporca_centos7
     - get: bin_gpdb_sles11
       passed:
       - icw_gporca_sles11
+{% if pipeline_type == "prod" %}
+  - put: bin_gpdb_centos6_icw_green
+    params:
+      file: bin_gpdb_centos6/bin_gpdb.tar.gz
+{% endif %}
 
 {% endif %}
 {% if "CS" in test_sections %}
@@ -1585,6 +1599,8 @@ jobs:
 
 - name: gate_cs_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -1594,7 +1610,8 @@ jobs:
           repository: alpine
       run:
         path: 'sh'
-        args: ['-c', 'sleep `expr {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+        args: ['-c', 'sleep `expr 1 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -1835,6 +1852,8 @@ jobs:
 
 - name: gate_mpp_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -1845,6 +1864,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 2 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -1989,6 +2009,8 @@ jobs:
 
 - name: gate_mm_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -1999,6 +2021,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 3 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -2261,6 +2284,8 @@ jobs:
 
 - name: gate_dpm_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -2271,6 +2296,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 4 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -3022,6 +3048,8 @@ jobs:
 
 - name: gate_ud_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -3032,6 +3060,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 5 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -3053,19 +3082,16 @@ jobs:
       resource: bin_gpdb_centos6
       passed: [gate_ud_start]
       trigger: [[ test_trigger ]]
-    - get: singlecluster
-      trigger: [[ test_trigger ]]
     - get: pxf_tarball
       trigger: [[ test_trigger ]]
     - get: pxf_infra_src
-      trigger: [[ test_trigger ]]
-    - get: centos-gpdb-dev-6
+    - get: centos6-gpdb-dev-pxf-hdp
   - task: test_pxf
     file: pxf_infra_src/concourse/test_pxf.yml
-    image: centos-gpdb-dev-6
+    image: centos6-gpdb-dev-pxf-hdp
     params:
       GROUP: smoke
-      HADOOP_CLIENT: TAR
+      HADOOP_CLIENT: HDP
       TARGET_OS: centos
       TARGET_OS_VERSION: 6
 
@@ -3109,6 +3135,8 @@ jobs:
 
 - name: gate_advanced_analytics_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -3119,6 +3147,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 6 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
@@ -3212,6 +3241,8 @@ jobs:
 
 - name: gate_filerep_start
   plan:
+{% if stagger_sections %}
+  # stagger starts on prod pipelines
   - task: sleep_before_starting
     config:
       platform: linux
@@ -3222,6 +3253,7 @@ jobs:
       run:
         path: 'sh'
         args: ['-c', 'sleep `expr 7 \* {{group_start_delay}} + 1 + $RANDOM % {{group_delay_jitter}}`']
+{% endif %}
   - aggregate:
     - get: gpdb_src
       passed:
