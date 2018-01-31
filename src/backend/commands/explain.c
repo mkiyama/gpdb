@@ -38,6 +38,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"             /* AllocSetContextCreate() */
 #include "utils/resscheduler.h"
+#include "utils/metrics_utils.h"
 #include "utils/tuplesort.h"
 #include "utils/tuplesort_mk.h"
 #include "cdb/cdbdisp.h"                /* CheckDispatchResult() */
@@ -345,8 +346,12 @@ ExplainOnePlan(PlannedStmt *plannedstmt, ParamListInfo params,
 	StringInfoData buf;
 	EState     *estate = NULL;
 	int			eflags;
+	int			instrument_option = INSTRUMENT_NONE;
 	char	   *settings;
 	MemoryContext explaincxt = CurrentMemoryContext;
+
+	if (stmt->analyze)
+		instrument_option = INSTRUMENT_ALL;
 
 	/*
 	 * Update snapshot command ID to ensure this query sees results of any
@@ -362,7 +367,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, ParamListInfo params,
 								queryString,
 								ActiveSnapshot, InvalidSnapshot,
 								None_Receiver, params,
-								stmt->analyze);
+								instrument_option);
 
 	if (gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -374,6 +379,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, ParamListInfo params,
 				GetResqueueName(GetResQueueId()),
 				GetResqueuePriority(GetResQueueId()));
 	}
+
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
 
 	/* Initialize ExplainState structure. */
 	es = (ExplainState *) palloc0(sizeof(ExplainState));
@@ -732,7 +741,7 @@ report_triggers(ResultRelInfo *rInfo, bool show_relname, StringInfo buf)
 			appendStringInfo(buf, " on %s",
 							 RelationGetRelationName(rInfo->ri_RelationDesc));
 
-		appendStringInfo(buf, ": time=%.3f calls=%.0f\n",
+		appendStringInfo(buf, ": time=%.3f calls=%ld\n",
 						 1000.0 * instr->total, instr->ntuples);
 	}
 }
@@ -1684,7 +1693,7 @@ explain_outNode(StringInfo str,
 	}
 
     /* CDB: Show actual row count, etc. */
-	if (planstate->instrument)
+	if (planstate->instrument && planstate->instrument->need_cdb)
 	{
         cdbexplain_showExecStats(planstate,
                                  str,
