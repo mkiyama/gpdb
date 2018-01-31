@@ -76,6 +76,7 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/tqual.h"
+#include "utils/metrics_utils.h"
 
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
@@ -106,8 +107,6 @@
 #include "cdb/cdbtargeteddispatch.h"
 
 extern bool cdbpathlocus_querysegmentcatalogs;
-
-
 /* Hooks for plugins to get control in ExecutorStart/Run/End() */
 ExecutorStart_hook_type ExecutorStart_hook = NULL;
 ExecutorRun_hook_type ExecutorRun_hook = NULL;
@@ -300,6 +299,10 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		gpmon_qlog_query_start(queryDesc->gpmon_pkt);
 	}
 
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(METRICS_QUERY_START, queryDesc);
+
 	/**
 	 * Distribute memory to operators.
 	 */
@@ -393,7 +396,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 */
 	estate->es_snapshot = RegisterSnapshot(queryDesc->snapshot);
 	estate->es_crosscheck_snapshot = RegisterSnapshot(queryDesc->crosscheck_snapshot);
-	estate->es_instrument = queryDesc->doInstrument;
+	estate->es_instrument = queryDesc->instrument_options;
 	estate->showstatctx = queryDesc->showstatctx;
 
 	/*
@@ -457,7 +460,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		}
 
 		/* Pass EXPLAIN ANALYZE flag to qExecs. */
-		estate->es_sliceTable->doInstrument = queryDesc->doInstrument;
+		estate->es_sliceTable->instrument_options = queryDesc->instrument_options;
 
 		/* set our global sliceid variable for elog. */
 		currentSliceId = LocallyExecutingSliceIndex(estate);
@@ -513,8 +516,8 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			currentSliceId = LocallyExecutingSliceIndex(estate);
 
 			/* Should we collect statistics for EXPLAIN ANALYZE? */
-			estate->es_instrument = sliceTable->doInstrument;
-			queryDesc->doInstrument = sliceTable->doInstrument;
+			estate->es_instrument = sliceTable->instrument_options;
+			queryDesc->instrument_options = sliceTable->instrument_options;
 		}
 
 		/* InitPlan() will acquire locks by walking the entire plan
@@ -965,7 +968,8 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	{
         /* If EXPLAIN ANALYZE, let qExec try to return stats to qDisp. */
         if (estate->es_sliceTable &&
-            estate->es_sliceTable->doInstrument &&
+            estate->es_sliceTable->instrument_options &&
+            (estate->es_sliceTable->instrument_options & INSTRUMENT_CDB) &&
             Gp_role == GP_ROLE_EXECUTE)
         {
             PG_TRY();
@@ -1095,7 +1099,8 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
      * If EXPLAIN ANALYZE, qExec returns stats to qDisp now.
      */
     if (estate->es_sliceTable &&
-        estate->es_sliceTable->doInstrument &&
+        estate->es_sliceTable->instrument_options &&
+        (estate->es_sliceTable->instrument_options & INSTRUMENT_CDB) &&
         Gp_role == GP_ROLE_EXECUTE)
         cdbexplain_sendExecStats(queryDesc);
 
@@ -1181,6 +1186,10 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 		gpmon_qlog_query_end(queryDesc->gpmon_pkt);
 		queryDesc->gpmon_pkt = NULL;
 	}
+
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(METRICS_QUERY_DONE, queryDesc);
 
 	/* Reset queryDesc fields that no longer point to anything */
 	queryDesc->tupDesc = NULL;
@@ -1925,6 +1934,10 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 
 	Assert(queryDesc->planstate);
 
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(METRICS_PLAN_NODE_INITIALIZE, queryDesc);
+
 	if (RootSliceIndex(estate) != LocallyExecutingSliceIndex(estate))
 		return;
 
@@ -2224,7 +2237,7 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 				  Relation resultRelationDesc,
 				  Index resultRelationIndex,
 				  CmdType operation,
-				  bool doInstrument)
+				  int instrument_options)
 {
 	/*
 	 * Check valid relkind ... parser and/or planner should have noticed this
@@ -2299,8 +2312,8 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 
 		resultRelInfo->ri_TrigFunctions = (FmgrInfo *)
 			palloc0(n * sizeof(FmgrInfo));
-		if (doInstrument)
-			resultRelInfo->ri_TrigInstrument = InstrAlloc(n);
+		if (instrument_options)
+			resultRelInfo->ri_TrigInstrument = InstrAlloc(n, instrument_options);
 		else
 			resultRelInfo->ri_TrigInstrument = NULL;
 	}

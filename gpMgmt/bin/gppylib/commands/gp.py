@@ -353,7 +353,7 @@ class SegmentStart(Command):
 
     def __init__(self, name, gpdb, numContentsInCluster, era, mirrormode,
                  utilityMode=False, ctxt=LOCAL, remoteHost=None,
-                 noWait=False, timeout=SEGMENT_TIMEOUT_DEFAULT,
+                 pg_ctl_wait=True, timeout=SEGMENT_TIMEOUT_DEFAULT,
                  specialMode=None, wrapper=None, wrapper_args=None):
 
         # This is referenced from calling code
@@ -372,7 +372,7 @@ class SegmentStart(Command):
         b.set_special(specialMode)
 
         # build pg_ctl command
-        c = PgCtlStartArgs(datadir, b, era, wrapper, wrapper_args, not noWait, timeout)
+        c = PgCtlStartArgs(datadir, b, era, wrapper, wrapper_args, pg_ctl_wait, timeout)
         self.cmdStr = str(c) + ' 2>&1'
 
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
@@ -1036,17 +1036,17 @@ class GpCleanSegmentDirectories(Command):
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
 #-----------------------------------------------
-class GpDumpDirsExist(Command):
+class GpDirsExist(Command):
     """
     Checks if gp_dump* directories exist in the given directory
     """
-    def __init__(self, name, baseDir, ctxt=LOCAL, remoteHost=None):
-        cmdStr = "find %s -name '*dump*' -print" % baseDir
+    def __init__(self, name, baseDir, dirName, ctxt=LOCAL, remoteHost=None):
+        cmdStr = "find %s -name %s -print" % (baseDir, dirName)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
-    def local(name, baseDir):
-        cmd = GpDumpDirsExist(name, baseDir)
+    def local(name, baseDir, dirName):
+        cmd = GpDirsExist(name, baseDir=baseDir, dirName=dirName)
         cmd.run(validateAfter=True)
         dirCount = len(cmd.get_results().stdout.split('\n'))
         # This is > 1 because the command output will terminate with \n
@@ -1101,9 +1101,9 @@ class ConfigureNewSegment(Command):
                         : if primary then 'true' else 'false'
                         : if target is reused location then 'true' else 'false'
                         : <segment dbid>
-
         """
         result = {}
+
         for segIndex, seg in enumerate(segments):
             if primaryMirror == 'primary' and seg.isSegmentPrimary() == False:
                continue
@@ -1116,15 +1116,25 @@ class ConfigureNewSegment(Command):
                 result[hostname] = ''
 
             isTargetReusedLocation = isTargetReusedLocationArr and isTargetReusedLocationArr[segIndex]
+            # only a mirror segment has these two attributes
+            # added on the fly, by callers
+            primaryHostname = getattr(seg, 'primaryHostname', "")
+            primarySegmentPort = getattr(seg, 'primarySegmentPort', "-1")
+            if primaryHostname == "":
+                isPrimarySegment =  "true" if seg.isSegmentPrimary(current_role=True) else "false"
+                isTargetReusedLocationString = "true" if isTargetReusedLocation else "false"
+            else:
+                isPrimarySegment = "false"
+                isTargetReusedLocationString = "false"
 
-            result[hostname] += '%s:%d:%s:%s:%d' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
-                        "true" if seg.isSegmentPrimary(current_role=True) else "false",
-                        "true" if isTargetReusedLocation else "false",
-                        seg.getSegmentDbId()
+            result[hostname] += '%s:%d:%s:%s:%d:%s:%s' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
+                                                          isPrimarySegment,
+                                                          isTargetReusedLocationString,
+                                                          seg.getSegmentDbId(),
+                                                          primaryHostname,
+                                                          primarySegmentPort
             )
         return result
-
-
 
 #-----------------------------------------------
 class GpVersion(Command):

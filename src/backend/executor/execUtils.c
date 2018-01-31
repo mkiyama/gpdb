@@ -67,6 +67,7 @@
 #include "cdb/cdbmotion.h"
 #include "cdb/cdbsreh.h"
 #include "cdb/memquota.h"
+#include "executor/instrument.h"
 #include "executor/spi.h"
 #include "utils/elog.h"
 #include "miscadmin.h"
@@ -74,6 +75,7 @@
 #include "storage/ipc.h"
 #include "cdb/cdbllize.h"
 #include "utils/workfile_mgr.h"
+#include "utils/metrics_utils.h"
 
 #include "cdb/memquota.h"
 
@@ -1409,7 +1411,7 @@ InitSliceTable(EState *estate, int nMotions, int nSubplans)
 	table->nMotions = nMotions;
 	table->nInitPlans = nSubplans;
 	table->slices = NIL;
-    table->doInstrument = false;
+	table->instrument_options = INSTRUMENT_NONE;
 
 	/* Each slice table has a unique-id. */
 	table->ic_instance_id = ++gp_interconnect_id;
@@ -2096,6 +2098,10 @@ void mppExecutorCleanup(QueryDesc *queryDesc)
 	/* caller must have switched into per-query memory context already */
 	estate = queryDesc->estate;
 
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook && QueryCancelCleanup)
+		(*query_info_collect_hook)(METRICS_QUERY_CANCELING, queryDesc);
+
 	/*
 	 * If this query is being canceled, record that when the gpperfmon
 	 * is enabled.
@@ -2150,6 +2156,10 @@ void mppExecutorCleanup(QueryDesc *queryDesc)
 		TeardownInterconnect(estate->interconnect_context, estate->motionlayer_context, true /* force EOS */, true);
 		estate->es_interconnect_is_setup = false;
 	}
+
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(QueryCancelCleanup ? METRICS_QUERY_CANCELED : METRICS_QUERY_ERROR, queryDesc);
 	
 	/**
 	 * Perfmon related stuff.
