@@ -7,8 +7,8 @@
     <p>With mirroring enabled, you may have failed segments in the system without interruption of
       service or any indication that a failure has occurred. You can verify the status of your
       system using the <codeph>gpstate</codeph> utility. <codeph>gpstate</codeph> provides the
-      status of each individual component of a Greenplum Database system, including
-      primary segments, mirror segments, master, and standby master.</p>
+      status of each individual component of a Greenplum Database system, including primary
+      segments, mirror segments, master, and standby master.</p>
     <section id="ki155580">
       <title>To check for failed segments</title>
       <ol>
@@ -19,8 +19,8 @@
             in the role to which it was assigned at system initialization. This means the system is
             in a potentially unbalanced state, as some segment hosts may have more active segments
             than is optimal for top system performance.</p>
-          <p>See <xref href="g-recovering-from-segment-failures.xml#topic14"
-            /> for instructions to fix this situation.</p>
+          <p>See <xref href="g-recovering-from-segment-failures.xml#topic14"/> for instructions to
+            fix this situation.</p>
         </li>
         <li id="ki165350">To get detailed information about a failed segment, check the
             <i>gp_segment_configuration</i> catalog table. For

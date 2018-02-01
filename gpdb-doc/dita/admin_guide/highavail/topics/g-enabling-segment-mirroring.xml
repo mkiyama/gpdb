@@ -19,10 +19,10 @@
           and SCP to each other without a password prompt.</li>
         <li id="ki156993">Run the <codeph>gpaddmirrors</codeph> utility to enable mirroring in your
           Greenplum Database system. For example, to add 10000 to your primary segment port numbers
-          to calculate the mirror segment port numbers:<codeblock>$ gpaddmirrors -p 10000</codeblock>
-          <p>Where <codeph>-p</codeph> specifies the number to add to your primary segment port
-            numbers. Mirrors are added with the default group mirroring configuration. </p>
-        </li>
+          to calculate the mirror segment port
+          numbers:<codeblock>$ gpaddmirrors -p 10000</codeblock> Where <codeph>-p</codeph> specifies
+          the number to add to your primary segment port numbers. Mirrors are added with the default
+          group mirroring configuration. </li>
       </ol>
     </section>
     <section>
@@ -36,23 +36,23 @@
           SCP to each other without a password prompt.</li>
         <li id="ki155422">Create a configuration file that lists the host names, ports, and data
           directories on which to create mirrors. To create a sample configuration file to use as a
-          starting point, run:<codeblock>$ gpaddmirrors -o <i>filename</i>          </codeblock>
-          <p>The format of the mirror configuration file is: </p><codeblock>filespaceOrder=[<i>filespace1_fsname</i>[:<i>filespace2_fsname</i>:...] 
+          starting point,
+            run:<codeblock>$ gpaddmirrors -o <i>filename</i>          </codeblock><p>The format of
+            the mirror configuration file is:
+            </p><codeblock>filespaceOrder=[<i>filespace1_fsname</i>[:<i>filespace2_fsname</i>:...] 
 <i>mirror</i>[<i>content</i>]=<i>content</i>:<i>address</i>:<i>port</i>:<i>mir_replication_port</i>:
-<i>pri_replication_port</i>:<i>fselocation</i>[:<i>fselocation</i>:...]</codeblock>
-          <p>For example, a configuration for two segment hosts and two segments per host, with no
-            additional filespaces configured besides the default <i>pg_system</i> filespace:</p>
-          <codeblock>filespaceOrder=
+<i>pri_replication_port</i>:<i>fselocation</i>[:<i>fselocation</i>:...]</codeblock><p>For
+            example, a configuration for two segment hosts and two segments per host, with no
+            additional filespaces configured besides the default <i>pg_system</i>
+          filespace:</p><codeblock>filespaceOrder=
 mirror0=0:sdw1-1:52001:53001:54001:/gpdata/mir1/gp0
 mirror1=1:sdw1-2:52002:53002:54002:/gpdata/mir1/gp1
 mirror2=2:sdw2-1:52001:53001:54001:/gpdata/mir1/gp2
-mirror3=3:sdw2-2:52002:53002:54002:/gpdata/mir1/gp3
-</codeblock>
-        </li>
+mirror3=3:sdw2-2:52002:53002:54002:/gpdata/mir1/gp3</codeblock></li>
         <li id="ki155430">Run the <codeph>gpaddmirrors</codeph> utility to enable mirroring in your
-          Greenplum Database system:<codeblock>$ gpaddmirrors -i <i>mirror_config_file</i>
-               </codeblock>
-          <p>Where <codeph>-i</codeph> names the mirror configuration file you created.</p>
+          Greenplum Database
+            system:<codeblock>$ gpaddmirrors -i <i>mirror_config_file</i></codeblock><p>Where
+              <codeph>-i</codeph> names the mirror configuration file you created.</p>
         </li>
       </ol>
     </section>

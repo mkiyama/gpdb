@@ -354,6 +354,14 @@ gp_segment_id | plcontainer_show_local_config
     <topic id="topic9" xml:lang="en">
       <title id="pz215232">Examples</title>
       <body>
+        <p>The values in the <codeph># container</codeph> lines of the examples,
+            <codeph>plc_python_shared</codeph> and <codeph>plc_r_shared</codeph>, are the
+            <codeph>id</codeph> XML elements defined in the <codeph>plcontainer_config.xml</codeph>
+          file. The <codeph>id</codeph> element is mapped to the <codeph>image</codeph> element that
+          specifies the Docker image to be started. If you configured PL/Container with a different
+          ID, change the value of the <codeph># container</codeph> line. For information about
+          configuring PL/Container and viewing the configuration settings, see <xref
+            href="#topic_sk1_gdq_dw" format="dita"/>.</p>
         <p>This is an example of PL/Python function that runs using the
             <codeph>plc_python_shared</codeph>
           container:<codeblock>CREATE OR REPLACE FUNCTION pylog100() RETURNS double precision AS $$
@@ -366,11 +374,6 @@ $$ LANGUAGE plcontainer;</codeblock></p>
 # container: plc_r_shared
 return(log10(100))
 $$ LANGUAGE plcontainer;</codeblock></p>
-        <p>The values in the <codeph># container</codeph> lines of the examples,
-            <codeph>plc_python_shared</codeph> and <codeph>plc_r_shared</codeph>, are the
-            <codeph>id</codeph> XML elements defined in the <codeph>plcontainer_config.xml</codeph>
-          file. The <codeph>id</codeph> element is mapped to the <codeph>image</codeph> element that
-          specifies the Docker image to be started. </p>
         <p>If the <codeph># container</codeph> line in a UDF specifies an ID that is not in the
           PL/Container configuration file, Greenplum Database returns an error when you try to
           execute the UDF.</p>
@@ -412,11 +415,8 @@ $$ LANGUAGE plcontainer;</codeblock></p>
           documentation for additional information about
           <codeph>plpy.subtransaction()</codeph>.</li>
       </ul>
-      <p>PL/Container does not support these Greenplum Database PL/Python features:<ul
+      <p>PL/Container does not support this Greenplum Database PL/Python feature:<ul
           id="ul_qzd_1w5_ncb">
-          <li><codeph>plpy.SPIError</codeph> - If an error occurs when running
-              <codeph>plpy.execute</codeph> or <codeph>plpy.prepare</codeph>, the exception
-              <codeph>plpy.SPIError</codeph> is raised. </li>
           <li> Multi-dimensional arrays.</li>
         </ul></p>
       <p>Also, the Python module has two global dictionary objects that retain the data between
@@ -519,11 +519,11 @@ $$ LANGUAGE plcontainer;</codeblock></p>
 
   runtime-add {<b>-r</b> | <b>--runtime</b>} <varname>runtime_id</varname>
      {<b>-i</b> | <b>--image</b>} <varname>image_name</varname> {<b>-l | --language</b>} {python | r}
-     [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname> [{<b>-v</b>| <b>--volume</b>} <varname>shared_volume</varname>...]]
+     [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname> [{<b>-v</b>| <b>--volume</b>} <varname>shared_volume</varname>...]] 
      [{<b>-s</b> | <b>--setting</b>} <varname>param_value</varname> [{<b>-s</b> | <b>--setting</b>} <varname>param_value</varname> ...]]
   runtime-replace {<b>-r</b> | <b>--runtime</b>} <varname>runtime_id</varname>
      {<b>-i</b> | <b>--image</b>} <varname>image_name</varname> <b>-l</b> {r | python}
-     [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname> [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname>...]]
+     [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname> [{<b>-v</b> | <b>--volume</b>} <varname>shared_volume</varname>...]] 
      [{<b>-s</b> | <b>--setting</b>} <varname>param_value</varname> [{<b>-s</b> | <b>--setting</b>} <varname>param_value</varname> ...]]
   runtime-show {<b>-r</b> | <b>--runtime</b>} <varname>runtime_id</varname>
   runtime-delete {<b>-r</b> | <b>--runtime</b>} <varname>runtime_id</varname>
@@ -1016,7 +1016,11 @@ $$ LANGUAGE plcontainer;</codeblock></p>
               <codeph>plcontainer_configuration.xml</codeph> in the data directory of all Greenplum
             Database segment instances: master, standby master, primary, and mirror. This query
             lists the Greenplum Database system data
-              directories:<codeblock>SELECT hostname, datadir FROM gp_segment_configuration;</codeblock><p>A
+              directories:<codeblock>SELECT g.hostname, fe.fselocation as directory 
+   FROM pg_filespace AS f, pg_filespace_entry AS fe, 
+       gp_segment_configuration AS g
+   WHERE f.oid = fe.fsefsoid AND g.dbid = fe.fsedbid 
+       AND f.fsname = 'pg_system';</codeblock><p>A
               sample PL/Container configuration file is in
                 <codeph>$GPHOME/share/postgresql/plcontainer</codeph>. </p></li>
           <li>When Greenplum Database executes a PL/Container UDF, Query Executer (QE) processes
@@ -1130,6 +1134,7 @@ $$ LANGUAGE plcontainer;</codeblock></p>
         <ol id="ol_lrx_zb2_rbb">
           <li>Install EPEL package<codeblock>sudo yum -y install epel-release</codeblock></li>
           <li>Install Docker<codeblock>sudo yum -y install docker-io</codeblock></li>
+          <li>Create a docker group<codeblock>sudo groupadd docker</codeblock></li>
           <li>Start Docker<codeblock>sudo service docker start</codeblock></li>
           <li>To give access to the Docker daemon and docker commands, assign the Greenplum Database
             administrator (gpadmin) to the group

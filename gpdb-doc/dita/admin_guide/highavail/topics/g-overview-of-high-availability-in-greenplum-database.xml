@@ -64,8 +64,7 @@
          <p>When a Greenplum Database cluster starts up, the <codeph>gpstart</codeph> utility checks
             that heap checksums are consistently enabled or disabled on the master and all segments.
             If there are any differences, the cluster fails to start. See <xref
-               href="../../../utility_guide/admin_utilities/gpstart.xml#topic1"
-            />.</p>
+               href="../../../utility_guide/admin_utilities/gpstart.xml#topic1"/>.</p>
          <p>In cases where it is necessary to ignore heap checksum verification errors so that data
             can be recovered, setting the <xref
                href="../../../ref_guide/config_params/guc-list.xml#ignore_checksum_failure"/> system
@@ -102,8 +101,8 @@
             Database Postgres instance. The data for each table is spread between the segments based
             on the distribution policy that is defined for the table in the DDL at the time the
             table is created. When segment mirroring is enabled, for each segment there is a
-               <i>primary</i> and <i>mirror</i> pair. The primary and mirror perform the same IO
-            operations and store copies of the same data. </p>
+               <i>primary</i> and <i>mirror</i> pair. The mirror segment is kept up-to-date by
+            replicating the write-ahead log (WAL) from the primary to the mirror. </p>
          <p>The mirror instance for each segment is usually initialized with the
                <codeph>gpinitsystem</codeph> utility or the <codeph>gpexpand</codeph> utility. The
             mirror runs on a different host than the primary instance to protect from a single

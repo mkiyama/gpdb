@@ -2,15 +2,14 @@
 <!DOCTYPE topic
   PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
 <topic id="topic1" xml:lang="en">
-  <title id="op164582">pg_stat_replication</title>
+  <title id="op164582">gp_stat_replication</title>
   <body>
-    <p>The <codeph>pg_stat_replication</codeph> view contains metadata of the
-        <codeph>walsender</codeph> process that is used for Greenplum Database master mirroring.</p>
-    <p>The <codeph><xref href="gp_stat_replication.xml#topic1">gp_stat_replication</xref></codeph>
-      view contains <codeph>walsender</codeph> metadata for Greenplum Database master and segment
-      mirroring. </p>
+    <!--6.0 table -WAL replication for both master and segments-->
+    <p>The <codeph>gp_stat_replication</codeph> view contains metadata of the
+        <codeph>walsender</codeph> process that is used for Greenplum Database master and segment
+      mirroring.</p>
     <table id="op164584">
-      <title>pg_catalog.pg_stat_replication</title>
+      <title>pg_catalog.gp_stat_replication</title>
       <tgroup cols="4">
         <colspec colnum="1" colname="col1" colwidth="131pt"/>
         <colspec colnum="2" colname="col2" colwidth="100pt"/>
@@ -25,6 +24,12 @@
           </row>
         </thead>
         <tbody>
+          <row>
+            <entry colname="col1"><codeph>gp_segment_id</codeph></entry>
+            <entry colname="col2">integer</entry>
+            <entry colname="col3"/>
+            <entry colname="col4">The unique identifier of a segment (or master) instance.</entry>
+          </row>
           <row>
             <entry colname="col1"><codeph>procpid</codeph></entry>
             <entry colname="col2">integer</entry>
@@ -72,7 +77,8 @@
             <entry colname="col2">text</entry>
             <entry colname="col3"/>
             <entry colname="col4">WAL sender state. The value can
-                  be:<p><codeph>startup</codeph></p><p><codeph>backup</codeph></p><p><codeph>catchup</codeph></p><p><codeph>streaming</codeph></p></entry>
+                  be:<p><codeph>startup</codeph></p><p><codeph>backup</codeph> - is this in
+                  6.0?</p><p><codeph>catchup</codeph></p><p><codeph>streaming</codeph></p></entry>
           </row>
           <row>
             <entry colname="col1"><codeph>sent_location</codeph></entry>
@@ -96,7 +102,8 @@
             <entry colname="col1"><codeph>replay_location</codeph></entry>
             <entry colname="col2">text</entry>
             <entry colname="col3"/>
-            <entry colname="col4">Standby xlog record replay location.</entry>
+            <entry colname="col4">Master standby or segment mirror xlog record replay
+              location.</entry>
           </row>
           <row>
             <entry colname="col1"><codeph>sync_priority</codeph></entry>
@@ -110,6 +117,13 @@
             <entry colname="col3"/>
             <entry colname="col4">WAL sender syncronization state. The value is
                 <codeph>sync</codeph>.</entry>
+          </row>
+          <row>
+            <entry colname="col1"><codeph>sync_error</codeph></entry>
+            <entry colname="col2">text</entry>
+            <entry colname="col3"/>
+            <entry colname="col4">WAL sender syncronization error. <codeph>none</codeph> if no
+              error.</entry>
           </row>
         </tbody>
       </tgroup>
