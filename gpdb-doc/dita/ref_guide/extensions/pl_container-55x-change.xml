@@ -4,7 +4,7 @@
 <topic id="topic1" xml:lang="en">
   <title id="pz212122">Greenplum PL/Container Language Extension</title>
   <body>
-    <p>This section includes the following information:</p>
+    <p>This section includes the following information about PL/Container 1.1 and later:</p>
     <ul>
       <li id="pz219023"><xref href="#topic2" type="topic" format="dita"/></li>
       <li>
@@ -185,7 +185,12 @@
           configured with PL/Container.</p>
         <note type="important">Dropping PL/Container from a database drops all PL/Container UDFs
           from the database, including user-created PL/Container UDFs. If the UDFs are required,
-          ensure you can re-create the UDFs before dropping PL/Container.</note>
+          ensure you can re-create the UDFs before dropping PL/Container. This
+            <codeph>SELECT</codeph> command lists the names of and body of PL/Container UDFs in a
+            database.<codeblock>SELECT proname, prosrc FROM pg_proc WHERE prolang = (SELECT oid FROM pg_language WHERE lanname = 'plcontainer');</codeblock><p>For
+            information about the catalog tables, <codeph>pg_proc</codeph> and
+              <codeph>pg_language</codeph>, see <xref
+              href="../system_catalogs/catalog_ref-tables.xml" format="dita"/>. </p></note>
         <p>These steps upgrade from PL/Container 1.0 to PL/Container 1.1 or later in a database. The
           steps save the PL/Container 1.0 configuration and restore the configuration for use with
           PL/Container 1.1 or later.<ol id="ol_axf_mmq_vcb">
@@ -906,6 +911,7 @@ $$ LANGUAGE plcontainer;</codeblock></p>
         &lt;command>/clientdir/rclient.sh&lt;/command>
         &lt;shared_directory access="ro" container="/clientdir" host="/usr/local/greenplum-db/bin/plcontainer_clients"/>
         &lt;setting use_container_logging="yes"/>
+        &lt;cpu_share>2056&lt;/cpu_share>
     &lt;/runtime>
     &lt;runtime>
 &lt;/configuration></codeblock></p>
@@ -966,9 +972,23 @@ $$ LANGUAGE plcontainer;</codeblock></p>
                         <codeph>plcontainer runtime-edit</codeph> command.</note></pd>
                 </plentry>
                 <plentry>
+                  <pt>cpu_share</pt>
+                  <pd>
+                    <p>Optional. Specify the CPU usage for a PL/Container container. The value of
+                      the element is a positive integer. The default value is 1024. The value is a
+                      relative weighting of CPU usage compared to other containers. </p>
+                    <p>For example, a container with a <codeph>cpu_share</codeph> of 2048 is
+                      allocated double the CPU slice time compared with container with the default
+                      value of 1024.</p>
+                    <note>This element cannot be set with the <codeph>plcontainer</codeph> utility.
+                      You can update the configuration file with the with the <codeph>plcontainer
+                        runtime-edit</codeph> command.</note>
+                  </pd>
+                </plentry>
+                <plentry>
                   <pt>shared_directory</pt>
                   <pd>Optional. This element specifies a shared Docker shared volume for a container
-                    with access information. Mutliple <codeph>shared_directory</codeph> elements are
+                    with access information. Multiple <codeph>shared_directory</codeph> elements are
                     allowed. Each <codeph>shared_directory</codeph> element specifies a single
                     shared volume. XML attributes for the <codeph>shared_directory</codeph>
                       element:<ul id="ul_x4d_lcs_dw">
