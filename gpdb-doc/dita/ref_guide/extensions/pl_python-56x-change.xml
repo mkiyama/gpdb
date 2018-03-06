@@ -326,6 +326,14 @@ $$;</codeblock>
       <p>The command returns the location of the Python installation. The Python installed with
         Greenplum Database is in the Greenplum Database <codeph>ext/python</codeph> directory.</p>
       <codeblock>/<varname>path_to_greenplum-db</varname>/ext/python/bin/python</codeblock>
+      <p>When running shell commands on remote hosts with <codeph>gpssh</codeph>, you can specify
+        the <codeph>-s</codeph> option. When the option is specified, <codeph>gpssh</codeph> sources
+        the <codeph>greenplum_path.sh</codeph> file before running commands on the remote hosts. For
+        example, this command should display the Python installed with Greenplum Database on each
+        host.<codeblock>gpssh -f gpdb_hosts which python</codeblock></p>
+      <p>If it does not, you can add the <codeph>-s</codeph> to source
+          <codeph>greenplum_path.sh</codeph> on the remote hosts before running the command.
+        <codeblock>gpssh -s -f gpdb_hosts which python</codeblock></p>
       <p>To display the list to currently installed Python modules, run this command.</p>
       <codeblock>python -c "help('modules')"</codeblock>
       <!--pivotal only-->
@@ -336,7 +344,7 @@ $$;</codeblock>
           >Pivotal Network</xref>. For information about the libraries, see <xref scope="peer"
           type="topic" format="dita" href="../../install_guide/install_python_dsmod.xml#topic1"
           >Python Data Science Module Package</xref>.</p>
-      <p>These are examples of installing and testing Python modules:<ul id="ul_ukh_4wr_wt">
+      <p>These sections describe installing and testing Python modules:<ul id="ul_ukh_4wr_wt">
           <li><xref href="#topic_yx3_yjq_rt" format="dita"/></li>
           <li><xref href="#topic_g4j_hmt_ycb" format="dita"/></li>
           <li><xref href="#topic_j53_5jq_rt" format="dita"/></li>
@@ -457,9 +465,10 @@ $$ language plpythonu;</codeblock>
           <li>If the Python <codeph>import</codeph> command does not return an error, environment
             variables might not be configured in the Greenplum Database environment. For example,
             the Greenplum Database might not have been restarted after installing the Python Package
-            on the host system.<note>On the Greenplum Database master and segment hosts, the
-                <codeph>.bashrc</codeph> file for the <codeph>gpadmin</codeph> user must source the
-              file <codeph>$GPHOME/greenplum_path.sh</codeph>.</note></li>
+            on the host system.<p>You can specify the <codeph>gpssh</codeph> option
+                <codeph>-s</codeph>. When the option is specified, <codeph>gpssh</codeph> sources
+              the <codeph>greenplum_path.sh</codeph> file before running commands on the remote
+              hosts. <codeblock>gpssh -s -h mdw1 python -c "import numpy"</codeblock></p></li>
         </ul>
       </body>
     </topic>
