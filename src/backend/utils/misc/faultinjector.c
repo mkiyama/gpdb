@@ -105,6 +105,7 @@ FaultInjectorTypeEnumToString[] = {
 	_("interrupt"),
 	_("finish_pending"),
 	_("checkpoint_and_panic"),
+	_("wait_until_triggered"),
 	_("not recognized"),
 };
 
@@ -283,6 +284,8 @@ FaultInjectorIdentifierEnumToString[] = {
 		/* inject fault before an append-only delete */
 	_("appendonly_update"),
 		/* inject fault before an append-only update */
+	_("appendonly_skip_compression"),
+		/* inject fault in append-only compression function */
 	_("reindex_db"),
 		/* inject fault while reindex db is in progress */
 	_("reindex_relation"),
@@ -1063,6 +1066,7 @@ FaultInjector_NewHashEntry(
 
 			case InterconnectStopAckIsLost:
 			case SendQEDetailsInitBackend:
+			case AppendOnlySkipCompression:
 
 				break;
 			default:
@@ -1400,6 +1404,40 @@ FaultInjector_SetFaultInjection(
 			
 			break;
 		}
+
+		case FaultInjectorTypeWaitUntilTriggered:
+		{
+			FaultInjectorEntry_s	*entryLocal;
+
+			while ((entryLocal = FaultInjector_LookupHashEntry(entry->faultName)) != NULL &&
+				   entry->occurrence > entryLocal->numTimesTriggered)
+			{
+				pg_usleep(1000000L);  // 1 sec
+			}
+
+			if (entryLocal != NULL)
+			{
+				ereport(LOG,
+						(errcode(ERRCODE_FAULT_INJECT),
+						 errmsg("fault triggered %d times, fault name:'%s' fault type:'%s' ",
+							entry->occurrence,
+							entryLocal->faultName,
+							FaultInjectorTypeEnumToString[entry->faultInjectorType])));
+				status = STATUS_OK;
+			}
+			else
+			{
+				ereport(LOG,
+						(errcode(ERRCODE_FAULT_INJECT),
+						 errmsg("fault 'NULL', fault name:'%s'  ",
+								entryLocal->faultName)));
+
+				status = STATUS_ERROR;
+			}
+
+			break;
+		}
+
 		case FaultInjectorTypeStatus:
 		{	
 			HASH_SEQ_STATUS			hash_status;
