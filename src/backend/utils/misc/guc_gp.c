@@ -1131,6 +1131,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"debug_burn_xids", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Consume a lot of XIDs, for testing purposes."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&Debug_burn_xids,
+		false, NULL, NULL
+	},
+
+	{
 		{"gp_cost_hashjoin_chainwalk", PGC_USERSET, QUERY_TUNING_COST,
 			gettext_noop("Enable the cost for walking the chain in the hash join"),
 			NULL,
@@ -3050,7 +3060,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&xid_stop_limit,
-		1000000000, 10000000, INT_MAX, NULL, NULL
+		100000000, 10000000, INT_MAX, NULL, NULL
 	},
 	{
 		{"xid_warn_limit", PGC_POSTMASTER, WAL,
@@ -3500,36 +3510,6 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_fts_probe_interval,
 		60, 10, 3600, NULL, NULL
-	},
-
-	{
-		{"gp_fts_probe_threadcount", PGC_POSTMASTER, GP_ARRAY_TUNING,
-			gettext_noop("Use this number of threads for probing the segments."),
-			gettext_noop("The number of threads to create at each probe interval expiration."),
-			GUC_NOT_IN_SAMPLE
-		},
-		&gp_fts_probe_threadcount,
-		16, 1, 128, NULL, NULL
-	},
-
-	{
-		{"gp_fts_transition_retries", PGC_POSTMASTER, GP_ARRAY_TUNING,
-			gettext_noop("The number of retries for FTS to request a segment state transition."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
-		},
-		&gp_fts_transition_retries,
-		5, 1, 100, NULL, NULL
-	},
-
-	{
-		{"gp_fts_transition_timeout", PGC_POSTMASTER, GP_ARRAY_TUNING,
-			gettext_noop("Timeout (in seconds) for FTS to request a segment state transition."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL | GUC_UNIT_S
-		},
-		&gp_fts_transition_timeout,
-		3600, 1, 36000, NULL, NULL
 	},
 
 	{

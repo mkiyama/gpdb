@@ -39,12 +39,12 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2010, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/utils/error/elog.c,v 1.219 2009/11/28 23:38:07 tgl Exp $
+ *	  $PostgreSQL: pgsql/src/backend/utils/error/elog.c,v 1.224 2010/05/08 16:39:51 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -122,7 +122,8 @@ __attribute__((format_arg(1)));
 #undef _
 #define _(x) err_gettext(x)
 
-static const char *err_gettext(const char *str)
+static const char *
+err_gettext(const char *str)
 /* This extension allows gcc to check the format string for consistency with
    the supplied arguments. */
 __attribute__((format_arg(1)));
@@ -2143,9 +2144,9 @@ write_syslog(int level, const char *line)
 static void
 write_eventlog(int level, const char *line, int len)
 {
-	WCHAR		   *utf16;
-	int				eventlevel = EVENTLOG_ERROR_TYPE;
-	static HANDLE	evtHandle = INVALID_HANDLE_VALUE;
+	WCHAR	   *utf16;
+	int			eventlevel = EVENTLOG_ERROR_TYPE;
+	static HANDLE evtHandle = INVALID_HANDLE_VALUE;
 
 	if (evtHandle == INVALID_HANDLE_VALUE)
 	{
@@ -2182,11 +2183,11 @@ write_eventlog(int level, const char *line, int len)
 	}
 
 	/*
-	 * Convert message to UTF16 text and write it with ReportEventW,
-	 * but fall-back into ReportEventA if conversion failed.
+	 * Convert message to UTF16 text and write it with ReportEventW, but
+	 * fall-back into ReportEventA if conversion failed.
 	 *
-	 * Also verify that we are not on our way into error recursion trouble
-	 * due to error messages thrown deep inside pgwin32_toUTF16().
+	 * Also verify that we are not on our way into error recursion trouble due
+	 * to error messages thrown deep inside pgwin32_toUTF16().
 	 */
 	if (GetDatabaseEncoding() != GetPlatformEncoding() &&
 		!in_error_recursion_trouble())
@@ -2195,28 +2196,28 @@ write_eventlog(int level, const char *line, int len)
 		if (utf16)
 		{
 			ReportEventW(evtHandle,
-					eventlevel,
-					0,
-					0,				/* All events are Id 0 */
-					NULL,
-					1,
-					0,
-					(LPCWSTR *) &utf16,
-					NULL);
+						 eventlevel,
+						 0,
+						 0,		/* All events are Id 0 */
+						 NULL,
+						 1,
+						 0,
+						 (LPCWSTR *) &utf16,
+						 NULL);
 
 			pfree(utf16);
 			return;
 		}
 	}
 	ReportEventA(evtHandle,
-				eventlevel,
-				0,
-				0,				/* All events are Id 0 */
-				NULL,
-				1,
-				0,
-				&line,
-				NULL);
+				 eventlevel,
+				 0,
+				 0,				/* All events are Id 0 */
+				 NULL,
+				 1,
+				 0,
+				 &line,
+				 NULL);
 }
 #endif   /* WIN32 */
 
@@ -2354,6 +2355,7 @@ static void
 write_console(const char *line, int len)
 {
 #ifdef WIN32
+
 	/*
 	 * WriteConsoleW() will fail of stdout is redirected, so just fall through
 	 * to writing unconverted to the logfile in this case.
@@ -2379,17 +2381,18 @@ write_console(const char *line, int len)
 			}
 
 			/*
-			 * In case WriteConsoleW() failed, fall back to writing the message
-			 * unconverted.
+			 * In case WriteConsoleW() failed, fall back to writing the
+			 * message unconverted.
 			 */
 			pfree(utf16);
 		}
 	}
 #else
+
 	/*
-	 * Conversion on non-win32 platform is not implemented yet.
-	 * It requires non-throw version of pg_do_encoding_conversion(),
-	 * that converts unconvertable characters to '?' without errors.
+	 * Conversion on non-win32 platform is not implemented yet. It requires
+	 * non-throw version of pg_do_encoding_conversion(), that converts
+	 * unconvertable characters to '?' without errors.
 	 */
 #endif
 
@@ -2404,24 +2407,20 @@ setup_formatted_log_time(void)
 {
 	struct timeval tv;
 	pg_time_t	stamp_time;
-	pg_tz	   *tz;
 	char		msbuf[8];
 
 	gettimeofday(&tv, NULL);
 	stamp_time = (pg_time_t) tv.tv_sec;
 
 	/*
-	 * Normally we print log timestamps in log_timezone, but during startup we
-	 * could get here before that's set. If so, fall back to gmt_timezone
-	 * (which guc.c ensures is set up before Log_line_prefix can become
-	 * nonempty).
+	 * Note: we expect that guc.c will ensure that log_timezone is set up
+	 * (at least with a minimal GMT value) before Log_line_prefix can become
+	 * nonempty or CSV mode can be selected.
 	 */
-	tz = log_timezone ? log_timezone : gmt_timezone;
-
 	pg_strftime(formatted_log_time, FORMATTED_TS_LEN,
 				/* leave room for microseconds... */
 				"%Y-%m-%d %H:%M:%S        %Z",
-				pg_localtime(&stamp_time, tz));
+				pg_localtime(&stamp_time, log_timezone));
 
 	/* 'paste' microseconds into place... */
 	sprintf(msbuf, ".%06d", (int) (tv.tv_usec));
@@ -2435,19 +2434,15 @@ static void
 setup_formatted_start_time(void)
 {
 	pg_time_t	stamp_time = (pg_time_t) MyStartTime;
-	pg_tz	   *tz;
 
 	/*
-	 * Normally we print log timestamps in log_timezone, but during startup we
-	 * could get here before that's set. If so, fall back to gmt_timezone
-	 * (which guc.c ensures is set up before Log_line_prefix can become
-	 * nonempty).
+	 * Note: we expect that guc.c will ensure that log_timezone is set up
+	 * (at least with a minimal GMT value) before Log_line_prefix can become
+	 * nonempty or CSV mode can be selected.
 	 */
-	tz = log_timezone ? log_timezone : gmt_timezone;
-
 	pg_strftime(formatted_start_time, FORMATTED_TS_LEN,
 				"%Y-%m-%d %H:%M:%S %Z",
-				pg_localtime(&stamp_time, tz));
+				pg_localtime(&stamp_time, log_timezone));
 }
 
 /*
@@ -2547,14 +2542,11 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 			case 't':
 				{
 					pg_time_t	stamp_time = (pg_time_t) time(NULL);
-					pg_tz	   *tz;
 					char		strfbuf[128];
-
-					tz = log_timezone ? log_timezone : gmt_timezone;
 
 					pg_strftime(strfbuf, sizeof(strfbuf),
 								"%Y-%m-%d %H:%M:%S %Z",
-								pg_localtime(&stamp_time, tz));
+								pg_localtime(&stamp_time, log_timezone));
 					appendStringInfoString(buf, strfbuf);
 				}
 				break;
@@ -4319,8 +4311,9 @@ void
 write_stderr(const char *fmt,...)
 {
 	va_list		ap;
+
 #ifdef WIN32
-	char		errbuf[2048];		/* Arbitrary size? */
+	char		errbuf[2048];	/* Arbitrary size? */
 #endif
 
 	fmt = _(fmt);
@@ -4426,6 +4419,24 @@ is_log_level_output(int elevel, int log_min_level)
 		return true;
 
 	return false;
+}
+
+/*
+ * If trace_recovery_messages is set to make this visible, then show as LOG,
+ * else display as whatever level is set. It may still be shown, but only
+ * if log_min_messages is set lower than trace_recovery_messages.
+ *
+ * Intention is to keep this for at least the whole of the 9.0 production
+ * release, so we can more easily diagnose production problems in the field.
+ */
+int
+trace_recovery(int trace_level)
+{
+	if (trace_level < LOG &&
+		trace_level >= trace_recovery_messages)
+		return LOG;
+
+	return trace_level;
 }
 
 /*
