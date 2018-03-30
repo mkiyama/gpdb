@@ -26,6 +26,9 @@
  * ----- Declarations of Greenplum-specific global variables ------
  */
 
+/* This is used to special case the handling of autovacuum */
+#define TEMPLATE0_DATABASE_NAME "template0"
+
 #ifdef sparc
 #define TUPLE_CHUNK_ALIGN	4
 #else
@@ -238,6 +241,8 @@ extern bool Debug_print_prelim_plan;
 extern bool Debug_print_slice_table;
 
 extern bool Debug_resource_group;
+
+extern bool Debug_burn_xids;
 
 /*
  * gp_backup_directIO

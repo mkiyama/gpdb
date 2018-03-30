@@ -1259,6 +1259,21 @@ PostmasterMain(int argc, char *argv[])
 	CreateDataDirLockFile(true);
 
 	/*
+	 * If timezone is not set, determine what the OS uses.	(In theory this
+	 * should be done during GUC initialization, but because it can take as
+	 * much as several seconds, we delay it until after we've created the
+	 * postmaster.pid file.  This prevents problems with boot scripts that
+	 * expect the pidfile to appear quickly.  Also, we avoid problems with
+	 * trying to locate the timezone files too early in initialization.)
+	 */
+	pg_timezone_initialize();
+
+	/*
+	 * Likewise, init timezone_abbreviations if not already set.
+	 */
+	pg_timezone_abbrev_initialize();
+
+	/*
 	 * Remember postmaster startup time
      * CDB: Moved this code up from below for use in error message headers.
 	 */
@@ -7828,23 +7843,27 @@ StartAutovacuumWorker(void)
 	 */
 	if (canAcceptConnections() == CAC_OK)
 	{
-		/*
-		 * Compute the cancel key that will be assigned to this session. We
-		 * probably don't need cancel keys for autovac workers, but we'd
-		 * better have something random in the field to prevent unfriendly
-		 * people from sending cancels to them.
-		 */
-		MyCancelKey = PostmasterRandom();
-
 		bn = (Backend *) malloc(sizeof(Backend));
 		if (bn)
 		{
+			/*
+			 * Compute the cancel key that will be assigned to this session. We
+			 * probably don't need cancel keys for autovac workers, but we'd
+			 * better have something random in the field to prevent unfriendly
+			 * people from sending cancels to them.
+			 */
+			MyCancelKey = PostmasterRandom();
+			bn->cancel_key = MyCancelKey;
+
+			/* Autovac workers are not dead_end and need a child slot */
+			bn->dead_end = false;
+			bn->child_slot = MyPMChildSlot = AssignPostmasterChildSlot();
+
 			bn->pid = StartAutoVacWorker();
 			if (bn->pid > 0)
 			{
-				bn->cancel_key = MyCancelKey;
 				bn->is_autovacuum = true;
-				bn->dead_end = false;
+
 				DLAddHead(BackendList, DLNewElem(bn));
 #ifdef EXEC_BACKEND
 				ShmemBackendArrayAdd(bn);
@@ -7857,6 +7876,7 @@ StartAutovacuumWorker(void)
 			 * fork failed, fall through to report -- actual error message was
 			 * logged by StartAutoVacWorker
 			 */
+			(void) ReleasePostmasterChildSlot(bn->child_slot);
 			free(bn);
 		}
 		else
