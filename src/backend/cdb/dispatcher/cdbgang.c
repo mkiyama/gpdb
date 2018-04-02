@@ -537,7 +537,7 @@ buildGangDefinition(GangType type, int gang_id, int size, int content)
 
 			if (size != segCount)
 			{
-				FtsReConfigureMPP(false);
+				DisconnectAndDestroyAllGangs(true);
 				elog(ERROR, "Not all primary segment instances are active and connected");
 			}
 			break;
@@ -1043,16 +1043,12 @@ getCdbProcessList(Gang *gang, int sliceIndex, DirectDispatchInfo *directDispatch
 		/* Currently, direct dispatch is to one segment db. */
 		Assert(list_length(directDispatch->contentIds) == 1);
 
-		/* initialize a list of NULL */
-		for (i = 0; i < gang->size; i++)
-			list = lappend(list, NULL);
-
 		int			directDispatchContentId = linitial_int(directDispatch->contentIds);
 		SegmentDatabaseDescriptor *segdbDesc = &gang->db_descriptors[directDispatchContentId];
 		CdbProcess *process = makeCdbProcess(segdbDesc);
 
 		setQEIdentifier(segdbDesc, sliceIndex, gang->perGangContext);
-		list_nth_replace(list, directDispatchContentId, process);
+		list = lappend(list, (void*)process);
 	}
 	else
 	{
@@ -1317,7 +1313,7 @@ cleanupGang(Gang *gp)
 			return false;
 
 		/* if segment is down, the gang can not be reused */
-		if (!FtsTestConnection(segdbDesc->segment_database_info, false))
+		if (!FtsIsSegmentUp(segdbDesc->segment_database_info))
 			return false;
 
 		/* Note, we cancel all "still running" queries */
@@ -1827,7 +1823,7 @@ GangOK(Gang *gp)
 
 		if (cdbconn_isBadConnection(segdbDesc))
 			return false;
-		if (!FtsTestConnection(segdbDesc->segment_database_info, false))
+		if (!FtsIsSegmentUp(segdbDesc->segment_database_info))
 			return false;
 	}
 

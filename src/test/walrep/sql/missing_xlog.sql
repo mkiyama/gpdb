@@ -65,17 +65,11 @@ begin
 	loop
 		all_caught_up = true;
 		for r in select gp_segment_id, replay_location as loc from gp_stat_replication loop
-			-- XXX: Using text comparison to compare XLOG positions
-			-- is not quite right. Comparing 10/12345678 with
-			-- 9/12345678 would yield incorrect result, for
-			-- example. Ignore that for now, because this test is
-			-- executed in a fresh test cluster, which surely
-			-- hasn't written enough WAL yet to hit that problem.
-			-- With WAL positions smaller than 10/00000000, this
-			-- should work. PostgreSQL 9.4 got a pg_lsn datatype
-			-- that we could use here, once we merge up to 9.4.
+			-- PostgreSQL 9.4 got a pg_lsn datatype that we could
+			-- use here, once we merge up to 9.4. Till then using
+			-- GPDB type gpxlogloc.
 			replay_locs[r.gp_segment_id] = r.loc;
-			if r.loc < checkpoint_locs[r.gp_segment_id] then
+			if ('(' || r.loc || ')')::gpxlogloc < ('(' || checkpoint_locs[r.gp_segment_id] || ')')::gpxlogloc then
 				all_caught_up = false;
 				failed_for_segment[r.gp_segment_id] = 1;
 			else
@@ -129,7 +123,7 @@ create extension if not exists gp_inject_fault;
 -- interval.
 select gp_inject_fault('fts_probe', 'skip', '', '', '', -1, 0, 1);
 select gp_request_fts_probe_scan();
-select gp_inject_fault('fts_probe', 'wait_until_triggered', 1);
+select gp_wait_until_triggered_fault('fts_probe', 1, 1);
 
 -- stop a mirror
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='m' and c.content=0), 'stop', NULL, NULL);
