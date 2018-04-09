@@ -11207,8 +11207,8 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 		char	   *command = NULL;
 		char	   *rejlim;
 		char	   *rejlimtype;
-		char	   *errnspname;
-		char	   *errtblname;
+		char	   *errnspname = NULL;
+		char	   *errtblname = NULL;
 		char	   *extencoding;
 		char	   *writable = NULL;
 		char	   *tmpstring = NULL;
@@ -11218,6 +11218,8 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 		bool		iswritable = false;
 		char	   *options;
 		bool		gpdb5OrLater = isGPDB5000OrLater();
+		bool		gpdb6OrLater = isGPDB6000OrLater();
+		char	   *logerrors = NULL;
 		char	   *on_clause;
 
 		/*
@@ -11230,15 +11232,29 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 						  fmtId(tbinfo->dobj.name));
 
 		/* Now get required information from pg_exttable */
-		if (gpdb5OrLater)
+		if (gpdb6OrLater)
 		{
 			appendPQExpBuffer(query,
 					"SELECT x.urilocation, x.execlocation, x.fmttype, x.fmtopts, x.command, "
 						   "x.rejectlimit, x.rejectlimittype, "
-						   "(SELECT relname "
-							"FROM pg_catalog.pg_class "
-							"WHERE Oid=x.fmterrtbl) AS errtblname, "
-						   "x.fmterrtbl = x.reloid AS errortofile , "
+						   "CASE WHEN x.logerrors THEN true ELSE null END AS logerrors, "
+						   "pg_catalog.pg_encoding_to_char(x.encoding), "
+						   "x.writable, "
+						   "array_to_string(ARRAY( "
+						   "SELECT pg_catalog.quote_ident(option_name) || ' ' || "
+						   "pg_catalog.quote_literal(option_value) "
+						   "FROM pg_options_to_table(x.options) "
+						   "ORDER BY option_name"
+						   "), E',\n    ') AS options "
+					"FROM pg_catalog.pg_exttable x, pg_catalog.pg_class c "
+					"WHERE x.reloid = c.oid AND c.oid = '%u'::oid ", tbinfo->dobj.catId.oid);
+		}
+		else if (gpdb5OrLater)
+		{
+			appendPQExpBuffer(query,
+					"SELECT x.urilocation, x.execlocation, x.fmttype, x.fmtopts, x.command, "
+						   "x.rejectlimit, x.rejectlimittype, "
+						   "x.fmterrtbl AS logerrors, "
 						   "pg_catalog.pg_encoding_to_char(x.encoding), "
 						   "x.writable, "
 						   "array_to_string(ARRAY( "
@@ -11259,7 +11275,7 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 						   "END AS execlocation, "
 						   "x.fmttype, x.fmtopts, x.command, "
 						   "x.rejectlimit, x.rejectlimittype, "
-						   "n.nspname AS errnspname, d.relname AS errtblname, "
+						   "d.relname AS logerrors, "
 						   "pg_catalog.pg_encoding_to_char(x.encoding), "
 						   "x.writable, null AS options "
 					"FROM pg_catalog.pg_class c "
@@ -11279,7 +11295,7 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 						   "END AS execlocation, "
 						   "x.fmttype, x.fmtopts, x.command, "
 						   "x.rejectlimit, x.rejectlimittype, "
-						   "n.nspname AS errnspname, d.relname AS errtblname, "
+						   "d.relname AS logerrors, "
 						   "pg_catalog.pg_encoding_to_char(x.encoding), "
 						   "null as writable, null as options "
 					"FROM pg_catalog.pg_class c "
@@ -11299,7 +11315,7 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 						   "END AS execlocation, "
 						   "x.fmttype, x.fmtopts, x.command, "
 						   "-1 as rejectlimit, null as rejectlimittype,"
-						   "null as errnspname, null as errtblname, "
+						   "null as logerrors, "
 						   "null as encoding, null as writable, "
 						   "null as options "
 					"FROM pg_catalog.pg_exttable x, pg_catalog.pg_class c "
@@ -11332,11 +11348,10 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 		command = PQgetvalue(res, 0, 4);
 		rejlim = PQgetvalue(res, 0, 5);
 		rejlimtype = PQgetvalue(res, 0, 6);
-		errnspname = PQgetvalue(res, 0, 7);
-		errtblname = PQgetvalue(res, 0, 8);
-		extencoding = PQgetvalue(res, 0, 9);
-		writable = PQgetvalue(res, 0, 10);
-		options = PQgetvalue(res, 0, 11);
+		logerrors = PQgetvalue(res, 0, 7);
+		extencoding = PQgetvalue(res, 0, 8);
+		writable = PQgetvalue(res, 0, 9);
+		options = PQgetvalue(res, 0, 10);
 
 		on_clause = execlocations;
 
@@ -11501,12 +11516,10 @@ dumpExternal(TableInfo *tbinfo, PQExpBuffer query, PQExpBuffer q, PQExpBuffer de
 				appendPQExpBufferChar(q, '\n');
 
 				/*
-				 * Error tables were removed in 5.0 and replaced with file
-				 * error logging. The catalog syntax for identifying error
-				 * logging is however still using the pg_exttable.fmterrtbl
-				 * attribute so we use the errtblname for emitting LOG ERRORS.
+				 * Error tables were removed and replaced with file error
+				 * logging.
 				 */
-				if (errtblname && strlen(errtblname) > 0)
+				if (logerrors && strlen(logerrors) > 0)
 					appendPQExpBufferStr(q, "LOG ERRORS ");
 
 				/* reject limit */
@@ -11993,11 +12006,30 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 									  tbinfo->attlen[j],
 									  tbinfo->attalign[j]);
 					appendStringLiteralAH(q, tbinfo->attnames[j], fout);
-					appendPQExpBuffer(q, "\n  AND attrelid = ");
-					appendStringLiteralAH(q, fmtId(tbinfo->dobj.name), fout);
-					appendPQExpBuffer(q, "::pg_catalog.regclass;\n");
-
-					appendPQExpBuffer(q, "ALTER TABLE ONLY %s ",
+					if (gp_partitioning_available)
+					{
+						/*
+						 * Do for all descendants of a partition table.
+						 * No hurt if this is not a table with partitions.
+						 */
+						appendPQExpBuffer(q, "\n  AND attrelid IN (SELECT ");
+						appendStringLiteralAH(q, fmtId(tbinfo->dobj.name), fout);
+						appendPQExpBuffer(q, "::pg_catalog.regclass ");
+						appendPQExpBuffer(q, "UNION SELECT pr.parchildrelid FROM "
+										  "pg_catalog.pg_partition_rule pr, "
+										  "pg_catalog.pg_partition p WHERE "
+										  "pr.parchildrelid != 0 AND "
+										  "pr.paroid = p.oid AND p.parrelid = ");
+						appendStringLiteralAH(q, fmtId(tbinfo->dobj.name), fout);
+						appendPQExpBuffer(q, "::pg_catalog.regclass);\n");
+					}
+					else
+					{
+						appendPQExpBuffer(q, "\n  AND attrelid = ");
+						appendStringLiteralAH(q, fmtId(tbinfo->dobj.name), fout);
+						appendPQExpBuffer(q, "::pg_catalog.regclass;\n");
+					}
+					appendPQExpBuffer(q, "ALTER TABLE %s ",
 									  fmtId(tbinfo->dobj.name));
 					appendPQExpBuffer(q, "DROP COLUMN %s;\n",
 									  fmtId(tbinfo->attnames[j]));
