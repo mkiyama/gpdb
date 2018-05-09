@@ -58,6 +58,7 @@ groups:
   - icw_planner_centos6
   - icw_gporca_centos6
   - icw_gporca_centos7
+  - icw_planner_centos7
   - icw_gporca_sles11
   - icw_planner_ubuntu16
   - icw_gporca_conan_ubuntu16
@@ -113,8 +114,8 @@ groups:
   - DPM_backup-restore_netbackup_part2
   - DPM_backup-restore_netbackup_part3
   - DPM_backup_43_restore_5
-  - DPM_gptransfer-43x-to-5x
-  - DPM_gptransfer-5x-to-5x
+  - gptransfer-43x-to-5x
+  - gptransfer-5x-to-5x
   - gate_dpm_end
 {% endif %}
 {% if "UD" in test_sections %}
@@ -178,6 +179,7 @@ groups:
   - icw_planner_centos6
   - icw_gporca_centos6
   - icw_gporca_centos7
+  - icw_planner_centos7
   - icw_gporca_sles11
   - icw_planner_ubuntu16
   - icw_gporca_conan_ubuntu16
@@ -249,8 +251,8 @@ groups:
   - DPM_backup-restore_netbackup_part2
   - DPM_backup-restore_netbackup_part3
   - DPM_backup_43_restore_5
-  - DPM_gptransfer-43x-to-5x
-  - DPM_gptransfer-5x-to-5x
+  - gptransfer-43x-to-5x
+  - gptransfer-5x-to-5x
   - gate_dpm_end
 
 {% endif %}
@@ -481,6 +483,15 @@ resources:
     region_name: {{aws-region}}
     secret_access_key: {{bucket-secret-access-key}}
     versioned_file: bin_gpdb_centos6/gpdb_branch_5X_STABLE/icw_green/bin_gpdb.tar.gz
+
+- name: bin_gpdb_centos7_icw_green
+  type: s3
+  source:
+    access_key_id: {{bucket-access-key-id}}
+    bucket: {{bucket-name}}
+    region_name: {{aws-region}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: bin_gpdb_centos7/gpdb_branch_5X_STABLE/icw_green/bin_gpdb.tar.gz
 
 - name: bin_gpdb_sles11_icw_green
   type: s3
@@ -1425,6 +1436,25 @@ jobs:
       TEST_OS: centos
       CONFIGURE_FLAGS: {{configure_flags}}
 
+- name: icw_planner_centos7
+  plan:
+  - aggregate:
+    - get: gpdb_src
+      passed: [gate_icw_start]
+    - get: bin_gpdb
+      resource: bin_gpdb_centos7
+      passed: [gate_icw_start]
+      trigger: [[ test_trigger ]]
+    - get: centos-gpdb-dev-7
+  - task: ic_gpdb
+    file: gpdb_src/concourse/tasks/ic_gpdb.yml
+    image: centos-gpdb-dev-7
+    params:
+      MAKE_TEST_COMMAND: PGOPTIONS='-c optimizer=off' installcheck-world
+      BLDWRAP_POSTGRES_CONF_ADDONS: "fsync=off"
+      TEST_OS: centos
+      CONFIGURE_FLAGS: {{configure_flags}}
+
 - name: icw_gporca_sles11
   plan:
   - aggregate:
@@ -1633,6 +1663,7 @@ jobs:
       - QP_optimizer-functional
     - get: bin_gpdb_centos7
       passed:
+      - icw_planner_centos7
       - icw_gporca_centos7
     - get: bin_gpdb_sles11
       passed:
@@ -1642,6 +1673,9 @@ jobs:
     - put: bin_gpdb_centos6_icw_green
       params:
         file: bin_gpdb_centos6/bin_gpdb.tar.gz
+    - put: bin_gpdb_centos7_icw_green
+      params:
+        file: bin_gpdb_centos7/bin_gpdb.tar.gz
     - put: bin_gpdb_sles11_icw_green
       params:
         file: bin_gpdb_sles11/bin_gpdb.tar.gz
@@ -1919,6 +1953,9 @@ jobs:
     - get: bin_gpdb_centos7
       passed:
       - gate_compile_end
+    - get: binary_swap_gpdb_centos6
+      passed:
+      - gate_compile_end
 
 - name: mpp_interconnect
   plan:
@@ -1960,6 +1997,10 @@ jobs:
       trigger: [[ test_trigger ]]
     - get: ccp_src
     - get: centos-gpdb-dev-6
+    - get: binary_swap_gpdb
+      resource: binary_swap_gpdb_centos6
+      passed: [gate_mpp_start]
+      trigger: [[ test_trigger ]]
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -1996,6 +2037,10 @@ jobs:
       trigger: [[ test_trigger ]]
     - get: ccp_src
     - get: centos-gpdb-dev-7
+    - get: binary_swap_gpdb
+      resource: binary_swap_gpdb_centos6
+      passed: [gate_mpp_start]
+      trigger: [[ test_trigger ]]
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2087,6 +2132,10 @@ jobs:
       trigger: [[ test_trigger ]]
     - get: ccp_src
     - get: centos-gpdb-dev-6
+    - get: binary_swap_gpdb
+      passed: [compile_gpdb_binary_swap_centos6]
+      resource: binary_swap_gpdb_centos6
+      trigger: [[ test_trigger ]]
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2124,6 +2173,10 @@ jobs:
       trigger: [[ test_trigger ]]
     - get: ccp_src
     - get: centos-gpdb-dev-6
+    - get: binary_swap_gpdb
+      passed: [compile_gpdb_binary_swap_centos6]
+      resource: binary_swap_gpdb_centos6
+      trigger: [[ test_trigger ]]
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2809,7 +2862,7 @@ jobs:
   ensure:
     <<: *set_failed
 
-- name: DPM_gptransfer-43x-to-5x
+- name: gptransfer-43x-to-5x
   plan:
   - get: nightly-trigger
     trigger: [[ test_trigger ]]
@@ -2914,7 +2967,7 @@ jobs:
   ensure:
     <<: *set_failed_two_clusters
 
-- name: DPM_gptransfer-5x-to-5x
+- name: gptransfer-5x-to-5x
   plan:
   - *ccp_jitter_delay
   - aggregate:
@@ -3029,8 +3082,8 @@ jobs:
       - DPM_backup-restore_netbackup_part2
       - DPM_backup-restore_netbackup_part3
       - DPM_backup_43_restore_5
-      - DPM_gptransfer-43x-to-5x
-      - DPM_gptransfer-5x-to-5x
+      - gptransfer-43x-to-5x
+      - gptransfer-5x-to-5x
 
 {% endif %}
 {% if "UD" in test_sections %}
@@ -3338,6 +3391,7 @@ jobs:
     - icw_planner_centos6
     - icw_gporca_centos6
     - icw_gporca_centos7
+    - icw_planner_centos7
     - icw_gporca_sles11
     - icw_planner_ubuntu16
     - icw_gporca_conan_ubuntu16
@@ -3375,8 +3429,8 @@ jobs:
                     MM_gpexpand_suites %}
     - MM_[[ test_name ]]
 {% endfor %}
-    - DPM_gptransfer-43x-to-5x
-    - DPM_gptransfer-5x-to-5x
+    - gptransfer-43x-to-5x
+    - gptransfer-5x-to-5x
     - mpp_interconnect
     - QP_optimizer-functional
 {% for test_name in aa_Test_suites %}
