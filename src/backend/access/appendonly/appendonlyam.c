@@ -423,11 +423,16 @@ errdetail_appendonly_insert_block_header(AppendOnlyInsertDesc aoInsertDesc)
 static void
 SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 {
+	RelFileNodeBackend rnode;
+
 	FileSegInfo *fsinfo;
 	int64		eof;
 	int64		eof_uncompressed;
 	int64		varblockcount;
 	int32		fileSegNo;
+
+	rnode.node = aoInsertDesc->aoi_rel->rd_node;
+	rnode.backend = aoInsertDesc->aoi_rel->rd_backend;
 
 	/* Make the 'segment' file name */
 	MakeAOSegmentFileName(aoInsertDesc->aoi_rel,
@@ -484,7 +489,7 @@ SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 	{
 		AppendOnlyStorageWrite_TransactionCreateFile(&aoInsertDesc->storageWrite,
 													 aoInsertDesc->appendFilePathName,
-													 &aoInsertDesc->aoi_rel->rd_node,
+													 &rnode,
 													 aoInsertDesc->cur_segno);
 	}
 
@@ -496,7 +501,7 @@ SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 									aoInsertDesc->fsInfo->formatversion,
 									eof,
 									eof_uncompressed,
-									&aoInsertDesc->aoi_rel->rd_node,
+									&rnode,
 									aoInsertDesc->cur_segno);
 
 	/* reset counts */
@@ -1584,7 +1589,7 @@ appendonly_beginrangescan_internal(Relation relation,
 	scan->aos_filenamepath_maxlen = AOSegmentFilePathNameLen(relation) + 1;
 	scan->aos_filenamepath = (char *) palloc(scan->aos_filenamepath_maxlen);
 	scan->aos_filenamepath[0] = '\0';
-	scan->usableBlockSize = AppendOnlyStorage_GetUsableBlockSize(relation->rd_appendonly->blocksize);
+	scan->usableBlockSize = relation->rd_appendonly->blocksize;
 	scan->aos_rd = relation;
 	scan->appendOnlyMetaDataSnapshot = appendOnlyMetaDataSnapshot;
 	scan->snapshot = snapshot;
@@ -2143,9 +2148,7 @@ appendonly_fetch_init(Relation relation,
 	attr->compressLevel = relation->rd_appendonly->compresslevel;
 	attr->checksum = relation->rd_appendonly->checksum;
 	attr->safeFSWriteSize = relation->rd_appendonly->safefswritesize;
-
-	aoFetchDesc->usableBlockSize =
-		AppendOnlyStorage_GetUsableBlockSize(relation->rd_appendonly->blocksize);
+	aoFetchDesc->usableBlockSize = relation->rd_appendonly->blocksize;
 
 	/*
 	 * Get information about all the file segments we need to scan
@@ -2441,7 +2444,7 @@ AppendOnlyDeleteDesc
 appendonly_delete_init(Relation rel, Snapshot appendOnlyMetaDataSnapshot)
 {
 	Assert(RelationIsAoRows(rel));
-	Assert(!IsXactIsoLevelSerializable);
+	Assert(!IsolationUsesXactSnapshot());
 
 	AppendOnlyDeleteDesc aoDeleteDesc = palloc0(sizeof(AppendOnlyDeleteDescData));
 
@@ -2507,7 +2510,7 @@ AppendOnlyUpdateDesc
 appendonly_update_init(Relation rel, Snapshot appendOnlyMetaDataSnapshot, int segno)
 {
 	Assert(RelationIsAoRows(rel));
-	Assert(!IsXactIsoLevelSerializable);
+	Assert(!IsolationUsesXactSnapshot());
 
 	/*
 	 * allocate and initialize the insert descriptor
@@ -2643,7 +2646,7 @@ appendonly_insert_init(Relation rel, int segno, bool update_mode)
 /* 	aoInsertDesc->useNoToast = aoentry->notoast; */
 	aoInsertDesc->useNoToast = Debug_appendonly_use_no_toast;
 
-	aoInsertDesc->usableBlockSize = AppendOnlyStorage_GetUsableBlockSize(rel->rd_appendonly->blocksize);
+	aoInsertDesc->usableBlockSize = rel->rd_appendonly->blocksize;
 
 	attr = &aoInsertDesc->storageAttributes;
 

@@ -224,8 +224,19 @@ plan_tree_mutator(Node *node,
 				FLATCOPY(newappend, append, Append);
 				PLANMUTATE(newappend, append);
 				MUTATE(newappend->appendplans, append->appendplans, List *);
-				/* isTarget is scalar. */
 				return (Node *) newappend;
+			}
+			break;
+
+		case T_MergeAppend:
+			{
+				MergeAppend	   *merge = (MergeAppend *) node;
+				MergeAppend	   *newmerge;
+
+				FLATCOPY(newmerge, merge, MergeAppend);
+				PLANMUTATE(newmerge, merge);
+				MUTATE(newmerge->mergeplans, merge->mergeplans, List *);
+				return (Node *) newmerge;
 			}
 			break;
 
@@ -386,7 +397,6 @@ plan_tree_mutator(Node *node,
 				SCANMUTATE(newextscan, extscan);
 
 				MUTATE(newextscan->uriList, extscan->uriList, List *);
-				MUTATE(newextscan->fmtOpts, extscan->fmtOpts, List *);
 				newextscan->fmtType = extscan->fmtType;
 				newextscan->isMasterOnly = extscan->isMasterOnly;
 
@@ -820,7 +830,6 @@ plan_tree_mutator(Node *node,
 				switch (rte->rtekind)
 				{
 					case RTE_RELATION:	/* ordinary relation reference */
-					case RTE_SPECIAL:	/* special rule relation (NEW or OLD) */
 					case RTE_VOID:	/* deleted entry */
 						/* No extras. */
 						break;
@@ -927,7 +936,8 @@ plan_tree_mutator(Node *node,
  * definition.
  *
  */
-void		mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void *context)
+static void
+mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void *context)
 {
 	/*
 	 * Scalar fields startup_cost total_cost plan_rows plan_width nParamExec
@@ -953,7 +963,8 @@ void		mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void
  * definition.
  *
  */
-void		mutate_join_fields(Join *newjoin, Join *oldjoin, Node *(*mutator) (), void *context)
+static void 
+mutate_join_fields(Join *newjoin, Join *oldjoin, Node *(*mutator) (), void *context)
 {
 	/* A Join node is a Plan node. */
 	mutate_plan_fields((Plan *) newjoin, (Plan *) oldjoin, mutator, context);

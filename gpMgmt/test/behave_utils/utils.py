@@ -117,10 +117,10 @@ def run_cmd(command):
     return (result.rc, result.stdout, result.stderr)
 
 
-def run_command_remote(context, command, host, source_file, export_mdd):
+def run_command_remote(context, command, host, source_file, export_mdd, validateAfter=True):
     cmd = Command(name='run command %s' % command,
                   cmdStr='gpssh -h %s -e \'source %s; %s; %s\'' % (host, source_file, export_mdd, command))
-    cmd.run(validateAfter=True)
+    cmd.run(validateAfter=validateAfter)
     result = cmd.get_results()
     context.ret_code = result.rc
     context.stdout_message = result.stdout
@@ -255,7 +255,8 @@ def check_db_exists(dbname, host=None, port=0, user=None):
 def create_database_if_not_exists(context, dbname, host=None, port=0, user=None):
     if not check_db_exists(dbname, host, port, user):
         create_database(context, dbname, host, port, user)
-
+    context.dbname = dbname
+    context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname))
 
 def create_database(context, dbname=None, host=None, port=0, user=None):
     LOOPS = 10
@@ -659,10 +660,15 @@ def is_any_segment_resynchronized():
     return False
 
 
-def check_row_count(tablename, dbname, nrows):
+def check_row_count(context, tablename, dbname, nrows):
     NUM_ROWS_QUERY = 'select count(*) from %s' % tablename
     # We want to bubble up the exception so that if table does not exist, the test fails
-    with dbconn.connect(dbconn.DbURL(dbname=dbname)) as conn:
+    if hasattr(context, 'standby_was_activated') and context.standby_was_activated is True:
+        dburl = dbconn.DbURL(dbname=dbname, port=context.standby_port, hostname=context.standby_hostname)
+    else:
+        dburl = dbconn.DbURL(dbname=dbname)
+
+    with dbconn.connect(dburl) as conn:
         result = dbconn.execSQLForSingleton(conn, NUM_ROWS_QUERY)
     if result != nrows:
         raise Exception('%d rows in table %s.%s, expected row count = %d' % (result, dbname, tablename, nrows))

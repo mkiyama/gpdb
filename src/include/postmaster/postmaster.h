@@ -3,10 +3,10 @@
  * postmaster.h
  *	  Exports from postmaster/postmaster.c.
  *
- * Portions Copyright (c) 1996-2010, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $PostgreSQL: pgsql/src/include/postmaster/postmaster.h,v 1.22 2010/01/02 16:58:08 momjian Exp $
+ * src/include/postmaster/postmaster.h
  *
  *-------------------------------------------------------------------------
  */
@@ -30,6 +30,7 @@ extern bool Log_connections;
 extern bool log_hostname;
 extern bool enable_bonjour;
 extern char *bonjour_name;
+extern bool restart_after_crash;
 
 #ifdef WIN32
 extern HANDLE PostmasterHandle;
@@ -47,6 +48,7 @@ extern int	postmaster_alive_fds[2];
 
 #define POSTMASTER_IN_STARTUP_MSG "the database system is starting up"
 #define POSTMASTER_IN_RECOVERY_MSG "the database system is in recovery mode"
+#define POSTMASTER_IN_RECOVERY_DETAIL_MSG "last replayed record at"
 
 extern const char *progname;
 

@@ -35,8 +35,6 @@ typedef struct WalSnd
 	pid_t		pid;			/* this walsender's process id, or 0 */
 	WalSndState state;			/* this walsender's state */
 	XLogRecPtr	sentPtr;		/* WAL has been sent up to this point */
-	bool		needreload;		/* does currently-open file need to be
-								 * reloaded? */
 	bool		sendKeepalive;	/* do we send keepalives on this connection? */
 
 	/*
@@ -86,11 +84,10 @@ typedef struct WalSnd
 	bool		synchronous;
 
 	/*
-	 * Records time when PID was set to 0, either during initialization or due
-	 * to disconnection. This helps to detect time passed since mirror didn't
-	 * connect.
+	 * Records time, either during initialization or due to disconnection.
+	 * This helps to detect time passed since mirror didn't connect.
 	 */
-	pg_time_t   marked_pid_zero_at_time;
+	pg_time_t   replica_disconnected_at;
 } WalSnd;
 
 extern WalSnd *MyWalSnd;

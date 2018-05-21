@@ -24,6 +24,7 @@
 #include "access/tuptoaster.h"
 
 #include "catalog/pg_attribute_encoding.h"
+#include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbappendonlyblockdirectory.h"
 #include "cdb/cdbappendonlystoragelayer.h"
 #include "cdb/cdbappendonlystorageread.h"
@@ -369,7 +370,8 @@ init_datumstream_info(
 	/*
 	 * Adjust maxsz for Append-Only Storage.
 	 */
-	*maxAoBlockSize = AppendOnlyStorage_GetUsableBlockSize(maxsz);
+	Assert(maxsz <= MAX_APPENDONLY_BLOCK_SIZE);
+	*maxAoBlockSize = maxsz;
 
 	/*
 	 * Assume the folowing unless modified below.
@@ -784,7 +786,8 @@ destroy_datumstreamread(DatumStreamRead * ds)
 
 
 void
-datumstreamwrite_open_file(DatumStreamWrite * ds, char *fn, int64 eof, int64 eofUncompressed, RelFileNode relFileNode, int32 segmentFileNum, int version)
+datumstreamwrite_open_file(DatumStreamWrite *ds, char *fn, int64 eof, int64 eofUncompressed,
+						   RelFileNodeBackend *relFileNode, int32 segmentFileNum, int version)
 {
 	ds->eof = eof;
 	ds->eofUncompress = eofUncompressed;
@@ -801,7 +804,7 @@ datumstreamwrite_open_file(DatumStreamWrite * ds, char *fn, int64 eof, int64 eof
 	{
 		AppendOnlyStorageWrite_TransactionCreateFile(&ds->ao_write,
 													 fn,
-													 &relFileNode,
+													 relFileNode,
 													 segmentFileNum);
 	}
 
@@ -813,7 +816,7 @@ datumstreamwrite_open_file(DatumStreamWrite * ds, char *fn, int64 eof, int64 eof
 									version,
 									eof,
 									eofUncompressed,
-									&relFileNode,
+									relFileNode,
 									segmentFileNum);
 
 	ds->need_close_file = true;

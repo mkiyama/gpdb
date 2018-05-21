@@ -35,15 +35,6 @@ TESTER= \
 DISCOVER=discover
 
 # cs-walrepl-multinode
-walrep_1:
-	$(TESTER) $(DISCOVER) -t tincrepo/mpp/gpdb/tests/storage/walrepl \
-	-s gpactivatestandby \
-	-s gpinitstandby \
-	-s gpstart \
-	-s gpstate \
-	-s gpstop \
-	-s run
-
 walrep_2:
 	$(TESTER) $(DISCOVER) -t tincrepo/mpp/gpdb/tests/storage/walrepl \
 	-s basebackup \
@@ -57,12 +48,6 @@ walrep_2:
 	-s crash \
 	-q "class!=DDLTestCase" \
 	-q "class!=DMLTestCase"
-
-test_pg_twophase:
-	$(TESTER) $(DISCOVER) \
-	-s tincrepo/mpp/gpdb/tests/storage/pg_twophase \
-	-p test_pg_twophase.py \
-	-p test_switch.py
 
 runaway_query:
 	$(TESTER) \

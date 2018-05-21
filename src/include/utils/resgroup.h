@@ -54,21 +54,12 @@ typedef struct ResGroupCaps
 	ResGroupCap		memLimit;
 	ResGroupCap		memSharedQuota;
 	ResGroupCap		memSpillRatio;
+	ResGroupCap		memAuditor;
 } ResGroupCaps;
-
-/*
- * Resource group options
- */
-typedef struct ResGroupOptions
-{
-	ResGroupCaps caps;
-	int32 memAuditor;
-} ResGroupOptions;
 
 /*
  * GUC variables.
  */
-extern char                		*gp_resgroup_memory_policy_str;
 extern bool						gp_log_resgroup_memory;
 extern int						gp_resgroup_memory_policy_auto_fixed_mem;
 extern bool						gp_resgroup_print_operator_memory_limits;
@@ -77,6 +68,12 @@ extern int						memory_spill_ratio;
 extern int gp_resource_group_cpu_priority;
 extern double gp_resource_group_cpu_limit;
 extern double gp_resource_group_memory_limit;
+
+/*
+ * Non-GUC global variables.
+ */
+extern bool gp_resource_group_enable_cgroup_memory;
+extern bool gp_resource_group_enable_cgroup_swap;
 
 /*
  * Resource Group assignment hook.
@@ -108,7 +105,7 @@ extern void ResGroupControlInit(void);
 /* Load resource group information from catalog */
 extern void	InitResGroups(void);
 
-extern void AllocResGroupEntry(Oid groupId, const ResGroupOptions *groupOptions);
+extern void AllocResGroupEntry(Oid groupId, const ResGroupCaps *caps);
 
 extern void SerializeResGroupInfo(StringInfo str);
 extern void DeserializeResGroupInfo(struct ResGroupCaps *capsOut,

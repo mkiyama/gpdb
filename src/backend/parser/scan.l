@@ -1,4 +1,4 @@
-%{
+%top{
 /*-------------------------------------------------------------------------
  *
  * scan.l
@@ -6,7 +6,7 @@
  *
  * NOTE NOTE NOTE:
  *
- * The rules in this file must be kept in sync with psql's lexer!!!
+ * The rules in this file must be kept in sync with psql's psqlscan.l!
  *
  * The rules are designed so that the scanner never has to backtrack,
  * in the sense that there is always a rule that can match the input
@@ -20,11 +20,11 @@
  * resulting "lex.backup" file says that no backing up is needed.
  *
  *
- * Portions Copyright (c) 1996-2010, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/parser/scan.l,v 1.167 2010/05/30 18:10:41 tgl Exp $
+ *	  src/backend/parser/scan.l
  *
  *-------------------------------------------------------------------------
  */
@@ -33,11 +33,13 @@
 #include <ctype.h>
 #include <unistd.h>
 
+#include "parser/gramparse.h"
 #include "parser/parser.h"				/* only needed for GUC variables */
-#include "parser/scanner.h"
 #include "parser/scansup.h"
 #include "mb/pg_wchar.h"
+}
 
+%{
 #define unify_version(a,b,c) ((a<<16)+(b<<8)+c)
 #if unify_version(YY_FLEX_MAJOR_VERSION,YY_FLEX_MINOR_VERSION,YY_FLEX_SUBMINOR_VERSION) < unify_version(2,5,35)
 int base_yyget_lineno  (void);
@@ -268,8 +270,8 @@ xqinside		[^']+
 
 /* $foo$ style quotes ("dollar quoting")
  * The quoted string starts with $foo$ where "foo" is an optional string
- * in the form of an identifier, except that it may not contain "$", 
- * and extends to the first occurrence of an identical string.  
+ * in the form of an identifier, except that it may not contain "$",
+ * and extends to the first occurrence of an identical string.
  * There is *no* processing of the quoted text.
  *
  * {dolqfailed} is an error rule to avoid scanner backup when {dolqdelim}
@@ -355,7 +357,7 @@ self			[,()\[\].;\:\+\-\*\/\%\^\<\>\=]
 op_chars		[\~\!\@\#\^\&\|\`\?\+\-\*\/\%\<\>\=]
 operator		{op_chars}+
 
-/* we no longer allow unary minus in numbers. 
+/* we no longer allow unary minus in numbers.
  * instead we pass it separately to parser. there it gets
  * coerced via doNegate() -- Leon aug 20 1999
  *

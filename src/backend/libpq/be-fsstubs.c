@@ -3,12 +3,12 @@
  * be-fsstubs.c
  *	  Builtin functions for open/close/read/write operations on large objects
  *
- * Portions Copyright (c) 1996-2010, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/libpq/be-fsstubs.c,v 1.94 2010/02/26 02:00:42 momjian Exp $
+ *	  src/backend/libpq/be-fsstubs.c
  *
  * NOTES
  *	  This should be moved to a more appropriate place.  It is here
@@ -101,6 +101,10 @@ lo_open(PG_FUNCTION_ARGS)
 	LargeObjectDesc *lobjDesc;
 	int			fd;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 #if FSDB
 	elog(DEBUG4, "lo_open(%u,%d)", lobjId, mode);
 #endif
@@ -126,6 +130,10 @@ Datum
 lo_close(PG_FUNCTION_ARGS)
 {
 	int32		fd = PG_GETARG_INT32(0);
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	if (fd < 0 || fd >= cookies_size || cookies[fd] == NULL)
 		ereport(ERROR,
@@ -219,6 +227,10 @@ lo_lseek(PG_FUNCTION_ARGS)
 	int32		whence = PG_GETARG_INT32(2);
 	int			status;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 	if (fd < 0 || fd >= cookies_size || cookies[fd] == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
@@ -233,6 +245,10 @@ Datum
 lo_creat(PG_FUNCTION_ARGS)
 {
 	Oid			lobjId;
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	/*
 	 * We don't actually need to store into fscxt, but create it anyway to
@@ -250,6 +266,10 @@ lo_create(PG_FUNCTION_ARGS)
 {
 	Oid			lobjId = PG_GETARG_OID(0);
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 	/*
 	 * We don't actually need to store into fscxt, but create it anyway to
 	 * ensure that AtEOXact_LargeObject knows there is state to clean up
@@ -266,6 +286,10 @@ lo_tell(PG_FUNCTION_ARGS)
 {
 	int32		fd = PG_GETARG_INT32(0);
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 	if (fd < 0 || fd >= cookies_size || cookies[fd] == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
@@ -278,6 +302,10 @@ Datum
 lo_unlink(PG_FUNCTION_ARGS)
 {
 	Oid			lobjId = PG_GETARG_OID(0);
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	/* Must be owner of the largeobject */
 	if (!lo_compat_privileges &&
@@ -322,6 +350,10 @@ loread(PG_FUNCTION_ARGS)
 	bytea	   *retval;
 	int			totalread;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 	if (len < 0)
 		len = 0;
 
@@ -339,6 +371,10 @@ lowrite(PG_FUNCTION_ARGS)
 	bytea	   *wbuf = PG_GETARG_BYTEA_P(1);
 	int			bytestowrite;
 	int			totalwritten;
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	bytestowrite = VARSIZE(wbuf) - VARHDRSZ;
 	totalwritten = lo_write(fd, VARDATA(wbuf), bytestowrite);
@@ -358,6 +394,10 @@ lo_import(PG_FUNCTION_ARGS)
 {
 	text	   *filename = PG_GETARG_TEXT_PP(0);
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 	PG_RETURN_OID(lo_import_internal(filename, InvalidOid));
 }
 
@@ -370,6 +410,10 @@ lo_import_with_oid(PG_FUNCTION_ARGS)
 {
 	text	   *filename = PG_GETARG_TEXT_PP(0);
 	Oid			oid = PG_GETARG_OID(1);
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	PG_RETURN_OID(lo_import_internal(filename, oid));
 }
@@ -399,7 +443,7 @@ lo_import_internal(text *filename, Oid lobjOid)
 	 * open the file to be read in
 	 */
 	text_to_cstring_buffer(filename, fnamebuf, sizeof(fnamebuf));
-	fd = PathNameOpenFile(fnamebuf, O_RDONLY | PG_BINARY, 0666);
+	fd = PathNameOpenFile(fnamebuf, O_RDONLY | PG_BINARY, S_IRWXU);
 	if (fd < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -451,6 +495,10 @@ lo_export(PG_FUNCTION_ARGS)
 	LargeObjectDesc *lobj;
 	mode_t		oumask;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
+
 #ifndef ALLOW_DANGEROUS_LO_FUNCTIONS
 	if (!superuser())
 		ereport(ERROR,
@@ -474,8 +522,9 @@ lo_export(PG_FUNCTION_ARGS)
 	 * world-writable export files doesn't seem wise.
 	 */
 	text_to_cstring_buffer(filename, fnamebuf, sizeof(fnamebuf));
-	oumask = umask((mode_t) 0022);
-	fd = PathNameOpenFile(fnamebuf, O_CREAT | O_WRONLY | O_TRUNC | PG_BINARY, 0666);
+	oumask = umask(S_IWGRP | S_IWOTH);
+	fd = PathNameOpenFile(fnamebuf, O_CREAT | O_WRONLY | O_TRUNC | PG_BINARY,
+						  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	umask(oumask);
 	if (fd < 0)
 		ereport(ERROR,
@@ -511,6 +560,10 @@ lo_truncate(PG_FUNCTION_ARGS)
 {
 	int32		fd = PG_GETARG_INT32(0);
 	int32		len = PG_GETARG_INT32(1);
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("large objects are not supported")));
 
 	if (fd < 0 || fd >= cookies_size || cookies[fd] == NULL)
 		ereport(ERROR,
