@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-    <topicref href="../../580/homenav.html" scope="external" navtitle="Greenplum Database 5.8 Documentation"
-        format="html"/>
+    <topicref href="../../580/homenav.html" scope="external"
+        navtitle="Greenplum Database 5.8 Documentation" format="html"/>
     <topicref href="utility_guide.xml" navtitle="Utility Guide">
         <topicref href="admin_utilities/util_ref.xml" linking="targetonly">
             <topicref href="admin_utilities/analyzedb.xml"/>
@@ -13,6 +13,7 @@
             <topicref href="admin_utilities/gpcheckcat.xml"/>
             <topicref href="admin_utilities/gpcheckperf.xml"/>
             <topicref href="admin_utilities/gpconfig.xml"/>
+            <topicref href="admin_utilities/gpcopy.xml"/>
             <topicref href="admin_utilities/gpcrondump.xml"/>
             <topicref href="admin_utilities/gpdbrestore.xml"/>
             <topicref href="admin_utilities/gpdeletesystem.xml"/>

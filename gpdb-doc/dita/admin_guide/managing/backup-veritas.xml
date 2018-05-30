@@ -4,6 +4,11 @@
 <topic id="backup-veritas">
   <title>Backing Up Databases with Veritas NetBackup</title>
   <body id="body_ebt_kzy_3p">
+    <note>The <codeph>gpcrondump</codeph> or <codeph>gpdbrestore</codeph> utilities are deprecated
+      and will not be supported after the end of Greenplum Database 5.x Support Life. Also, support
+      of third-party software such as Veritas NetBackup software when used with the
+        <codeph>gpcrondump</codeph> or <codeph>gpdbrestore</codeph> utilities is deprecated and will
+      not be supported after the end of Greenplum Database 5.x Support Life.</note>
     <p>For Greenplum Database on Red Hat Enterprise Linux, you can configure Greenplum Database to
       perform backup and restore operations with Veritas NetBackup. You configure Greenplum Database
       and NetBackup and then run a Greenplum Database <codeph>gpcrondump</codeph> or

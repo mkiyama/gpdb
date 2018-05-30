@@ -43,6 +43,8 @@
           <p>
             <xref href="gpconfig.xml#topic1" type="topic" format="dita"/>
           </p>
+          <p><xref href="gpcopy.xml#topic1" type="topic" format="dita"/>
+          </p>
           <p>
             <xref href="gpcrondump.xml#topic1" type="topic" format="dita"/>
           </p>
@@ -83,7 +85,7 @@
           <p>
             <xref href="gpmfr.xml#topic1" type="topic" format="dita"/>
           </p>
-            <p>
+          <p>
             <xref href="gpmovemirrors.xml#topic1"/>
           </p>
           <p>
