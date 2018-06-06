@@ -7,9 +7,14 @@
     <body>
         <draft-comment author="msk">dev doc <xref
                 href="https://docs.google.com/document/d/14xnIwYzCX7rjRZb3SlSj-kC44UKZ5QJGSH1gMCnFFg0/edit"
-                format="html" scope="external">https://docs.google.com - gpcopy</xref><p>Is this
-                commercial only? - repo is private YES.</p><p>Need confirmation for resource groups,
-                filespaces. DONE - added a prereq. for resource groups, filespaces. </p><p><xref
+                format="html" scope="external">https://docs.google.com - gpcopy</xref><p><xref
+                    href="https://www.pivotaltracker.com/story/show/158020285" format="html"
+                    scope="external">158020285</xref> add --verbose option</p><p><xref
+                    href="https://www.pivotaltracker.com/story/show/158020270" format="html"
+                    scope="external">58020270</xref> parameter changes: --schema-only to
+                --metadata-only,  --database to --dbname</p><p>Is this commercial only? - repo is
+                private YES.</p><p>Need confirmation for resource groups, filespaces. DONE - added a
+                prereq. for resource groups, filespaces. </p><p><xref
                     href="https://www.pivotaltracker.com/story/show/156605415" format="html"
                     scope="external">156605415</xref> support for deleting source data -
                     DONE</p><p><xref href="https://www.pivotaltracker.com/story/show/157585886"
