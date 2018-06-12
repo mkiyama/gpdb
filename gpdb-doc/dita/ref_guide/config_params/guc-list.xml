@@ -4253,13 +4253,13 @@
       <p>The default value is <codeph>false</codeph>, Greenplum Database returns an error if the
           <codeph>INTO ERROR TABLE</codeph> clause is specified in a command. </p>
       <p>If the value is <codeph>true</codeph>, Greenplum Database ignores the clause, issues a
-        warning, and executes the command and logs information about data rows with formatting
-        errors. In Greenplum Database 5.x, you access the error log information with built-in SQL
+        warning, and executes the command without the <codeph>INTO ERROR TABLE</codeph> clause. In
+        Greenplum Database 5.x and later, you access the error log information with built-in SQL
         functions. See the <codeph><xref href="../sql_commands/CREATE_EXTERNAL_TABLE.xml">CREATE
             EXTERNAL TABLE</xref></codeph> or <codeph><xref href="../sql_commands/COPY.xml"
             >COPY</xref></codeph> command.</p>
-      <p>You can set this value to <codeph>true</codeph> to avoid the Greenplum Database 5 error
-        when you run applications that execute <codeph>CREATE EXTERNAL TABLE</codeph> or
+      <p>You can set this value to <codeph>true</codeph> to avoid the Greenplum Database error when
+        you run applications that execute <codeph>CREATE EXTERNAL TABLE</codeph> or
           <codeph>COPY</codeph> commands that include the Greenplum Database 4.3.x <codeph>INTO
           ERROR TABLE</codeph> clause.</p>
       <table id="table_hnf_2v5_bdb">
@@ -4278,7 +4278,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">false</entry>
-              <entry colname="col3">master<p>system</p><p>reload</p></entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -7483,8 +7483,8 @@
     <body>
       <note>The <codeph>memory_spill_ratio</codeph> server configuration parameter is enforced only
         when resource group-based resource management is active.</note>
-      <p>Sets the memory usage threshold for memory-intensive operators in a transaction. When 
-        a transaction reaches this threshold, it spills to disk.</p>
+      <p>Sets the memory usage threshold for memory-intensive operators in a transaction. When a
+        transaction reaches this threshold, it spills to disk.</p>
       <p>The default <codeph>memory_spill_ratio</codeph> is the value defined for the resource group
         assigned to the currently active role. You can set <codeph>memory_spill_ratio</codeph> at
         the session level to selectively set this limit on a per-query basis. For example, if you
@@ -9596,7 +9596,11 @@
     <title>unix_socket_directory</title>
     <body>
       <p>Specifies the directory of the UNIX-domain socket on which the server is to listen for
-        connections from client applications.</p>
+        connections from client applications. The default is an empty string which is the directory
+          <codeph>/tmp/</codeph>.</p>
+      <note type="important">Do not change the value of this parameter. The default location is
+        required for Greenplum Database utilities.</note>
+      <note>This parameter is deprecated and will be removed in a future release.</note>
       <table id="unix_socket_directory_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
