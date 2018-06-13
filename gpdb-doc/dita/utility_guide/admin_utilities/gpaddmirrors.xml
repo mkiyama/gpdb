@@ -13,10 +13,10 @@
    [<b>-d</b> <varname>master_data_directory</varname>] [<b>-B</b> <varname>parallel_processes</varname>] [<b>-l</b> <varname>logfile_directory</varname>]
    [<b>-v</b>]
 
-<b>gpaddmirrors</b> <b>-i</b> <varname>mirror_config_file</varname> [<b>-s</b>] [<b>-a</b>] [<b>-d</b> <varname>master_data_directory</varname>]
+<b>gpaddmirrors</b> <b>-i</b> <varname>mirror_config_file</varname> [<b>-a</b>] [<b>-d</b> <varname>master_data_directory</varname>]
    [<b>-B</b> <varname>parallel_processes</varname>] [<b>-l</b> <varname>logfile_directory</varname>] [<b>-v</b>]
 
-<b>gpaddmirrors</b> <b>-o</b> <varname>output_sample_mirror_config </varname>[<b>-m</b> <varname>datadir_config_file</varname>]
+<b>gpaddmirrors</b> <b>-o</b> <varname>output_sample_mirror_config</varname> [<b>-s</b>] [<b>-m</b> <varname>datadir_config_file</varname>]
 
 <b>gpaddmirrors</b> <b>-?</b> 
 
