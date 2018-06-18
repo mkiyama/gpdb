@@ -121,8 +121,8 @@
                 might be more efficient to copy the schema and smaller tables to the destination
                 database using other methods, such as the SQL <cmdname>COPY</cmdname> command, and
                 then use <codeph>gptransfer</codeph> to transfer large tables in batches.</p>
-            <p>The <codeph>gptransfer</codeph> utility can copy a data row with a maximum length of
-                256 MB.</p>
+            <p>The maximum length of a data row that the <codeph>gptransfer</codeph> utility can
+                copy is 256 MB.</p>
             <p>When transferring data between databases, you can run only one instance of
                     <codeph>gptransfer</codeph> at a time.<ph otherprops="op-pivotal"> Running
                     multiple, concurrent instances of <codeph>gptransfer</codeph> is not
