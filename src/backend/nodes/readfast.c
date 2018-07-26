@@ -954,9 +954,9 @@ static AlternativeSubPlan *
 _readAlternativeSubPlan(void)
 {
 	READ_LOCALS(AlternativeSubPlan);
-	
+
 	READ_NODE_FIELD(subplans);
-	
+
 	READ_DONE();
 }
 
@@ -1139,6 +1139,7 @@ _readCreateStmt_common(CreateStmt *local_node)
 	/* postCreate - for analysis, QD only */
 	/* deferredStmts - for analysis, QD only */
 	READ_BOOL_FIELD(is_part_child);
+	READ_BOOL_FIELD(is_part_parent);
 	READ_BOOL_FIELD(is_add_part);
 	READ_BOOL_FIELD(is_split_part);
 	READ_OID_FIELD(ownerid);
@@ -2762,27 +2763,27 @@ static PlaceHolderVar *
 _readPlaceHolderVar(void)
 {
 	READ_LOCALS(PlaceHolderVar);
-	
+
 	READ_NODE_FIELD(phexpr);
 	READ_BITMAPSET_FIELD(phrels);
 	READ_INT_FIELD(phid);
 	READ_INT_FIELD(phlevelsup);
-	
+
 	READ_DONE();
 }
-	
+
 static PlaceHolderInfo *
 _readPlaceHolderInfo(void)
 {
 	READ_LOCALS(PlaceHolderInfo);
-	
+
 	READ_INT_FIELD(phid);
 	READ_NODE_FIELD(ph_var);
 	READ_BITMAPSET_FIELD(ph_eval_at);
 	READ_BITMAPSET_FIELD(ph_needed);
 	READ_BITMAPSET_FIELD(ph_may_need);
 	READ_INT_FIELD(ph_width);
-	
+
 	READ_DONE();
 }
 
@@ -2961,6 +2962,9 @@ _readModifyTable(void)
 	READ_NODE_FIELD(returningLists);
 	READ_NODE_FIELD(rowMarks);
 	READ_INT_FIELD(epqParam);
+	READ_NODE_FIELD(action_col_idxes);
+	READ_NODE_FIELD(ctid_col_idxes);
+	READ_NODE_FIELD(oid_col_idxes);
 
 	READ_DONE();
 }

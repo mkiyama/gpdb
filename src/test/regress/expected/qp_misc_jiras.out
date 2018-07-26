@@ -3588,33 +3588,6 @@ else 'Unidentify' end
 (10 rows)
 
 DROP TABLE qp_misc_jiras.ir_voice_sms_and_data;
-create table qp_misc_jiras.x (a int, b int) distributed by (a);
---create index xi on x(a);
-insert into qp_misc_jiras.x values (1,2), (2,3), (3,4);
-select count(*) from qp_misc_jiras.x;
- count 
--------
-     3
-(1 row)
-
-set gp_setwith_alter_storage to true;
-alter table qp_misc_jiras.x set with (appendonly=true) distributed by (b);
-insert into qp_misc_jiras.x values (4,5), (5,6);
-select count(*) from qp_misc_jiras.x;
- count 
--------
-     5
-(1 row)
-
-alter table qp_misc_jiras.x set with (appendonly=false) distributed by (a);
-insert into qp_misc_jiras.x values (6,7), (7,8);
-select count(*) from qp_misc_jiras.x;
- count 
--------
-     7
-(1 row)
-
-drop table if exists qp_misc_jiras.x cascade;
 create table qp_misc_jiras.r
     (a int, b int, c int)
     with (appendonly = true)
@@ -4596,6 +4569,42 @@ select test();
  
 (1 row)
 
+--
+-- Test gp_enable_relsize_collection's effect on ORCA plan generation
+--
+create table tbl_z(x int) distributed by (x);
+set optimizer_metadata_caching to off;
+insert into tbl_z select i from generate_series(1,100) i;
+-- plan with no relsize collection
+explain select 1 as t1 where 1 <= ALL (select x from tbl_z);
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Result  (cost=10000000651.88..10000000651.89 rows=1 width=0)
+   One-Time Filter: (SubPlan 1)
+   SubPlan 1  (slice0)
+     ->  Materialize  (cost=10000000000.00..10000001544.50 rows=32100 width=4)
+           ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000001063.00 rows=96300 width=4)
+                 ->  Seq Scan on tbl_z  (cost=10000000000.00..10000001063.00 rows=32100 width=4)
+ Optimizer: legacy query optimizer
+(7 rows)
+
+set gp_enable_relsize_collection = on;
+-- plan with relsize collection
+explain select 1 as t1 where 1 <= ALL (select x from tbl_z);
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Result  (cost=10000000006.52..10000000006.53 rows=1 width=0)
+   One-Time Filter: (SubPlan 1)
+   SubPlan 1  (slice0)
+     ->  Materialize  (cost=10000000000.00..10000000015.44 rows=321 width=4)
+           ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000010.63 rows=963 width=4)
+                 ->  Seq Scan on tbl_z  (cost=10000000000.00..10000000010.63 rows=321 width=4)
+ Optimizer: legacy query optimizer
+(7 rows)
+
+drop table if exists tbl_z;
+reset optimizer_metadata_caching;
+reset gp_enable_relsize_collection;
 -- start_ignore
 drop schema qp_misc_jiras cascade;
 NOTICE:  drop cascades to table qp_misc_jiras._tbl10050_test

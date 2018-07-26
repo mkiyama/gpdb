@@ -2723,13 +2723,12 @@ RelationBuildLocalRelation(const char *relname,
 	 * manager in Greenplum breaks if this happens, see GPDB_91_MERGE_FIXME in
 	 * GetNewRelFileNode() for details.
 	 */
-	if (relid < FirstNormalObjectId /* bootstrap only */
-		|| IsBinaryUpgrade)
+	if (relid < FirstNormalObjectId) /* bootstrap only */
 		rel->rd_rel->relfilenode = relid;
 	else
 	{
 		rel->rd_rel->relfilenode = GetNewRelFileNode(reltablespace, NULL, relpersistence);
-		if (Gp_role == GP_ROLE_EXECUTE)
+		if (Gp_role == GP_ROLE_EXECUTE || IsBinaryUpgrade)
 			AdvanceObjectId(relid);
 	}
 
@@ -2851,14 +2850,17 @@ RelationSetNewRelfilenode(Relation relation, TransactionId freezeXid)
 		classform->relpages = 0;	/* it's empty until further notice */
 		classform->reltuples = 0;
 	}
-	if (should_have_valid_relfrozenxid(relation->rd_rel->relkind,
-									   relation->rd_rel->relstorage))
+
+	if (TransactionIdIsValid(classform->relfrozenxid))
 	{
+		Assert(TransactionIdIsNormal(freezeXid));
 		classform->relfrozenxid = freezeXid;
-	}
-	else
-	{
-		classform->relfrozenxid = InvalidTransactionId;
+		/*
+		 * Don't know partition parent or not here but passing false is perfect
+		 * for assertion, as valid relfrozenxid means it shouldn't be parent.
+		 */
+		Assert(should_have_valid_relfrozenxid(classform->relkind,
+											  classform->relstorage, false));
 	}
 
 	simple_heap_update(pg_class, &tuple->t_self, tuple);

@@ -8,7 +8,7 @@ TODO: docs!
 """
 import os, pickle, base64, time
 
-import re
+import re, socket
 
 from gppylib.gplog import *
 from gppylib.db import dbconn
@@ -53,23 +53,6 @@ def getPostmasterPID(hostname, datadir):
         return int(sout.split()[1])
     except:
         return -1
-
-#-----------------------------------------------
-class PySync(Command):
-    def __init__(self,name,srcDir,dstHost,dstDir,ctxt=LOCAL,remoteHost=None, options=None):
-        psync_executable=GPHOME + "/bin/lib/pysync.py"
-
-        # MPP-13617
-        if ':' in dstHost and not ']' in dstHost:
-            dstHost = '[' + dstHost + ']'
-
-        self.cmdStr="%s %s %s %s:%s" % (psync_executable,
-                                        options if options else "",
-                                        srcDir,
-                                        dstHost,
-                                        dstDir)
-        Command.__init__(self,name,self.cmdStr,ctxt,remoteHost)
-
 
 #-----------------------------------------------
 
@@ -1549,8 +1532,7 @@ class GpRecoverSeg(Command):
        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
 
 class GpReadConfig(Command):
-    def __init__(self, name, host, seg, guc_name, ctxt=LOCAL, remote_host=None):
-        self.host = host
+    def __init__(self, name, seg, guc_name):
         self.seg_db_id = seg.getSegmentDbId()
         self.seg_content_id = seg.getSegmentContentId()
         self.guc_name = guc_name
@@ -1558,6 +1540,11 @@ class GpReadConfig(Command):
         cat_path = findCmdInPath('cat')
 
         cmdStr = "%s %s/postgresql.conf" % (cat_path, seg.getSegmentDataDirectory())
+        ctxt = LOCAL
+        remote_host = None
+        if seg.hostname != socket.gethostname():
+            ctxt = REMOTE
+            remote_host = seg.hostname
         Command.__init__(self, name, cmdStr, ctxt, remote_host)
 
     def get_guc_value(self):
