@@ -3,7 +3,7 @@
  * parse_func.c
  *		handle function calls in parser
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -45,7 +45,6 @@ static void unify_hypothetical_args(ParseState *pstate,
 static Oid	FuncNameAsType(List *funcname);
 static Node *ParseComplexProjection(ParseState *pstate, char *funcname,
 					   Node *first_arg, int location);
-static bool check_pg_get_expr_arg(ParseState *pstate, Node *arg, int netlevelsup);
 
 typedef struct
 {
@@ -797,9 +796,6 @@ ParseFuncOrColumn(ParseState *pstate, List *funcname, List *fargs,
 	if (func_exec_location(funcid) != PROEXECLOCATION_ANY)
 		pstate->p_hasFuncsWithExecRestrictions = true;
 
-	/* Hack to protect pg_get_expr() against misuse */
-	check_pg_get_expr_args(pstate, funcid, fargs);
-
 	return retval;
 }
 
@@ -1076,9 +1072,9 @@ func_select_candidate(int nargs,
 	 * Having completed this examination, remove candidates that accept the
 	 * wrong category at any unknown position.	Also, if at least one
 	 * candidate accepted a preferred type at a position, remove candidates
-	 * that accept non-preferred types.  If just one candidate remains,
-	 * return that one.  However, if this rule turns out to reject all
-	 * candidates, keep them all instead.
+	 * that accept non-preferred types.  If just one candidate remains, return
+	 * that one.  However, if this rule turns out to reject all candidates,
+	 * keep them all instead.
 	 */
 	resolved_unknowns = false;
 	for (i = 0; i < nargs; i++)
@@ -1203,7 +1199,7 @@ func_select_candidate(int nargs,
 	 * type, and see if that gives us a unique match.  If so, use that match.
 	 *
 	 * NOTE: for a binary operator with one unknown and one non-unknown input,
-	 * we already tried this heuristic in binary_oper_exact().  However, that
+	 * we already tried this heuristic in binary_oper_exact().	However, that
 	 * code only finds exact matches, whereas here we will handle matches that
 	 * involve coercion, polymorphic type resolution, etc.
 	 */
@@ -2153,140 +2149,4 @@ checkTableFunctions_walker(Node *node, check_table_func_context *context)
 									  checkTableFunctions_walker, 
 									  (void *) context);
 	}
-}
-
-/*
- * pg_get_expr() is a system function that exposes the expression
- * deparsing functionality in ruleutils.c to users. Very handy, but it was
- * later realized that the functions in ruleutils.c don't check the input
- * rigorously, assuming it to come from system catalogs and to therefore
- * be valid. That makes it easy for a user to crash the backend by passing
- * a maliciously crafted string representation of an expression to
- * pg_get_expr().
- *
- * There's a lot of code in ruleutils.c, so it's not feasible to add
- * water-proof input checking after the fact. Even if we did it once, it
- * would need to be taken into account in any future patches too.
- *
- * Instead, we restrict pg_rule_expr() to only allow input from system
- * catalogs. This is a hack, but it's the most robust and easiest
- * to backpatch way of plugging the vulnerability.
- *
- * This is transparent to the typical usage pattern of
- * "pg_get_expr(systemcolumn, ...)", but will break "pg_get_expr('foo',
- * ...)", even if 'foo' is a valid expression fetched earlier from a
- * system catalog. Hopefully there aren't many clients doing that out there.
- */
-void
-check_pg_get_expr_args(ParseState *pstate, Oid fnoid, List *args)
-{
-	Node	   *arg;
-
-	/* if not being called for pg_get_expr, do nothing */
-	if (fnoid != F_PG_GET_EXPR && fnoid != F_PG_GET_EXPR_EXT)
-		return;
-
-	/* superusers are allowed to call it anyway (dubious) */
-	if (superuser())
-		return;
-
-	/*
-	 * The first argument must be a Var referencing one of the allowed
-	 * system-catalog columns.  It could be a join alias Var or subquery
-	 * reference Var, though, so we need a recursive subroutine to chase
-	 * through those possibilities.
-	 */
-	Assert(list_length(args) > 1);
-	arg = (Node *) linitial(args);
-
-	if (!check_pg_get_expr_arg(pstate, arg, 0))
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("argument to pg_get_expr() must come from system catalogs")));
-}
-
-static bool
-check_pg_get_expr_arg(ParseState *pstate, Node *arg, int netlevelsup)
-{
-	if (arg && IsA(arg, Var))
-	{
-		Var		   *var = (Var *) arg;
-		RangeTblEntry *rte;
-		AttrNumber	attnum;
-
-		netlevelsup += var->varlevelsup;
-		rte = GetRTEByRangeTablePosn(pstate, var->varno, netlevelsup);
-		attnum = var->varattno;
-
-		if (rte->rtekind == RTE_JOIN)
-		{
-			/* Recursively examine join alias variable */
-			if (attnum > 0 &&
-				attnum <= list_length(rte->joinaliasvars))
-			{
-				arg = (Node *) list_nth(rte->joinaliasvars, attnum - 1);
-				return check_pg_get_expr_arg(pstate, arg, netlevelsup);
-			}
-		}
-		else if (rte->rtekind == RTE_SUBQUERY)
-		{
-			/* Subselect-in-FROM: examine sub-select's output expr */
-			TargetEntry *ste = get_tle_by_resno(rte->subquery->targetList,
-												attnum);
-			ParseState	mypstate;
-
-			if (ste == NULL || ste->resjunk)
-				elog(ERROR, "subquery %s does not have attribute %d",
-					 rte->eref->aliasname, attnum);
-			arg = (Node *) ste->expr;
-
-			/*
-			 * Recurse into the sub-select to see what its expr refers to.
-			 * We have to build an additional level of ParseState to keep in
-			 * step with varlevelsup in the subselect.
-			 */
-			MemSet(&mypstate, 0, sizeof(mypstate));
-			mypstate.parentParseState = pstate;
-			mypstate.p_rtable = rte->subquery->rtable;
-			/* don't bother filling the rest of the fake pstate */
-
-			return check_pg_get_expr_arg(&mypstate, arg, 0);
-		}
-		else if (rte->rtekind == RTE_RELATION)
-		{
-			switch (rte->relid)
-			{
-				case IndexRelationId:
-					if (attnum == Anum_pg_index_indexprs ||
-						attnum == Anum_pg_index_indpred)
-						return true;
-					break;
-
-				case AttrDefaultRelationId:
-					if (attnum == Anum_pg_attrdef_adbin)
-						return true;
-					break;
-
-				case ConstraintRelationId:
-					if (attnum == Anum_pg_constraint_conbin)
-						return true;
-					break;
-
-				case TypeRelationId:
-					if (attnum == Anum_pg_type_typdefaultbin)
-						return true;
-					break;
-
-				case PartitionRuleRelationId:
-					if (attnum == Anum_pg_partition_rule_parrangestart ||
-						attnum == Anum_pg_partition_rule_parrangeend ||
-						attnum == Anum_pg_partition_rule_parrangeevery ||
-						attnum == Anum_pg_partition_rule_parlistvalues)
-						return true;
-					break;
-			}
-		}
-	}
-
-	return false;
 }

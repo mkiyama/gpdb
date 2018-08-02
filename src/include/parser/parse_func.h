@@ -4,7 +4,7 @@
  *
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/parser/parse_func.h
@@ -78,8 +78,6 @@ extern Oid LookupFuncNameTypeNames(List *funcname, List *argtypes,
 						bool noError);
 extern Oid LookupAggNameTypeNames(List *aggname, List *argtypes,
 					   bool noError);
-
-extern void check_pg_get_expr_args(ParseState *pstate, Oid fnoid, List *args);
 
 extern void parseCheckTableFunctions(ParseState *pstate, Query *qry);
 

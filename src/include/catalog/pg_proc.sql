@@ -283,7 +283,7 @@
 
  CREATE FUNCTION bmvacuumcleanup(internal, internal) RETURNS internal LANGUAGE internal VOLATILE STRICT AS 'bmvacuumcleanup' WITH (OID=7195, DESCRIPTION="bitmap(internal)");
 
- CREATE FUNCTION bmcostestimate(internal, internal, internal, internal, internal, internal, internal, internal) RETURNS void LANGUAGE internal VOLATILE STRICT AS 'bmcostestimate' WITH (OID=7196, DESCRIPTION="bitmap(internal)");
+ CREATE FUNCTION bmcostestimate(internal, internal, internal, internal, internal, internal, internal) RETURNS void LANGUAGE internal VOLATILE STRICT AS 'bmcostestimate' WITH (OID=7196, DESCRIPTION="bitmap(internal)");
 
  CREATE FUNCTION bmoptions(_text, bool) RETURNS bytea LANGUAGE internal STABLE STRICT AS 'bmoptions' WITH (OID=7197, DESCRIPTION="btree(internal)");
 
@@ -522,12 +522,26 @@
  
  CREATE FUNCTION cbrt(complex) RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'complex_cbrt' WITH (OID=3591, DESCRIPTION="cube root"); 
  
- CREATE FUNCTION numeric2point("numeric") RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'numeric2complex' WITH (OID=3592, DESCRIPTION="(internal) type cast from numeric to complex");
+ CREATE FUNCTION numeric2point("numeric") RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'numeric2complex' WITH (OID=7597, DESCRIPTION="(internal) type cast from numeric to complex");
  
- CREATE FUNCTION complex_lt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lt' WITH (OID=3593);
+ CREATE FUNCTION complex_lt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lt' WITH (OID=7598);
  
  CREATE FUNCTION complex_gt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_gt' WITH (OID=3594);
  
  CREATE FUNCTION complex_lte(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lte' WITH (OID=3595);
- 
+
  CREATE FUNCTION complex_gte(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_gte' WITH (OID=7596);
+
+CREATE FUNCTION hyperloglog_in(value cstring) RETURNS hyperloglog_estimator  LANGUAGE internal IMMUTABLE STRICT AS 'hyperloglog_in' WITH (OID=7158, DESCRIPTION="Decode a bytea into hyperloglog_counter");
+
+CREATE FUNCTION hyperloglog_out(counter hyperloglog_estimator) RETURNS cstring  LANGUAGE internal IMMUTABLE STRICT AS 'hyperloglog_out' WITH (OID=7159, DESCRIPTION="Encode an hyperloglog_counter into a bytea");
+
+CREATE FUNCTION hyperloglog_comp(counter hyperloglog_estimator) RETURNS hyperloglog_estimator  LANGUAGE internal IMMUTABLE STRICT AS 'hyperloglog_comp' WITH (OID=7160, DESCRIPTION="Compress an hyperloglog counter");
+
+CREATE FUNCTION hyperloglog_merge(estimator1 hyperloglog_estimator, estimator2 hyperloglog_estimator) RETURNS hyperloglog_estimator  LANGUAGE internal IMMUTABLE AS 'hyperloglog_merge' WITH (OID=7161, DESCRIPTION="Merge two hyperloglog counters into one");
+
+CREATE FUNCTION hyperloglog_get_estimate(counter hyperloglog_estimator) RETURNS float8  LANGUAGE internal IMMUTABLE STRICT AS 'hyperloglog_get_estimate' WITH (OID=7162, DESCRIPTION="Estimates the number of distinct values stored in an hyperloglog counter");
+
+CREATE FUNCTION hyperloglog_add_item_agg_default(counter hyperloglog_estimator, item anyelement) RETURNS hyperloglog_estimator  LANGUAGE internal IMMUTABLE AS 'hyperloglog_add_item_agg_default' WITH (OID=7163, DESCRIPTION="Includes a data value into a hyperloglog counter");
+
+CREATE FUNCTION hyperloglog_accum(anyelement) RETURNS hyperloglog_estimator LANGUAGE internal IMMUTABLE AS 'aggregate_dummy' WITH (OID=7164, proisagg="t", DESCRIPTION="Adds every data value to a hyperloglog counter and returns the counter");
