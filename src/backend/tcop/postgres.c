@@ -18,7 +18,6 @@
  */
 
 #include "postgres.h"
-#include "gpmon/gpmon.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -498,7 +497,7 @@ SocketBackend(StringInfo inBuf)
 					{
 						/*
 						 * Can't send DEBUG log messages to client at this
-						 * point.Since we're disconnecting right away, we
+						 * point. Since we're disconnecting right away, we
 						 * don't need to restore whereToSendOutput.
 						 */
 						whereToSendOutput = DestNone;
@@ -1152,7 +1151,7 @@ exec_mpp_query(const char *query_string,
 			sliceTable->localSlice = localSlice;
 
 			slice = (Slice *)list_nth(sliceTable->slices, sliceTable->localSlice);
-			Insist(IsA(slice, Slice));
+			Assert(IsA(slice, Slice));
 
 			/* Set global sliceid variable for elog. */
 			currentSliceId = sliceTable->localSlice;

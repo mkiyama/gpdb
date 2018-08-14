@@ -1997,7 +1997,7 @@ elog_dismiss(int downgrade_to_elevel)
 		ErrorData  *newedata = &errordata[errordata_stack_depth];
 
 		/* errstart has stacked a new ErrorData entry. */
-		Insist(newedata == edata + 1);
+		Assert(newedata == edata + 1);
 
 		/* It tells us where to send the error report for the new elevel. */
 		edata->elevel = newedata->elevel;
@@ -2807,6 +2807,8 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 						if (subXid >= FirstNormalTransactionId)
 							appendStringInfo(buf, ", sx%u, ", subXid);
 					}
+
+					break;
 				}
 			case 'e':
 				appendStringInfoString(buf, unpack_sql_state(edata->sqlerrcode));
@@ -4737,7 +4739,16 @@ uint32 gp_backtrace(void **stackAddresses, uint32 maxStackDepth)
 {
 #if defined(__i386) || defined(__x86_64__)
 
-	Assert(stack_base_ptr != NULL);
+	/*
+	 * Stack base pointer has not been initialized by PostmasterMain,
+	 * or PostgresMain/AuxiliaryProcessMain is called directly by main
+	 * rather than forked by PostmasterMain (such as when initdb).
+	 *
+	 * In this case, just return depth as 0 to indicate that we have not
+	 * stored any frame addresses.
+	 */
+	if (stack_base_ptr == NULL)
+		return 0;
 
 	/* get base pointer of current frame */
 	uint64 framePtrValue = 0;

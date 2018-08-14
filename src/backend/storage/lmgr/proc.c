@@ -76,6 +76,7 @@ bool		log_lock_waits = false;
 /* Pointer to this process's PGPROC and PGXACT structs, if any */
 PGPROC	   *MyProc = NULL;
 PGXACT	   *MyPgXact = NULL;
+TMGXACT	   *MyTmGxact = NULL;
 
 /* Special for MPP reader gangs */
 PGPROC	   *lockHolderProcPtr = NULL;
@@ -190,6 +191,7 @@ InitProcGlobal(void)
 {
 	PGPROC	   *procs;
 	PGXACT	   *pgxacts;
+	TMGXACT	   *tmgxacts;
 	int			i,
 				j;
 	bool		found;
@@ -241,6 +243,14 @@ InitProcGlobal(void)
 	pgxacts = (PGXACT *) ShmemAlloc(TotalProcs * sizeof(PGXACT));
 	MemSet(pgxacts, 0, TotalProcs * sizeof(PGXACT));
 	ProcGlobal->allPgXact = pgxacts;
+
+	/*
+	 * Also allocate a separate array of TMGXACT structures out of the same
+	 * consideration as above.
+	 */
+	tmgxacts = (TMGXACT *) ShmemAlloc(TotalProcs * sizeof(TMGXACT));
+	MemSet(tmgxacts, 0, TotalProcs * sizeof(TMGXACT));
+	ProcGlobal->allTmGxact = tmgxacts;
 
 	for (i = 0; i < TotalProcs; i++)
 	{
@@ -295,13 +305,6 @@ InitProcGlobal(void)
 	/* Create ProcStructLock spinlock, too */
 	ProcStructLock = (slock_t *) ShmemAlloc(sizeof(slock_t));
 	SpinLockInit(ProcStructLock);
-
-	/*
-	 * GPDB: numFreeProcs is used to keep track of the
-	 * number of free PGPROC entries in freeProcs list,
-	 * and will accelerate HaveNFreeProcs().
-	 */
-	ProcGlobal->numFreeProcs = MaxConnections;
 }
 
 /*
@@ -351,17 +354,9 @@ InitProcess(void)
 	if (MyProc != NULL)
 	{
 		if (IsAnyAutoVacuumProcess())
-		{
 			procglobal->autovacFreeProcs = (PGPROC *) MyProc->links.next;
-		}
 		else
-		{
 			procglobal->freeProcs = (PGPROC *) MyProc->links.next;
-
-			procglobal->numFreeProcs--;     /* we removed an entry from the list. */
-			Assert(procglobal->numFreeProcs >= 0);
-		}
-
 		SpinLockRelease(ProcStructLock);
 	}
 	else
@@ -378,6 +373,7 @@ InitProcess(void)
 				 errmsg("sorry, too many clients already")));
 	}
 	MyPgXact = &ProcGlobal->allPgXact[MyProc->pgprocno];
+	MyTmGxact = &ProcGlobal->allTmGxact[MyProc->pgprocno];
 
 	if (gp_debug_pgproc)
 	{
@@ -500,7 +496,7 @@ InitProcess(void)
 	MyProc->queryCommandId = -1;
 
 	/* Init gxact */
-	initGxact(&MyProc->gxact);
+	initGxact(MyTmGxact);
 
 	/*
 	 * Arrange to clean up at backend exit.
@@ -605,6 +601,7 @@ InitAuxiliaryProcess(void)
 	MyProc = auxproc;
 	lockHolderProcPtr = auxproc;
 	MyPgXact = &ProcGlobal->allPgXact[auxproc->pgprocno];
+	MyTmGxact = &ProcGlobal->allTmGxact[auxproc->pgprocno];
 
 	SpinLockRelease(ProcStructLock);
 
@@ -712,13 +709,30 @@ GetStartupBufferPinWaitBufId(void)
 
 /*
  * Check whether there are at least N free PGPROC objects.
+ *
+ * Note: this is designed on the assumption that N will generally be small.
  */
 bool
 HaveNFreeProcs(int n)
 {
-	Assert(n >= 0);
+	PGPROC	   *proc;
 
-	return (ProcGlobal->numFreeProcs >= n);
+	/* use volatile pointer to prevent code rearrangement */
+	volatile PROC_HDR *procglobal = ProcGlobal;
+
+	SpinLockAcquire(ProcStructLock);
+
+	proc = procglobal->freeProcs;
+
+	while (n > 0 && proc != NULL)
+	{
+		proc = (PGPROC *) proc->links.next;
+		n--;
+	}
+
+	SpinLockRelease(ProcStructLock);
+
+	return (n <= 0);
 }
 
 /*
@@ -950,8 +964,6 @@ ProcKill(int code, Datum arg)
 	{
 		proc->links.next = (SHM_QUEUE *) procglobal->freeProcs;
 		procglobal->freeProcs = proc;
-
-		procglobal->numFreeProcs++;	/* we added an entry */
 	}
 
 
