@@ -853,7 +853,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char relstorage, boo
                                           stmt->policy,  /*CDB*/
                                           reloptions,
 										  true,
-										  allowSystemTableModsDDL,
+										  allowSystemTableMods,
 										  valid_opts,
 										  stmt->is_part_child,
 										  stmt->is_part_parent);
@@ -1068,7 +1068,7 @@ MetaTrackValidKindNsp(Form_pg_class rd_rel)
 		 * MPP-7773: don't track objects in system namespace
 		 * if modifying system tables (eg during upgrade)  
 		 */
-		if (allowSystemTableModsDDL)
+		if (allowSystemTableMods)
 			return false;
 	}
 
@@ -1468,7 +1468,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
 					   rel->relname);
 
-	if (!allowSystemTableModsDDL && IsSystemClass(classform))
+	if (!allowSystemTableMods && IsSystemClass(classform))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
@@ -1904,7 +1904,7 @@ truncate_check_rel(Relation rel)
 		aclcheck_error(aclresult, ACL_KIND_CLASS,
 					   RelationGetRelationName(rel));
 
-	if (!allowSystemTableModsDDL && IsSystemRelation(rel))
+	if (!allowSystemTableMods && IsSystemRelation(rel))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
@@ -2783,7 +2783,7 @@ renameatt_check(Oid myrelid, Form_pg_class classform, bool recursing)
 	if (!pg_class_ownercheck(myrelid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
 					   NameStr(classform->relname));
-	if (!allowSystemTableModsDDL && IsSystemClass(classform))
+	if (!allowSystemTableMods && IsSystemClass(classform))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
@@ -3397,7 +3397,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname)
 		/* MPP-7773: don't track objects in system namespace
 		 * if modifying system tables (eg during upgrade)
 		 */
-		( ! ( (PG_CATALOG_NAMESPACE == namespaceId) && (allowSystemTableModsDDL)))
+		( ! ( (PG_CATALOG_NAMESPACE == namespaceId) && (allowSystemTableMods)))
 		&& (   MetaTrackValidRelkind(targetrelation->rd_rel->relkind)
 			&& METATRACK_VALIDNAMESPACE(namespaceId)
 			   && (!(isAnyTempNamespace(namespaceId)))
@@ -3939,7 +3939,7 @@ ATController(Relation rel, List *cmds, bool recurse, LOCKMODE lockmode)
 	List	   *wqueue = NIL;
 	ListCell   *lcmd;
 	bool is_partition = false;
-	bool is_data_remote = RelationIsExternal(rel);
+	bool is_external = RelationIsExternal(rel);
 
 	cdb_sync_oid_to_segments();
 
@@ -4039,10 +4039,12 @@ ATController(Relation rel, List *cmds, bool recurse, LOCKMODE lockmode)
 	/* 
 	 * Phase 3: scan/rewrite tables as needed. If the data is in an external
 	 * table, no need to rewrite it or to add toast.
-	 * GPDB_91_MERGE_FIXME: How do we handle FOREIGN TABLEs? Should handle
-	 * external tables the same..
+	 *
+	 * We should skip this for foreign table as well, but it's handled inside of
+	 * ATRewriteTables() and ATAddToastIfNeeded(), we keep it that way to align
+	 * with upstream.
 	 */
-	if (!is_data_remote)
+	if (!is_external)
 	{
 		ATRewriteTables(&wqueue, lockmode);
 
@@ -4087,7 +4089,7 @@ prepSplitCmd(Relation rel, PgPartRule *prule, bool is_at)
 			 && (pNode->default_part->children))
 		{
 			ereport(ERROR,
-					(errcode(ERRCODE_GP_FEATURE_NOT_SUPPORTED),
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("SPLIT PARTITION is not "
 								"currently supported when leaf partition is "
 								"list partitioned in multi level partition table")));
@@ -5216,7 +5218,18 @@ ATAddToastIfNeeded(List **wqueue)
 		{
 			bool is_part = !rel_needs_long_lock(tab->relid);
 
-			AlterTableCreateToastTable(tab->relid, (Datum) 0, is_part, false /* is_create */);
+			/*
+			 * FIXME: we've passed false as is_part_parent to make_new_heap().
+			 * So it seems ok to pass false for is_part_parent here but is that
+			 * right?  E.g. what happens when a partitioned table goes through
+			 * this code path?  All non-leaf nodes suddenly get a valid
+			 * relfrozenxid, when they shouldn't?  How about creating a new
+			 * function to scan pg_inherits to determine, given a master
+			 * relation's OID, whether an auxiliary table needs valid
+			 * relfrozenxid or not?
+			 */
+			AlterTableCreateToastTable(tab->relid, (Datum) 0,
+									   false /* is_create */, is_part, false);
 		}
 	}
 }
@@ -6772,7 +6785,7 @@ ATSimplePermissions(Relation rel, int allowed_targets)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
 					   RelationGetRelationName(rel));
 
-	if (!allowSystemTableModsDDL && IsSystemRelation(rel))
+	if (!allowSystemTableMods && IsSystemRelation(rel))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
@@ -7993,7 +8006,7 @@ ATPrepSetStatistics(Relation rel, const char *colName, Node *newValue, LOCKMODE 
 	 * We do our own permission checking because (a) we want to allow SET
 	 * STATISTICS on indexes (for expressional index columns), and (b) we want
 	 * to allow SET STATISTICS on system catalogs without requiring
-	 * allowSystemTableModsDDL to be turned on.
+	 * allowSystemTableMods to be turned on.
 	 */
 	if (rel->rd_rel->relkind != RELKIND_RELATION &&
 		rel->rd_rel->relkind != RELKIND_INDEX &&
@@ -8721,7 +8734,7 @@ ATExecAddIndexConstraint(AlteredTableInfo *tab, Relation rel,
 							stmt->initdeferred,
 							stmt->primary,
 							true,
-							allowSystemTableModsDDL);
+							allowSystemTableMods);
 
 	index_close(indexRel, NoLock);
 }
@@ -8974,7 +8987,7 @@ ATAddForeignKeyConstraint(AlteredTableInfo *tab, Relation rel,
 				 errmsg("referenced relation \"%s\" is not a table",
 						RelationGetRelationName(pkrel))));
 
-	if (!allowSystemTableModsDDL && IsSystemRelation(pkrel))
+	if (!allowSystemTableMods && IsSystemRelation(pkrel))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
@@ -10477,7 +10490,8 @@ ATPrepAlterColumnType(List **wqueue,
 	CheckAttributeType(colName, targettype, targetcollid,
 					   list_make1_oid(rel->rd_rel->reltype),
 					   false);
-	if (tab->relkind == RELKIND_RELATION)
+	if (tab->relkind == RELKIND_RELATION &&
+		rel->rd_rel->relstorage != RELSTORAGE_EXTERNAL)
 	{
 		/*
 		 * Set up an expression to transform the old data value to the new
@@ -10561,6 +10575,14 @@ ATPrepAlterColumnType(List **wqueue,
 		tab->newvals = lappend(tab->newvals, newval);
 		if (ATColumnChangeRequiresRewrite(transform, attnum))
 			tab->rewrite = true;
+	}
+	else if (transform &&
+			 rel->rd_rel->relstorage == RELSTORAGE_EXTERNAL)
+	{
+		/* Just to give a better error message than "foo is not a table" */
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("cannot specify a USING expression when altering an external table")));
 	}
 	else if (transform)
 		ereport(ERROR,
@@ -13730,7 +13752,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 		List **col_encs = NULL;
 
 		cs->relKind = RELKIND_RELATION;
-		cs->distributedBy = (Node *)distro;
+		cs->distributedBy = distro;
 		cs->relation = tmpname;
 		cs->ownerid = rel->rd_rel->relowner;
 		cs->tablespacename = get_tablespace_name(rel->rd_rel->reltablespace);
@@ -14722,6 +14744,36 @@ rel_get_table_oid(Relation rel)
 		heap_close(deprel, AccessShareLock);
 	}
 	return toid;
+}
+
+/*
+ * Check if a relation is a parent in partition hierarchy by probing
+ * pg_inherits catalog table.
+ */
+bool
+rel_is_parent(Oid relid)
+{
+	Relation inhrel;
+	ScanKeyData scankey;
+	SysScanDesc sscan;
+	bool is_parent = false;
+
+	ScanKeyInit(&scankey,
+				Anum_pg_inherits_inhparent,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relid));
+
+	inhrel = heap_open(InheritsRelationId, AccessShareLock);
+
+	sscan = systable_beginscan(inhrel, InheritsParentIndexId,
+							   true, SnapshotNow, 1, &scankey);
+
+	if (systable_getnext(sscan))
+		is_parent = true;
+
+	systable_endscan(sscan);
+	heap_close(inhrel, AccessShareLock);
+	return is_parent;
 }
 
 /*
@@ -17139,7 +17191,7 @@ ATPExecPartSplit(Relation *rel,
 								if (!IsA(lfirst(parvals), List))
 								{
 									ereport(ERROR,
-											(errcode(ERRCODE_GP_FEATURE_NOT_SUPPORTED),
+											(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 											 errmsg("split partition is not "
 													"currently supported when the "
 													"lowest level is list partitioned")));
@@ -18773,7 +18825,7 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS, rv->relname);
 
 	/* No system table modifications unless explicitly allowed. */
-	if (!allowSystemTableModsDDL && IsSystemClass(classform))
+	if (!allowSystemTableMods && IsSystemClass(classform))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",

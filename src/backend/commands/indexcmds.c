@@ -495,7 +495,7 @@ DefineIndex(RangeVar *heapRelation,
 
 	if(RelationIsExternal(rel))
 		ereport(ERROR,
-				(errcode(ERRCODE_GP_FEATURE_NOT_SUPPORTED),
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot create indexes on external tables.")));
 		
 	/* Note: during bootstrap may see uncataloged relation */
@@ -804,7 +804,7 @@ DefineIndex(RangeVar *heapRelation,
 					 collationObjectId, classObjectId,
 					 coloptions, reloptions, primary,
 					 isconstraint, deferrable, initdeferred,
-					 allowSystemTableModsDDL,
+					 allowSystemTableMods,
 					 skip_build || concurrent,
 					 concurrent,
 					 altconname);

@@ -403,13 +403,14 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 	else
 		relstorage = RELSTORAGE_HEAP;
 
-	create->distributedBy = into->distributedBy; /* Seems to be not needed? */
+	create->distributedBy = (DistributedBy *) into->distributedBy; /* Seems to be not needed? */
 	create->partitionBy = NULL; /* CTAS does not not support partition. */
 
     create->policy = queryDesc->plannedstmt->intoPolicy;
 	create->postCreate = NULL;
 	create->deferredStmts = NULL;
 	create->is_part_child = false;
+	create->is_part_parent = false;
 	create->is_add_part = false;
 	create->is_split_part = false;
 	create->buildAoBlkdir = false;
@@ -448,10 +449,10 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 
 	(void) heap_reloptions(RELKIND_TOASTVALUE, toast_options, true);
 
-	AlterTableCreateToastTable(intoRelationId, toast_options, false, true);
-	AlterTableCreateAoSegTable(intoRelationId, false);
+	AlterTableCreateToastTable(intoRelationId, toast_options, true, false, false);
+	AlterTableCreateAoSegTable(intoRelationId, false, false);
 	/* don't create AO block directory here, it'll be created when needed. */
-	AlterTableCreateAoVisimapTable(intoRelationId, false);
+	AlterTableCreateAoVisimapTable(intoRelationId, false, false);
 
 	/*
 	 * Finally we can open the target table

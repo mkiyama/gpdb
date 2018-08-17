@@ -893,7 +893,7 @@ index_create(Relation heapRelation,
 				/* MPP-7773: don't track objects in system namespace
 				 * if modifying system tables (eg during upgrade)  
 				 */
-				if (allowSystemTableModsDDL)
+				if (allowSystemTableMods)
 					doIt = false;
 				break;
 
@@ -2645,7 +2645,7 @@ IndexBuildAppendOnlyRowScan(Relation parentRelation,
 					 errmsg("Cannot create index concurrently. Create an index non-concurrently "
 					        "before creating an index concurrently in an appendonly table.")));
 
-		AlterTableCreateAoBlkdirTable(RelationGetRelid(parentRelation), false);
+		AlterTableCreateAoBlkdirTable(RelationGetRelid(parentRelation), false, false);
 
 		aoscan->blockDirectory =
 			(AppendOnlyBlockDirectory *)palloc0(sizeof(AppendOnlyBlockDirectory));
@@ -2779,7 +2779,7 @@ IndexBuildAppendOnlyColScan(Relation parentRelation,
 					 errmsg("Cannot create index concurrently. Create an index non-concurrently "
 					        "before creating an index concurrently in an appendonly table.")));
 
-		AlterTableCreateAoBlkdirTable(RelationGetRelid(parentRelation), false);
+		AlterTableCreateAoBlkdirTable(RelationGetRelid(parentRelation), false, false);
 
 		aocsscan->blockDirectory =
 			(AppendOnlyBlockDirectory *)palloc0(sizeof(AppendOnlyBlockDirectory));
@@ -3591,7 +3591,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
 				/* MPP-7773: don't track objects in system namespace
 				 * if modifying system tables (eg during upgrade)  
 				 */
-				if (allowSystemTableModsDDL)
+				if (allowSystemTableMods)
 					doIt = false;
 				break;
 

@@ -347,9 +347,9 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	 * allow DML when:
 	 * 	- in single user mode: initdb insert PIN entries to pg_depend,...
 	 * 	- in maintenance mode, upgrade mode or
-	 *  - allow_system_table_mods = dml
+	 *  - allow_system_table_mods = true
 	 */
-	if (IsUnderPostmaster && !allowSystemTableModsDML
+	if (IsUnderPostmaster && !allowSystemTableMods
 		&& IsSystemRelation(pstate->p_target_relation))
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -3542,7 +3542,7 @@ transformFrameOffset(ParseState *pstate, int frameOptions, Node *clause,
 
 			if (con->constisnull)
 				ereport(ERROR,
-						(errcode(ERROR_INVALID_WINDOW_FRAME_PARAMETER),
+						(errcode(ERRCODE_WINDOWING_ERROR),
 						 errmsg("RANGE parameter cannot be NULL"),
 						 parser_errposition(pstate, con->location)));
 		}
@@ -3658,7 +3658,7 @@ transformFrameOffset(ParseState *pstate, int frameOptions, Node *clause,
 
 				if (result)
 					ereport(ERROR,
-							(errcode(ERROR_INVALID_WINDOW_FRAME_PARAMETER),
+							(errcode(ERRCODE_WINDOWING_ERROR),
 							 errmsg("RANGE parameter cannot be negative"),
 							 parser_errposition(pstate, con->location)));
 

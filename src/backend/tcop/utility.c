@@ -80,7 +80,7 @@ ProcessUtility_hook_type ProcessUtility_hook = NULL;
  * Verify user has ownership of specified relation, else ereport.
  *
  * If noCatalogs is true then we also deny access to system catalogs,
- * except when allowSystemTableModsDDL is true.
+ * except when allowSystemTableMods is true.
  */
 void
 CheckRelationOwnership(RangeVar *rel, bool noCatalogs)
@@ -107,7 +107,7 @@ CheckRelationOwnership(RangeVar *rel, bool noCatalogs)
 
 	if (noCatalogs)
 	{
-		if (!allowSystemTableModsDDL &&
+		if (!allowSystemTableMods &&
 			IsSystemClass((Form_pg_class) GETSTRUCT(tuple)))
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -704,16 +704,30 @@ standard_ProcessUtility(Node *parsetree,
 
 							AlterTableCreateToastTable(relOid,
 													   toast_options,
-													   cstmt->is_part_child,
-													   true);
+													   true,
+ 													   cstmt->is_part_child,
+													   cstmt->is_part_parent);
+							/*
+							 * If the master relation is a non-leaf relation in
+							 * a partition hierarchy, then this auxiliary
+							 * relation, like its master relation, will not
+							 * contain any data.  Therefore, like the master
+							 * relation, exclude this auxiliary table from
+							 * database age calculation, by passing master
+							 * relation's is_part_parent flag.
+							 */
 							AlterTableCreateAoSegTable(relOid,
-													   cstmt->is_part_child);
+													   cstmt->is_part_child,
+													   cstmt->is_part_parent);
 
 							if (cstmt->buildAoBlkdir)
-								AlterTableCreateAoBlkdirTable(relOid, cstmt->is_part_child);
+								AlterTableCreateAoBlkdirTable(relOid,
+															  cstmt->is_part_child,
+															  cstmt->is_part_parent);
 
 							AlterTableCreateAoVisimapTable(relOid,
-														   cstmt->is_part_child);
+														   cstmt->is_part_child,
+														   cstmt->is_part_parent);
 						}
 
 						if (Gp_role == GP_ROLE_DISPATCH)
