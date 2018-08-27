@@ -20,7 +20,7 @@
  * if change here, please also change pg_database.h
  */
 #define INVALID_HASH_METHOD      (-1)
-#define MODULE_HASH_METHOD       0
+#define MODULO_HASH_METHOD       0
 #define JUMP_HASH_METHOD         1
 
 /*
@@ -96,6 +96,11 @@ extern unsigned int cdbhashreduce(CdbHash *h);
  * Return true if Oid is hashable internally in Greenplum Database.
  */
 extern bool isGreenplumDbHashable(Oid typid);
+
+/*
+ * Return true if the operator Oid is hashable internally in Greenplum Database.
+ */
+extern bool isGreenplumDbOprRedistributable(Oid oprid);
 
 /*
  * Return true if the Oid is an array type.  This can be used prior
