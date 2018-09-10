@@ -553,7 +553,7 @@ gpdb::ExprCollation
 	{
 		if (expr && IsA(expr, List))
 		{
-			// GDPB_91_MERGE_FIXME: collation
+			// GPDB_91_MERGE_FIXME: collation
 			List *exprlist = (List *) expr;
 			ListCell   *lc;
 
@@ -718,18 +718,6 @@ gpdb::FunctionExists
 	return false;
 }
 
-List *
-gpdb::FunctionOids(void)
-{
-	GP_WRAP_START;
-	{
-		/* catalog tables: pg_proc */
-		return function_oids();
-	}
-	GP_WRAP_END;
-	return NIL;
-}
-
 Oid
 gpdb::GetAggIntermediateResultType
 	(
@@ -777,7 +765,7 @@ gpdb::IsOrderedAgg
 }
 
 bool
-gpdb::AggHasPrelimFunc
+gpdb::AggHasCombineFunc
 	(
 	Oid aggid
 	)
@@ -785,22 +773,7 @@ gpdb::AggHasPrelimFunc
 	GP_WRAP_START;
 	{
 		/* catalog tables: pg_aggregate */
-		return has_agg_prelimfunc(aggid);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
-bool
-gpdb::AggHasPrelimOrInvPrelimFunc
-	(
-	Oid aggid
-	)
-{
-	GP_WRAP_START;
-	{
-		/* catalog tables: pg_aggregate */
-		return agg_has_prelim_or_invprelim_func(aggid);
+		return has_agg_combinefunc(aggid);
 	}
 	GP_WRAP_END;
 	return false;
@@ -2083,6 +2056,20 @@ gpdb::NumericToDoubleNoOverflow
 	return 0.0;
 }
 
+bool
+gpdb::NumericIsNan
+	(
+	Numeric num
+	)
+{
+	GP_WRAP_START;
+	{
+		return numeric_is_nan(num);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
 double
 gpdb::ConvertTimeValueToScalar
 	(
@@ -2418,18 +2405,6 @@ gpdb::RelationExists
 	}
 	GP_WRAP_END;
 	return false;
-}
-
-List *
-gpdb::GetAllRelationOids(void)
-{
-	GP_WRAP_START;
-	{
-		/* catalog tables: pg_class */
-		return relation_oids();
-	}
-	GP_WRAP_END;
-	return NIL;
 }
 
 void
@@ -3234,6 +3209,8 @@ gpdb::IsAbortRequested
 	void
 	)
 {
+	// No GP_WRAP_START/END needed here. We just check these global flags,
+	// it cannot throw an ereport().
 	return (QueryCancelPending || ProcDiePending);
 }
 
@@ -3245,6 +3222,10 @@ gpdb::MakeGpPolicy
                int nattrs
        )
 {
-       return makeGpPolicy(mcxt, ptype, nattrs);
+	GP_WRAP_START;
+	{
+		return makeGpPolicy(mcxt, ptype, nattrs);
+	}
+	GP_WRAP_END;
 }
 // EOF

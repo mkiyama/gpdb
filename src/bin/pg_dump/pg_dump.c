@@ -131,13 +131,6 @@ static SimpleStringList relid_string_list = {NULL, NULL};
 static SimpleStringList funcid_string_list = {NULL, NULL};
 static SimpleOidList function_include_oids = {NULL, NULL};
 
-/*
- * Indicates whether or not SET SESSION AUTHORIZATION statements should be emitted
- * instead of ALTER ... OWNER statements to establish object ownership.
- * Set through the --use-set-session-authorization option.
- */
-static int	use_setsessauth = 0;
-
 /* default, if no "inclusion" switches appear, is to dump everything */
 static bool include_everything = true;
 
@@ -205,8 +198,6 @@ static void dumpCompositeTypeColComments(Archive *fout, TypeInfo *tyinfo);
 static void dumpShellType(Archive *fout, ShellTypeInfo *stinfo);
 static void dumpProcLang(Archive *fout, ProcLangInfo *plang);
 static void dumpFunc(Archive *fout, FuncInfo *finfo);
-static char *getFuncOwner(Archive *fout, Oid funcOid, const char *templateField);
-static void dumpPlTemplateFunc(Archive *fout, Oid funcOid, const char *templateField, PQExpBuffer buffer);
 static void dumpCast(Archive *fout, CastInfo *cast);
 static void dumpOpr(Archive *fout, OprInfo *oprinfo);
 static void dumpOpclass(Archive *fout, OpclassInfo *opcinfo);
@@ -8856,69 +8847,6 @@ dumpProcLang(Archive *fout, ProcLangInfo *plang)
 	}
 	appendPQExpBuffer(defqry, ";\n");
 
-	/* GPDB_91_MERGE_FIXME: Where did this code come from? I can't see it in
-	 * any upstream version, and I don't understand why we'd need it. Can
-	 * we remove it?
-	 */
-	/*
-	 * If the language is one of those for which the call handler and
-	 * validator functions are defined in pg_pltemplate, we must add ALTER
-	 * FUNCTION ... OWNER statements to switch the functions to the user to
-	 * whom the functions are assigned -OR- adjust the language owner to
-	 * reflect the call handler owner so a SET SESSION AUTHORIZATION statement
-	 * properly reflects the "language" owner.
-	 *
-	 * Functions specified in pg_pltemplate are entered into pg_proc under
-	 * pg_catalog.	Functions in pg_catalog are omitted from the function list
-	 * structure resulting in the references to them in this procedure to be
-	 * NULL.
-	 *
-	 * TODO: Adjust for ALTER LANGUAGE ... OWNER support.
-	 */
-	if (use_setsessauth)
-	{
-		/*
-		 * If using SET SESSION AUTHORIZATION statements to reflect
-		 * language/function ownership, alter the LANGUAGE owner to reflect
-		 * the owner of the call handler function (or the validator function)
-		 * if the fuction is from pg_pltempate. (Other functions are
-		 * explicitly created and not subject the user in effect with CREATE
-		 * LANGUAGE.)
-		 */
-		char	   *languageOwner = NULL;
-
-		if (funcInfo == NULL)
-		{
-			languageOwner = getFuncOwner(fout, plang->lanplcallfoid, "tmplhandler");
-		}
-		else if (validatorInfo == NULL)
-		{
-			languageOwner = getFuncOwner(fout, plang->lanvalidator, "tmplvalidator");
-		}
-		if (languageOwner != NULL)
-		{
-			free(plang->lanowner);
-			plang->lanowner = languageOwner;
-		}
-	}
-	else
-	{
-		/*
-		 * If the call handler or validator is defined, check to see if it's
-		 * one of the pre-defined ones.  If so, it won't have been dumped as a
-		 * function so won't have the proper owner -- we need to emit an ALTER
-		 * FUNCTION ... OWNER statement for it.
-		 */
-		if (funcInfo == NULL)
-		{
-			dumpPlTemplateFunc(fout, plang->lanplcallfoid, "tmplhandler", defqry);
-		}
-		if (validatorInfo == NULL)
-		{
-			dumpPlTemplateFunc(fout, plang->lanvalidator, "tmplvalidator", defqry);
-		}
-	}
-
 	appendPQExpBuffer(labelq, "LANGUAGE %s", qlanname);
 
 	if (binary_upgrade)
@@ -8953,98 +8881,6 @@ dumpProcLang(Archive *fout, ProcLangInfo *plang)
 	destroyPQExpBuffer(defqry);
 	destroyPQExpBuffer(delqry);
 	destroyPQExpBuffer(labelq);
-}
-
-
-/*
- * getFuncOwner - retrieves the "proowner" of the function identified by funcOid
- * if, and only if, funcOid represents a function specified in pg_pltemplate.
- */
-static char *
-getFuncOwner(Archive *fout, Oid funcOid, const char *templateField)
-{
-	PGresult   *res;
-	int			ntups;
-	int			i_funcowner;
-	char	   *functionOwner = NULL;
-	PQExpBuffer query = createPQExpBuffer();
-
-	/* Ensure we're in the proper schema */
-	selectSourceSchema(fout, "pg_catalog");
-
-	appendPQExpBuffer(query,
-					  "SELECT ( %s proowner ) AS funcowner "
-					  "FROM pg_proc "
-		"WHERE ( oid = %d AND proname IN ( SELECT %s FROM pg_pltemplate ) )",
-					  username_subquery, funcOid, templateField);
-
-	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
-
-	ntups = PQntuples(res);
-	if (ntups != 0)
-	{
-		i_funcowner = PQfnumber(res, "funcowner");
-		functionOwner = pg_strdup(PQgetvalue(res, 0, i_funcowner));
-	}
-
-	PQclear(res);
-	destroyPQExpBuffer(query);
-
-	return functionOwner;
-}
-
-
-/*
- * dumpPlTemplateFunc - appends an "ALTER FUNCTION ... OWNER" statement for the
- * pg_pltemplate-defined language function specified to the PQExpBuffer provided.
- *
- * The ALTER FUNCTION statement is added if, and only if, the function is defined
- * in the pg_catalog schema AND is identified in the pg_pltemplate table.
- */
-static void
-dumpPlTemplateFunc(Archive *fout, Oid funcOid, const char *templateField, PQExpBuffer buffer)
-{
-	PGresult   *res;
-	int			ntups;
-	int			i_signature;
-	int			i_owner;
-	char	   *functionSignature = NULL;
-	char	   *ownerName = NULL;
-	PQExpBuffer fquery = createPQExpBuffer();
-
-	/* Make sure we are in proper schema */
-	selectSourceSchema(fout, "pg_catalog");
-
-	appendPQExpBuffer(fquery,
-					  "SELECT p.oid::pg_catalog.regprocedure AS signature, "
-					  "( %s proowner ) AS owner "
-					  "FROM pg_pltemplate t, pg_proc p "
-					  "WHERE p.oid = %d "
-					  "AND proname = %s "
-					  "AND pronamespace = ( SELECT oid FROM pg_namespace WHERE nspname = 'pg_catalog' )",
-					  username_subquery, funcOid, templateField);
-
-	res = ExecuteSqlQuery(fout, fquery->data, PGRES_TUPLES_OK);
-
-	ntups = PQntuples(res);
-	if (ntups != 0)
-	{
-		i_signature = PQfnumber(res, "signature");
-		i_owner = PQfnumber(res, "owner");
-		functionSignature = pg_strdup(PQgetvalue(res, 0, i_signature));
-		ownerName = pg_strdup(PQgetvalue(res, 0, i_owner));
-
-		if (functionSignature != NULL && ownerName != NULL)
-		{
-			appendPQExpBuffer(buffer, "ALTER FUNCTION %s OWNER TO %s;\n", functionSignature, ownerName);
-		}
-
-		free(functionSignature);
-		free(ownerName);
-	}
-
-	PQclear(res);
-	destroyPQExpBuffer(fquery);
 }
 
 /*
@@ -11121,21 +10957,41 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	PGresult   *res;
 	int			i_aggtransfn;
 	int			i_aggfinalfn;
+	int			i_aggcombinefn;
+	int			i_aggserialfn;
+	int			i_aggdeserialfn;
+	int			i_aggmtransfn;
+	int			i_aggminvtransfn;
+	int			i_aggmfinalfn;
 	int			i_aggfinalextra;
+	int			i_aggmfinalextra;
 	int			i_aggsortop;
 	int			i_hypothetical;
 	int			i_aggtranstype;
+	int			i_aggtransspace;
+	int			i_aggmtranstype;
+	int			i_aggmtransspace;
 	int			i_agginitval;
-	int			i_aggprelimfn;
+	int			i_aggminitval;
 	int			i_convertok;
 	const char *aggtransfn;
 	const char *aggfinalfn;
+	const char *aggcombinefn;
+	const char *aggserialfn;
+	const char *aggdeserialfn;
+	const char *aggmtransfn;
+	const char *aggminvtransfn;
+	const char *aggmfinalfn;
 	bool		aggfinalextra;
+	bool		aggmfinalextra;
 	const char *aggsortop;
 	bool		hypothetical;
 	const char *aggtranstype;
+	const char *aggtransspace;
+	const char *aggmtranstype;
+	const char *aggmtransspace;
 	const char *agginitval;
-	const char *aggprelimfn;
+	const char *aggminitval;
 	bool		convertok;
 
 	/* Skip if not to be dumped */
@@ -11156,36 +11012,41 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 	{
 		appendPQExpBuffer(query, "SELECT aggtransfn, "
 						  "aggfinalfn, aggtranstype::pg_catalog.regtype, "
-						  "aggfinalextra, "
+					"aggcombinefn, aggserialfn, aggdeserialfn, aggmtransfn, "
+						  "aggminvtransfn, aggmfinalfn, aggmtranstype::pg_catalog.regtype, "
+						  "aggfinalextra, aggmfinalextra, "
 						  "aggsortop::pg_catalog.regoperator, "
 						  "(aggkind = 'h') as hypothetical, " /* aggkind was backported to GPDB6 */
-						  "agginitval, "
-						  "%s, "
+						  "aggtransspace, aggmtransspace, " /* aggtransspace was backported to GPDB6 */
+						  "agginitval, aggminitval, "
 						  "true AS convertok, "
 				  "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs, "
 		 "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs "
 					  "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
 						  "WHERE a.aggfnoid = p.oid "
 						  "AND p.oid = '%u'::pg_catalog.oid",
-						  (isGPbackend ? "aggprelimfn" : "NULL as aggprelimfn"),
 						  agginfo->aggfn.dobj.catId.oid);
 	}
 	else if (fout->remoteVersion >= 80100)
 	{
 		appendPQExpBuffer(query, "SELECT aggtransfn, "
 						  "aggfinalfn, aggtranstype::pg_catalog.regtype, "
+						  "aggprelimfn AS aggcombinefn, '-' AS aggserialfn, "
+						  "'-' AS aggdeserialfn, '-' AS aggmtransfn, "
+						  "'-' AS aggminvtransfn, '-' AS aggmfinalfn, "
+						  "0 AS aggmtranstype, "
 						  "false AS aggfinalextra, "
+						  "false AS aggmfinalextra, "
 						  "aggsortop::pg_catalog.regoperator, "
 						  "false AS hypothetical, "
-						  "agginitval, "
-						  "%s, "
+						  "0 AS aggtransspace, 0 AS aggmtransspace, "
+						  "agginitval, NULL AS aggminitval, "
 						  "'t'::boolean AS convertok, "
 						  "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs, "
 						  "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs "
 					  "from pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
 						  "WHERE a.aggfnoid = p.oid "
 						  "AND p.oid = '%u'::pg_catalog.oid",
-						  (isGPbackend ? "aggprelimfn" : "NULL as aggprelimfn"),
 						  agginfo->aggfn.dobj.catId.oid);
 	}
 	else
@@ -11197,22 +11058,42 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 
 	i_aggtransfn = PQfnumber(res, "aggtransfn");
 	i_aggfinalfn = PQfnumber(res, "aggfinalfn");
+	i_aggcombinefn = PQfnumber(res, "aggcombinefn");
+	i_aggserialfn = PQfnumber(res, "aggserialfn");
+	i_aggdeserialfn = PQfnumber(res, "aggdeserialfn");
+	i_aggmtransfn = PQfnumber(res, "aggmtransfn");
+	i_aggminvtransfn = PQfnumber(res, "aggminvtransfn");
+	i_aggmfinalfn = PQfnumber(res, "aggmfinalfn");
 	i_aggfinalextra = PQfnumber(res, "aggfinalextra");
+	i_aggmfinalextra = PQfnumber(res, "aggmfinalextra");
 	i_aggsortop = PQfnumber(res, "aggsortop");
 	i_hypothetical = PQfnumber(res, "hypothetical");
 	i_aggtranstype = PQfnumber(res, "aggtranstype");
+	i_aggtransspace = PQfnumber(res, "aggtransspace");
+	i_aggmtranstype = PQfnumber(res, "aggmtranstype");
+	i_aggmtransspace = PQfnumber(res, "aggmtransspace");
 	i_agginitval = PQfnumber(res, "agginitval");
-	i_aggprelimfn = PQfnumber(res, "aggprelimfn");
+	i_aggminitval = PQfnumber(res, "aggminitval");
 	i_convertok = PQfnumber(res, "convertok");
 
 	aggtransfn = PQgetvalue(res, 0, i_aggtransfn);
 	aggfinalfn = PQgetvalue(res, 0, i_aggfinalfn);
+	aggcombinefn = PQgetvalue(res, 0, i_aggcombinefn);
+	aggserialfn = PQgetvalue(res, 0, i_aggserialfn);
+	aggdeserialfn = PQgetvalue(res, 0, i_aggdeserialfn);
+	aggmtransfn = PQgetvalue(res, 0, i_aggmtransfn);
+	aggminvtransfn = PQgetvalue(res, 0, i_aggminvtransfn);
+	aggmfinalfn = PQgetvalue(res, 0, i_aggmfinalfn);
 	aggfinalextra = (PQgetvalue(res, 0, i_aggfinalextra)[0] == 't');
+	aggmfinalextra = (PQgetvalue(res, 0, i_aggmfinalextra)[0] == 't');
 	aggsortop = PQgetvalue(res, 0, i_aggsortop);
 	hypothetical = (PQgetvalue(res, 0, i_hypothetical)[0] == 't');
 	aggtranstype = PQgetvalue(res, 0, i_aggtranstype);
+	aggtransspace = PQgetvalue(res, 0, i_aggtransspace);
+	aggmtranstype = PQgetvalue(res, 0, i_aggmtranstype);
+	aggmtransspace = PQgetvalue(res, 0, i_aggmtransspace);
 	agginitval = PQgetvalue(res, 0, i_agginitval);
-	aggprelimfn = PQgetvalue(res, 0, i_aggprelimfn);
+	aggminitval = PQgetvalue(res, 0, i_aggminitval);
 	convertok = (PQgetvalue(res, 0, i_convertok)[0] == 't');
 
 	if (fout->remoteVersion >= 80400)
@@ -11251,17 +11132,16 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 		error_unsupported_server_version(fout);
 	}
 
+	if (strcmp(aggtransspace, "0") != 0)
+	{
+		appendPQExpBuffer(details, ",\n    SSPACE = %s",
+						  aggtransspace);
+	}
+
 	if (!PQgetisnull(res, 0, i_agginitval))
 	{
 		appendPQExpBuffer(details, ",\n    INITCOND = ");
 		appendStringLiteralAH(details, agginitval, fout);
-	}
-
-	if (!PQgetisnull(res, 0, i_aggprelimfn))
-	{
-		if (strcmp(aggprelimfn, "-") != 0)
-			appendPQExpBuffer(details, ",\n    PREFUNC = %s",
-							  aggprelimfn);
 	}
 
 	if (strcmp(aggfinalfn, "-") != 0)
@@ -11270,6 +11150,41 @@ dumpAgg(Archive *fout, AggInfo *agginfo)
 						  aggfinalfn);
 		if (aggfinalextra)
 			appendPQExpBufferStr(details, ",\n    FINALFUNC_EXTRA");
+	}
+
+	if (strcmp(aggcombinefn, "-") != 0)
+		appendPQExpBuffer(details, ",\n    COMBINEFUNC = %s",	aggcombinefn);
+
+	if (strcmp(aggserialfn, "-") != 0)
+		appendPQExpBuffer(details, ",\n    SERIALFUNC = %s", aggserialfn);
+
+	if (strcmp(aggdeserialfn, "-") != 0)
+		appendPQExpBuffer(details, ",\n    DESERIALFUNC = %s", aggdeserialfn);
+
+	if (strcmp(aggmtransfn, "-") != 0)
+	{
+		appendPQExpBuffer(details, ",\n    MSFUNC = %s,\n    MINVFUNC = %s,\n    MSTYPE = %s",
+						  aggmtransfn,
+						  aggminvtransfn,
+						  aggmtranstype);
+	}
+
+	if (strcmp(aggmtransspace, "0") != 0)
+	{
+		appendPQExpBuffer(details, ",\n    MSSPACE = %s",
+						  aggmtransspace);
+	}
+
+	if (!PQgetisnull(res, 0, i_aggminitval))
+	{
+		appendPQExpBufferStr(details, ",\n    MINITCOND = ");
+		appendStringLiteralAH(details, aggminitval, fout);
+	}
+
+	if (strcmp(aggmfinalfn, "-") != 0)
+	{
+		appendPQExpBuffer(details, ",\n    MFINALFUNC = %s",
+						  aggmfinalfn);
 	}
 
 	aggsortop = convertOperatorReference(fout, aggsortop);
@@ -13190,13 +13105,13 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 				PQExpBuffer 	partquery = createPQExpBuffer();
 				PGresult	   *partres;
 
-				appendPQExpBuffer(partquery, "SELECT c.oid "
-											 "FROM pg_catalog.pg_class pp "
-											 "     JOIN pg_catalog.pg_partitions p ON ( "
-											 "       pp.relname = p.tablename AND "
-											 "       pp.oid = '%u'::pg_catalog.oid) "
-											 "     JOIN pg_catalog.pg_class c ON ( "
-											 "       p.partitiontablename = c.relname)",
+				appendPQExpBuffer(partquery, "SELECT DISTINCT(child.oid) "
+											 "FROM pg_catalog.pg_partition part, "
+											 "     pg_catalog.pg_partition_rule rule, "
+											 "     pg_catalog.pg_class child "
+											 "WHERE part.parrelid = '%u'::pg_catalog.oid "
+											 "  AND rule.paroid = part.oid "
+											 "  AND child.oid = rule.parchildrelid",
 											 tbinfo->dobj.catId.oid);
 				partres = ExecuteSqlQuery(fout, partquery->data, PGRES_TUPLES_OK);
 
@@ -13528,19 +13443,15 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 			ExecuteSqlStatement(fout, "SET enable_nestloop TO off");
 
 			resetPQExpBuffer(query);
-			appendPQExpBuffer(query, "SELECT c.relname, pr.parname,"
-					"CASE WHEN p.parkind <> '%c'::char OR pr.parisdefault THEN NULL::bigint "
-					"ELSE pg_catalog.rank() OVER ( "
-					"PARTITION BY p.oid, cc.relname, p.parlevel, cl3.relname "
-					"ORDER BY pr.parisdefault, pr.parruleord) "
-					"END AS partitionrank "
+
+			appendPQExpBuffer(query, "SELECT DISTINCT cc.relname, ps.partitionrank, pp.parname "
 					"FROM pg_partition p "
-					"JOIN pg_class cc ON (p.parrelid = cc.oid), pg_class c "
-					"JOIN pg_partition_rule pr ON (c.oid = pr.parchildrelid) "
-					"LEFT JOIN pg_partition_rule pr2 ON pr.parparentrule = pr2.oid "
-					"LEFT JOIN pg_class cl3 ON pr2.parchildrelid = cl3.oid "
-					"WHERE pr.paroid = p.oid "
-					"AND p.parrelid = %u AND c.relstorage = '%c';", RELKIND_RELATION, tbinfo->dobj.catId.oid, RELSTORAGE_EXTERNAL);
+					"JOIN pg_class c on (p.parrelid = c.oid) "
+					"JOIN pg_partitions ps on (c.relname = ps.tablename) "
+					"JOIN pg_class cc on (ps.partitiontablename = cc.relname) "
+					"JOIN pg_partition_rule pp on (cc.oid = pp.parchildrelid) "
+					"WHERE p.parrelid = %u AND cc.relstorage = '%c';",
+					tbinfo->dobj.catId.oid, RELSTORAGE_EXTERNAL);
 
 			res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 

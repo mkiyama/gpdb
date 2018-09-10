@@ -167,7 +167,7 @@ slashUsage(unsigned short int pager)
 	if (currdb == NULL)
 		currdb = "";
 
-	output = PageOutput(94, pager);
+	output = PageOutput(97, pager);
 
 	/* if you add/remove a line here, change the row count above */
 
@@ -226,16 +226,14 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\do[S]  [PATTERN]      list operators\n"));
 	fprintf(output, _("  \\dO[S+] [PATTERN]      list collations\n"));
 	fprintf(output, _("  \\dp     [PATTERN]      list table, view, and sequence access privileges\n"));
-	fprintf(output, _("  \\dr[S+] [PATTERN]      list foreign tables\n"));  /* GPDB Only */
 	fprintf(output, _("  \\drds [PATRN1 [PATRN2]] list per-database role settings\n"));
 	fprintf(output, _("  \\ds[S+] [PATTERN]      list sequences\n"));
 	fprintf(output, _("  \\dt[S+] [PATTERN]      list tables\n"));
 	fprintf(output, _("  \\dT[S+] [PATTERN]      list data types\n"));
 	fprintf(output, _("  \\du[+]  [PATTERN]      list roles\n"));
 	fprintf(output, _("  \\dv[S+] [PATTERN]      list views\n"));
-	/* GPDB_91_MERGE_FIXME: can we use \dE for both external and foreign tables? */
-	fprintf(output, _("  \\dE     [PATTERN]      list external tables\n"));
-	fprintf(output, _("  \\dE[S+] [PATTERN]      list foreign tables\n"));
+	/* In GPDB, we use \dE for both external and foreign tables. */
+	fprintf(output, _("  \\dE[S+] [PATTERN]      list foreign and external tables\n"));
 	fprintf(output, _("  \\dx[+]  [PATTERN]      list extensions\n"));
 	fprintf(output, _("  \\l[+]                  list all databases\n"));
 	fprintf(output, _("  \\sf[+] FUNCNAME        show a function's definition\n"));

@@ -55,7 +55,6 @@ SUBDIRS += \
 		gp_distribution_policy \
 		gp_internal_tools \
 		gp_inject_fault \
-		gp_cancel_query \
 		gp_sparse_vector \
 		indexscan \
 
@@ -81,10 +80,6 @@ ifeq ($(with_selinux),yes)
 SUBDIRS += sepgsql
 else
 ALWAYS_SUBDIRS += sepgsql
-endif
-
-ifeq ($(enable_orca),yes)
-SUBDIRS += orca_debug
 endif
 
 SUBDIRS += gp_replica_check

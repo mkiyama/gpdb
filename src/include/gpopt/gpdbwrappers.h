@@ -153,7 +153,7 @@ namespace gpdb {
 	// expression collation
 	Oid	ExprCollation(Node *expr);
 
-	// expression collation - GDPB_91_MERGE_FIXME
+	// expression collation - GPDB_91_MERGE_FIXME
 	Oid	TypeCollation(Oid type);
 
 	// extract nodes with specific tag from a plan tree
@@ -172,11 +172,8 @@ namespace gpdb {
 	// is aggregate ordered
 	bool IsOrderedAgg(Oid aggid);
 	
-	// does aggregate have a preliminary function
-	bool AggHasPrelimFunc(Oid aggid);
-
-	// does aggregate have a prelim or inverse prelim function
-	bool AggHasPrelimOrInvPrelimFunc(Oid aggid);
+	// does aggregate have a combine function
+	bool AggHasCombineFunc(Oid aggid);
 
 	// intermediate result type of given aggregate
 	Oid GetAggregate(const char* agg, Oid type_oid);
@@ -197,9 +194,6 @@ namespace gpdb {
 
 	// attribute statistics
 	HeapTuple GetAttStats(Oid relid, AttrNumber attnum);
-
-	// function oids
-	List *FunctionOids(void);
 
 	// does a function exist with the given oid
 	bool FunctionExists(Oid oid);
@@ -448,6 +442,9 @@ namespace gpdb {
 	// convert numeric to double; if out of range, return +/- HUGE_VAL
 	double NumericToDoubleNoOverflow(Numeric num);
 
+	// is the given Numeric value NaN?
+	bool NumericIsNan(Numeric num);
+
 	// convert time-related datums to double for stats purpose
 	double ConvertTimeValueToScalar(Datum datum, Oid typid);
 
@@ -516,9 +513,6 @@ namespace gpdb {
 
 	// does a relation exist with the given oid
 	bool RelationExists(Oid oid);
-
-	// extract all relation oids from the catalog
-	List *GetAllRelationOids(void);
 
 	// estimate the relation size using the real number of blocks and tuple density
 	void EstimateRelationSize(Relation rel,	int32 *attr_widths,	BlockNumber *pages,	double *tuples, double *allvisfrac);
@@ -590,7 +584,7 @@ namespace gpdb {
 	// the first one found, or -1 if there are none
 	int FindNodes(Node *node, List *nodeTags);
 
-	// GDPB_91_MERGE_FIXME: collation
+	// GPDB_91_MERGE_FIXME: collation
 	// look for nodes with non-default collation; returns 1 if any exist, -1 otherwise
 	int CheckCollation(Node *node);
 

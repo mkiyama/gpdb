@@ -769,8 +769,9 @@ GET_CIDRADDR () {
 
 BUILD_MASTER_PG_HBA_FILE () {
         LOG_MSG "[INFO]:-Start Function $FUNCNAME"
-	if [ $# -eq 0 ];then ERROR_EXIT "[FATAL]:-Passed zero parameters, expected at least 1" 2;fi
+	if [ $# -eq 0 ];then ERROR_EXIT "[FATAL]:-Passed zero parameters, expected at least 2" 2;fi
 	GP_DIR=$1
+	HBA_HOSTNAMES=${2:-0}
         LOG_MSG "[INFO]:-Clearing values in Master $PG_HBA"
         $GREP "^#" ${GP_DIR}/$PG_HBA > $TMP_PG_HBA
         $MV $TMP_PG_HBA ${GP_DIR}/$PG_HBA
@@ -778,27 +779,35 @@ BUILD_MASTER_PG_HBA_FILE () {
         $ECHO "local    all         $USER_NAME         $PG_METHOD" >> ${GP_DIR}/$PG_HBA
         #$ECHO "local    all         all                $PG_METHOD" >> ${GP_DIR}/$PG_HBA
         LOG_MSG "[INFO]:-Setting local host access"
-        $ECHO "host     all         $USER_NAME         127.0.0.1/28    trust" >> ${GP_DIR}/$PG_HBA
-        for ADDR in "${MASTER_IP_ADDRESS_ALL[@]}"
-        do
-        	# MPP-15889
-        	CIDRADDR=$(GET_CIDRADDR $ADDR)
-        	$ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
-        done
-        for ADDR in "${STANDBY_IP_ADDRESS_ALL[@]}"
-        do
-        	# MPP-15889
-        	CIDRADDR=$(GET_CIDRADDR $ADDR)
-        	$ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
-        done
+        if [ $HBA_HOSTNAMES -eq 0 ];then
+            $ECHO "host     all         $USER_NAME         127.0.0.1/28    trust" >> ${GP_DIR}/$PG_HBA
 
-        # Add all local IPV6 addresses
-        for ADDR in "${MASTER_IPV6_LOCAL_ADDRESS_ALL[@]}"
-        do
-        	# MPP-15889
-        	CIDRADDR=$(GET_CIDRADDR $ADDR)
-        	$ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
-        done
+            for ADDR in "${MASTER_IP_ADDRESS_ALL[@]}"
+            do
+                # MPP-15889
+                CIDRADDR=$(GET_CIDRADDR $ADDR)
+                $ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
+
+            done
+            for ADDR in "${STANDBY_IP_ADDRESS_ALL[@]}"
+            do
+                # MPP-15889
+                CIDRADDR=$(GET_CIDRADDR $ADDR)
+                $ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
+            done
+
+            # Add all local IPV6 addresses
+            for ADDR in "${MASTER_IPV6_LOCAL_ADDRESS_ALL[@]}"
+            do
+                # MPP-15889
+                CIDRADDR=$(GET_CIDRADDR $ADDR)
+                $ECHO "host     all         $USER_NAME         $CIDRADDR       trust" >> ${GP_DIR}/$PG_HBA
+            done
+        else
+            $ECHO "host     all         $USER_NAME         localhost    trust" >> ${GP_DIR}/$PG_HBA
+            $ECHO "host     all         $USER_NAME         $MASTER_HOSTNAME       trust" >> ${GP_DIR}/$PG_HBA
+        fi
+
 
         # Add replication config
         $ECHO "local    replication $USER_NAME         $PG_METHOD" >> ${GP_DIR}/$PG_HBA
@@ -1294,23 +1303,6 @@ MAKE_DBID_FILE() {
 	  "$ECHO \"# Greenplum Database identifier for this master/segment.
 # Do not change the contents of this file.
 dbid = $DBID\" > $FILEPATH &&  chmod 400 $FILEPATH"
-}
-
-UPDATE_MPP () {
-	LOG_MSG "[INFO][$INST_COUNT]:-Start Function $FUNCNAME"
-	U_DB=$DEFAULTDB
-	U_PT=$1
-	U_MPPNAME="$2"
-	U_NUMSEG=$3
-	U_DBID=$4
-	U_CONTENT=$5
-	TYPE=$6
-	U_HOST=$7
-	U_DIR=$8
-	LOG_MSG "[INFO][$INST_COUNT]:-Making dbid file @ $U_HOST:$U_DIR = $U_DBID"
-	MAKE_DBID_FILE $U_DBID $U_HOST $U_DIR
-	LOG_MSG "[INFO][$INST_COUNT]:-Successfully updated GPDB system table"
-	LOG_MSG "[INFO][$INST_COUNT]:-End Function $FUNCNAME"
 }
 
 #******************************************************************************

@@ -295,9 +295,6 @@ bool		gp_enable_fast_sri = true;
 /* Enable single-mirror pair dispatch. */
 bool		gp_enable_direct_dispatch = true;
 
-/* Disable logging while creating mapreduce objects */
-bool		gp_mapreduce_define = false;
-
 /* Force core dump on memory context error */
 bool		coredump_on_memerror = false;
 
@@ -763,14 +760,6 @@ gpvars_check_statement_mem(int *newval, void **extra, GucSource source)
 void
 increment_command_count()
 {
-	if (gp_cancel_query_print_log)
-	{
-		ereport(LOG,
-				(errmsg("Incrementing command count from %d to %d",
-						gp_command_count, gp_command_count + 1),
-				 errprintstack(true)));
-	}
-
 	gp_command_count++;
 	if (gp_command_count <= 0)
 	{

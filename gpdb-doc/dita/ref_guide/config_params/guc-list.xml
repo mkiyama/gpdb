@@ -685,9 +685,6 @@
               <xref href="#password_hash_algorithm"/>
             </li>
             <li>
-              <xref href="#pgstat_track_activity_query_size"/>
-            </li>
-            <li>
               <xref href="#pljava_classpath"/>
             </li>
             <li>
@@ -791,6 +788,9 @@
             </li>
             <li>
               <xref href="#track_activities"/>
+            </li>
+            <li>
+              <xref href="#track_activity_query_size"/>
             </li>
             <li>
               <xref href="#track_counts"/>
@@ -3621,7 +3621,7 @@
           <tbody>
             <row>
               <entry colname="col1">Boolean</entry>
-              <entry colname="col2">false</entry>
+              <entry colname="col2">on</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
@@ -4780,10 +4780,9 @@
           mirrors on <codeph>seghost1</codeph> fail over to become primary segments, each of the
           original 4 primaries retain their memory allotment of <codeph>0.175</codeph>, and the two
           new primary segments are each allotted <codeph>(0.7 / 6 = 0.116%)</codeph> of system
-          memory. <codeph>seghost1</codeph>'s overall memory allocation in this scenario is</p><p>
-          <codeblock>
-0.7 + (0.116 * 2) = 0.932%</codeblock>
-        </p>
+          memory. <codeph>seghost1</codeph>'s overall memory allocation in this scenario
+          is</p><p><codeblock>
+0.7 + (0.116 * 2) = 0.932%</codeblock></p>
         <p>which is above the percentage configured in the
             <codeph>gp_resource_group_memory_limit</codeph> setting.</p></note>
     </body>
@@ -7237,10 +7236,11 @@
         The legacy query optimizer does not use these statistics. </p>
       <p>The default setting for the parameter is <codeph>on</codeph>, the <codeph>ANALYZE</codeph>
         command can collect root partition statistics without the <codeph>ROOTPARTITION</codeph>
-        keyword. Root partition statistics are collected when you perform an
-          <codeph>ANALYZE</codeph> operation on the root partition or a child leaf partition of the
-        partitioned table. When the value is <codeph>off</codeph>, you must run <codeph>ANALZYE
-          ROOTPARTITION</codeph> to collect root partition statistics. </p>
+        keyword. Root partition statistics are collected when you run <codeph>ANALYZE</codeph> on
+        the root partition, or when you run <codeph>ANALYZE</codeph> on a child leaf partition of
+        the partitioned table and the other child leaf partitions have statistics. When the value is
+          <codeph>off</codeph>, you must run <codeph>ANALZYE ROOTPARTITION</codeph> to collect root
+        partition statistics. </p>
       <p>When the value of the server configuration parameter <codeph><xref href="#optimizer"
             format="dita"/></codeph> is <codeph>on</codeph> (the default), the value of this
         parameter should also be <codeph>on</codeph>. For information about collecting table
@@ -7988,35 +7988,6 @@
               <entry colname="col1">MD5<p>SHA-256</p></entry>
               <entry colname="col2">MD5</entry>
               <entry colname="col3">master<p>session</p><p>reload</p><p>superuser</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="pgstat_track_activity_query_size">
-    <title>pgstat_track_activity_query_size</title>
-    <body>
-      <p>Sets the maximum length limit for the query text stored in the
-          <codeph>current_query</codeph> column of the system catalog view pg_stat_activity. The
-        minimum length is 1024 characters. </p>
-      <table id="pgstat_track_activity_query_size_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">integer</entry>
-              <entry colname="col2">1024</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9156,6 +9127,34 @@
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">on</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="track_activity_query_size">
+    <title>track_activity_query_size</title>
+    <body>
+      <p>Sets the maximum length limit for the query text stored in <codeph>current_query</codeph>
+        column of the system catalog view pg_stat_activity. The minimum length is 1024 characters. </p>
+      <table id="track_activity_query_size_table">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">integer</entry>
+              <entry colname="col2">1024</entry>
+              <entry colname="col3">local<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
         </tgroup>

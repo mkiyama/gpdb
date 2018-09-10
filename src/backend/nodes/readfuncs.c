@@ -1386,8 +1386,6 @@ _readWindowFunc(void)
 	READ_BOOL_FIELD(winstar);
 	READ_BOOL_FIELD(winagg);
 	READ_BOOL_FIELD(windistinct);
-	READ_UINT_FIELD(winindex);
-	READ_ENUM_FIELD(winstage, WinStage);
 	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
@@ -2401,6 +2399,7 @@ _readCreatePLangStmt(void)
 {
 	READ_LOCALS(CreatePLangStmt);
 
+	READ_BOOL_FIELD(replace);
 	READ_STRING_FIELD(plname);
 	READ_NODE_FIELD(plhandler);
 	READ_NODE_FIELD(plinline);

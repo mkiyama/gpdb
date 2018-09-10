@@ -49,6 +49,7 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
+#include "utils/elog.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -1081,55 +1082,79 @@ needs_sample(VacAttrStats **vacattrstats, int attr_cnt)
 
 /*
  *	leaf_parts_analyzed() -- checks if all the leaf partitions are analyzed
+ *                           for each requested column to be analyzed
  *
- *	We use this to determine if all the leaf partitions are analyzed and
- *	the statistics are in place to be able to merge and generate meaningful
- *	statistics for the root partition. If any partition is analyzed and the
- *	attstattarget is set to collect stats, but there are no statistics for
- *  the partition in pg_statistics, root statistics will be bogus if we continue
- *  merging.
- *  0. A single partition is not analyzed - return FALSE
+ *	We use this function to determine if all the leaf partitions are analyzed
+ *  for the requested columns and the statistics are in place to be able to
+ *  merge and generate meaningful statistics for the root partition. If any
+ *  partition is analyzed and the attstattarget is set to collect stats, but
+ *  there are no statistics for the partition in pg_statistics, root
+ *  statistics will be bogus if we continue merging.
+ *  0. A requested column in a single partition is not analyzed - return FALSE
  *  1. All partitions are analyzed
  *	  1.1. All partitions are empty - return FALSE
  *    1.2. Some empty & rest have stats - return TRUE
  *    1.3. Some empty & at least one don't have stats - return FALSE
  *    1.4. None empty & at least one don't have stats - return FALSE
  *    1.5. None empty & all have stats - return TRUE
+ *
+ *
+ *  attrelid - the relation id of the root table
+ *  relid_exclude - it is the relid that is excluded to check for the stats.
+ *  It is used when we are asked to auto merge statistics when analyzing a
+ *  single leaf partition. As we are going to produce stats for that
+ *  specific leaf partition, we should not check its stats availibility.
+ *  va_cols - column attnum list to be analyzed from root table's perspective.
+ *  These attnum's needs to be translated for each leaf table as the attnums
+ *  for different columns might be different due to the dropped columns and
+ *  split partitions.
  */
 bool
-leaf_parts_analyzed(VacAttrStats *stats)
+leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols)
 {
-	PartitionNode *pn = get_parts(stats->attr->attrelid, 0 /*level*/ ,
+	PartitionNode *pn = get_parts(attrelid, 0 /*level*/ ,
 								  0 /*parent*/, false /* inctemplate */, true /*includesubparts*/);
 	Assert(pn);
 
 	List *oid_list = all_leaf_partition_relids(pn); /* all leaves */
 	bool all_parts_empty = true;
-	ListCell *lc;
+	ListCell *lc, *lc_col;
+
 	foreach(lc, oid_list)
 	{
 		Oid partRelid = lfirst_oid(lc);
+		if (partRelid == relid_exclude)
+			continue;
+
 		float4 relTuples = get_rel_reltuples(partRelid);
 		int4 relpages = get_rel_relpages(partRelid);
-
-		// A partition is not analyzed, so return false and fallback
-		// to sample based calculation
-		if (relpages == 0)
-			return false;
 
 		// Partition is analyzed and we detect it is empty
 		if (relTuples == 0.0 && relpages == 1)
 			continue;
 
-		HeapTuple heaptupleStats = get_att_stats(partRelid, stats->attr->attnum);
 		all_parts_empty = false;
 
-		// if there is no colstats
-		if (!HeapTupleIsValid(heaptupleStats))
+		foreach(lc_col, va_cols)
 		{
-			return false;
+			// Check stats availibility for each column that asked to be analyzed.
+			AttrNumber attnum = lfirst_int(lc_col);
+			const char *attname = get_relid_attribute_name(attrelid, attnum);
+			AttrNumber child_attno = get_attnum(partRelid, attname);
+
+			HeapTuple heaptupleStats = get_att_stats(partRelid, child_attno);
+
+			// if there is no colstats
+			if (!HeapTupleIsValid(heaptupleStats) || relpages == 0)
+			{
+				if(relid_exclude == InvalidOid)
+					elog(LOG, "column %s of partition %s is not analyzed, so ANALYZE will collect sample for stats calculation", attname, get_rel_name(partRelid));
+				else
+					elog(LOG, "Auto merging of leaf partition stats to calculate root partition stats is not possible because column %s of partition %s is not analyzed", attname, get_rel_name(partRelid));
+				return false;
+			}
+			heap_freetuple(heaptupleStats);
 		}
-		heap_freetuple(heaptupleStats);
 	}
 
 	return !all_parts_empty;

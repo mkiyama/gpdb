@@ -58,11 +58,7 @@ test: create_index create_view
 
 test: inherit
 
-# 'triggers' test is disabled in GPDB, because it contains a trigger function
-# that would need to access rows on other segments, which doens't work. You
-# get errors like:
-# ERROR: function cannot execute on a QE slice because it accesses relation "public.pkeys"
-#test: triggers
+test: triggers
 
 # ----------
 # Another group of parallel tests
@@ -145,7 +141,7 @@ test: select_views portals_p2 cluster dependency guc bitmapops tsearch tsdicts f
 # NB: temp.sql does a reconnect which transiently uses 2 connections,
 # so keep this parallel group to at most 19 tests
 # ----------
-test: plancache limit plpgsql copy2 temp domain rangefuncs prepare without_oid conversion truncate alter_table sequence polymorphism rowtypes with xml
+test: plancache limit plpgsql copy2 temp domain rangefuncs prepare without_oid conversion truncate alter_table alter_extension sequence polymorphism rowtypes with xml
 
 # large objects are not supported by GPDB
 # test: largeobject

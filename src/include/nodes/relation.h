@@ -65,12 +65,13 @@ typedef struct AggClauseCosts
 {
 	int			numAggs;		/* total number of aggregate functions */
 	int			numOrderedAggs; /* number that use DISTINCT or ORDER BY */
+	int			numPureOrderedAggs; /* CDB: number that use ORDER BY, not counting DISTINCT */
 	QualCost	transCost;		/* total per-input-row execution costs */
 	Cost		finalCost;		/* total costs of agg final functions */
 	Size		transitionSpace;	/* space for pass-by-ref transition data */
 
 	List   *dqaArgs;	/* CDB: List of distinct DQA argument exprs. */
-	bool	missing_prelimfunc; /* CDB: any agg func w/o a prelim func? */
+	bool	missing_combinefunc; /* CDB: any agg func w/o a prelim func? */
 } AggClauseCosts;
 
 
@@ -215,7 +216,7 @@ typedef struct PlannerInfo
 
 	List	   *eq_classes;		/* list of active EquivalenceClasses */
 
-	List	   *non_eq_clauses;
+	List	   *non_eq_clauses;	/* list of non-equivalence clauses */
 
 	List	   *canon_pathkeys; /* list of "canonical" PathKeys */
 
@@ -1376,16 +1377,6 @@ typedef struct HashPath
  * (In short, is_pushed_down is only false for non-degenerate outer join
  * conditions.	Possibly we should rename it to reflect that meaning?)
  *
- * In GPDB, is an there is an additional field, "ojscope_relids". If
- * this clause is an outer join's JOIN/ON condition, "ojscope_relids" indicates
- * the extra relations that need to be in scope, independent of what appears
- * in the clause itself. In PostgreSQL, those are included in "required_relids",
- * but to do "predicate propagation" in GPDB, we need to preserve the original
- * ojscope relations. We might derive more RestrictInfos from this RestrictInfo,
- * with a modified clause, and must be careful to not push/pull the derived
- * RestrictInfos to places where the original RestrictInfo could not be legally
- * placed.
- *
  * RestrictInfo nodes also contain an outerjoin_delayed flag, which is true
  * if the clause's applicability must be delayed due to any outer joins
  * appearing below it (ie, it has to be postponed to some join level higher
@@ -1465,12 +1456,6 @@ typedef struct RestrictInfo
 
 	/* The set of relids required to evaluate the clause: */
 	Relids		required_relids;
-
-	/*
-	 * The set of relids required to evaluate the clause because this is an outer
-	 * join clause. required_relids is a union of this and clause_relids.
-	 */
-	Relids		ojscope_relids;
 
 	/* If an outer-join clause, the outer-side relations, else NULL: */
 	Relids		outer_relids;

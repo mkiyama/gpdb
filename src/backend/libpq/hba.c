@@ -761,7 +761,7 @@ check_same_host_or_net(SockAddr *raddr, IPCompareMethod method)
 						authname, argname), \
 				 errcontext("line %d of configuration file \"%s\"", \
 						line_num, HbaFileName))); \
-		return false; \
+		return NULL; \
 	} \
 } while (0);
 
@@ -1362,7 +1362,7 @@ parse_hba_line(List *line, int line_num)
 					 errmsg("cannot use 'ldaptls' or 'ldapport' with 'ldapserver' start with 'ldaps://'"),
 					 errcontext("line %d of configuration file \"%s\"",
 								line_num, HbaFileName)));
-			return false;
+			return NULL;
 
 		}
 	}

@@ -994,7 +994,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			}
 			break;
 		case T_Repeat:
-			pname = "Repeat";
+			pname = sname = "Repeat";
 			break;
 		case T_Append:
 			pname = sname = "Append";
@@ -1006,7 +1006,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			pname = sname = "Recursive Union";
 			break;
 		case T_Sequence:
-			pname = "Sequence";
+			pname = sname = "Sequence";
 			break;
 		case T_BitmapAnd:
 			pname = sname = "BitmapAnd";
@@ -1034,25 +1034,25 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			pname = sname = "Seq Scan";
 			break;
 		case T_AppendOnlyScan:
-			pname = "Append-only Scan";
+			pname = sname = "Append-only Scan";
 			break;
 		case T_AOCSScan:
-			pname = "Append-only Columnar Scan";
+			pname = sname = "Append-only Columnar Scan";
 			break;
 		case T_TableScan:
-			pname = "Table Scan";
+			pname = sname = "Table Scan";
 			break;
 		case T_DynamicTableScan:
-			pname = "Dynamic Table Scan";
+			pname = sname = "Dynamic Table Scan";
 			break;
 		case T_ExternalScan:
-			pname = "External Scan";
+			pname = sname = "External Scan";
 			break;
 		case T_IndexScan:
 			pname = sname = "Index Scan";
 			break;
 		case T_DynamicIndexScan:
-			pname = "Dynamic Index Scan";
+			pname = sname = "Dynamic Index Scan";
 			break;
 		case T_IndexOnlyScan:
 			pname = sname = "Index Only Scan";
@@ -1061,19 +1061,19 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			pname = sname = "Bitmap Index Scan";
 			break;
 		case T_DynamicBitmapIndexScan:
-			pname = "Dynamic Bitmap Index Scan";
+			pname = sname = "Dynamic Bitmap Index Scan";
 			break;
 		case T_BitmapHeapScan:
 			pname = sname = "Bitmap Heap Scan";
 			break;
 		case T_BitmapAppendOnlyScan:
 			if (((BitmapAppendOnlyScan *)plan)->isAORow)
-				pname = "Bitmap Append-Only Row-Oriented Scan";
+				pname = sname = "Bitmap Append-Only Row-Oriented Scan";
 			else
-				pname = "Bitmap Append-Only Column-Oriented Scan";
+				pname = sname = "Bitmap Append-Only Column-Oriented Scan";
 			break;
 		case T_BitmapTableScan:
-			pname = "Bitmap Table Scan";
+			pname = sname = "Bitmap Table Scan";
 			break;
 		case T_TidScan:
 			pname = sname = "Tid Scan";
@@ -1212,34 +1212,35 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 		case T_DML:
 			{
+				sname = "DML";
 				switch (es->pstmt->commandType)
 				{
 					case CMD_INSERT:
-						pname = "Insert";
+						pname = operation = "Insert";
 						break;
 					case CMD_DELETE:
-						pname = "Delete";
+						pname = operation = "Delete";
 						break;
 					case CMD_UPDATE:
-						pname = "Update";
+						pname = operation = "Update";
 						break;
 					default:
-						pname = "DML ???";
+						pname = operation = "DML ???";
 						break;
 				}
 			}
 			break;
 		case T_SplitUpdate:
-			pname = "Split";
+			pname = sname = "Split";
 			break;
 		case T_AssertOp:
-			pname = "Assert";
+			pname = sname = "Assert";
 			break;
 		case T_PartitionSelector:
-			pname = "Partition Selector";
+			pname = sname = "Partition Selector";
 			break;
 		case T_RowTrigger:
- 			pname = "RowTrigger";
+			pname = sname = "RowTrigger";
  			break;
 		default:
 			pname = sname = "???";
@@ -1508,10 +1509,23 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	{
 		ExplainPropertyInteger("operatorMem", PlanStateOperatorMemKB(planstate), es);
 	}
+	/*
+	 * We have to forcibly clean up the instrumentation state because we
+	 * haven't done ExecutorEnd yet.  This is pretty grotty ...
+	 *
+	 * Note: contrib/auto_explain could cause instrumentation to be set up
+	 * even though we didn't ask for it here.  Be careful not to print any
+	 * instrumentation results the user didn't ask for.  But we do the
+	 * InstrEndLoop call anyway, if possible, to reduce the number of cases
+	 * auto_explain has to contend with.
+	 */
+	if (planstate->instrument)
+		InstrEndLoop(planstate->instrument);
 
 	/* GPDB_90_MERGE_FIXME: In GPDB, these are printed differently. But does that work
 	 * with the new XML/YAML EXPLAIN output */
-	if (planstate->instrument && planstate->instrument->nloops > 0)
+	if (es->analyze &&
+		planstate->instrument && planstate->instrument->nloops > 0)
 	{
  		double		nloops = planstate->instrument->nloops;
 		double		startup_sec = 1000.0 * planstate->instrument->startup / nloops;
@@ -1520,7 +1534,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
-			if (planstate->instrument->need_timer)
+			if (es->timing)
 				appendStringInfo(es->str,
 							" (actual time=%.3f..%.3f rows=%.0f loops=%.0f)",
 								 startup_sec, total_sec, rows, nloops);
@@ -1531,7 +1545,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		}
 		else
 		{
-			if (planstate->instrument->need_timer)
+			if (es->timing)
 			{
 				ExplainPropertyFloat("Actual Startup Time", startup_sec, 3, es);
 				ExplainPropertyFloat("Actual Total Time", total_sec, 3, es);
@@ -1542,20 +1556,18 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	}
 	else if (es->analyze)
 	{
-
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			appendStringInfo(es->str, " (never executed)");
-		else if (planstate->instrument->need_timer)
-		{
-			ExplainPropertyFloat("Actual Startup Time", 0.0, 3, es);
-			ExplainPropertyFloat("Actual Total Time", 0.0, 3, es);
-		}
 		else
 		{
+			if (es->timing)
+			{
+				ExplainPropertyFloat("Actual Startup Time", 0.0, 3, es);
+				ExplainPropertyFloat("Actual Total Time", 0.0, 3, es);
+			}
 			ExplainPropertyFloat("Actual Rows", 0.0, 0, es);
 			ExplainPropertyFloat("Actual Loops", 0.0, 0, es);
 		}
-
 	}
 
 	/* in text format, first line ends here */
@@ -1803,7 +1815,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		cdbexplain_showExecStats(planstate, es);
 
 	/* Show buffer usage */
-	if (es->buffers)
+	if (es->buffers && planstate->instrument)
 	{
 		const BufferUsage *usage = &planstate->instrument->bufusage;
 

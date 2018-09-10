@@ -111,19 +111,15 @@ void *mapred_malloc(int size)
 	void *m;
 	XASSERT(size > 0);
 
-#ifdef INTERNAL_BUILD
 	if (global_debug_flag && global_verbose_flag)
 		fprintf(stderr, "Allocating %d bytes: ", size);
-#endif
 
 	m = malloc(size);
 	if (!m)
 		XRAISE(MEMORY_ERROR, "Memory allocation failure");
 
-#ifdef INTERNAL_BUILD
 	if (global_debug_flag && global_verbose_flag)
 		fprintf(stderr, "%p\n", m);
-#endif
 
 	return m;
 }
@@ -135,10 +131,8 @@ void mapred_free(void *ptr)
 {
 	XASSERT(ptr);
 
-#ifdef INTERNAL_BUILD
 	if (global_debug_flag && global_verbose_flag)
 		fprintf(stderr, "Freeing memory: %p\n", ptr);
-#endif
 
 	free(ptr);
 }
@@ -1052,16 +1046,6 @@ void mapred_run_document(PGconn *conn, mapred_document_t *doc)
 
 	XTRY
 	{
-
-		/*
-		 * Setting gp_mapreduce_define will disable logging of sql
-		 * statements.
-		 */
-#ifndef INTERNAL_BUILD
-		result = PQexec(conn, "set gp_mapreduce_define=true");
-		PQclear(result);
-#endif
-
 		/*
 		 * By running things within a transaction we can effectively
 		 * obscure the mapreduce sql definitions.  They could still
@@ -1150,14 +1134,6 @@ void mapred_run_document(PGconn *conn, mapred_document_t *doc)
 
 		} while (!done);
 
-		/*
-		 * Re-enable statement logging before we try running queries
-		 */
-#ifndef INTERNAL_BUILD
-		result = PQexec(conn, "set gp_mapreduce_define=false");
-		PQclear(result);
-#endif
-
 		/* objects created, execute queries */
 		mapred_run_queries(conn, doc);
 	}
@@ -1170,15 +1146,6 @@ void mapred_run_document(PGconn *conn, mapred_document_t *doc)
 	}
 	XFINALLY
 	{
-
-		/*
-		 * disable statement logging before deleting objects
-		 */
-#ifndef INTERNAL_BUILD
-		result = PQexec(conn, "set gp_mapreduce_define=true");
-		PQclear(result);
-#endif
-
 		/* Remove all the objects that we created */
 		if (global_print_flag || global_debug_flag)
 			printf("\n");
@@ -3035,7 +3002,7 @@ boolean mapred_create_object(PGconn *conn, mapred_document_t *doc,
 				bufcat(&buffer, transition->name);
 				if (combiner)
 				{
-					bufcat(&buffer, ",\n  prefunc = ");
+					bufcat(&buffer, ",\n  combinefunc = ");
 					if (!combiner->internal)
 						bufcat(&buffer, doc->prefix);
 					bufcat(&buffer, combiner->name);

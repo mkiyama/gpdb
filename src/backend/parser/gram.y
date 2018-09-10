@@ -696,8 +696,6 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 
 	MASTER MEDIAN MISSING MODIFIES
 
-	MERGE
-
 	NEWLINE NOCREATEEXTTABLE NOOVERCOMMIT
 
 	ORDERED OTHERS OVER OVERCOMMIT
@@ -5284,6 +5282,10 @@ format_opt_item:
 			{
 				$$ = makeDefElem("force_quote", (Node *)$3);
 			}
+			| FORCE QUOTE '*'
+			{
+				$$ = makeDefElem("force_quote", (Node *)makeNode(A_Star));
+			}
 			| FILL MISSING FIELDS
 			{
 				$$ = makeDefElem("fill_missing_fields", (Node *)makeInteger(TRUE));
@@ -5810,7 +5812,7 @@ AlterExtensionContentsStmt:
 					n->action = $4;
 					n->objtype = OBJECT_AGGREGATE;
 					n->objname = $6;
-					n->objargs = $7;
+					n->objargs = extractAggrArgTypes($7);
 					$$ = (Node *)n;
 				}
 			| ALTER EXTENSION name add_drop CAST '(' Typename AS Typename ')'
@@ -7517,7 +7519,7 @@ SecLabelStmt:
 					n->provider = $3;
 					n->objtype = OBJECT_AGGREGATE;
 					n->objname = $6;
-					n->objargs = $7;
+					n->objargs = extractAggrArgTypes($7);
 					n->label = $9;
 					$$ = (Node *) n;
 				}
@@ -10717,18 +10719,6 @@ AnalyzeStmt:
 					n->freeze_table_age = -1;
 					n->relation = $3;
 					n->va_cols = $4;
-					$$ = (Node *)n;
-				}
-			| analyze_keyword opt_verbose MERGE qualified_name opt_name_list
-				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_ANALYZE;
-					if ($2)
-						n->options |= VACOPT_VERBOSE;
-					n->options |= VACOPT_MERGE;
-					n->freeze_min_age = -1;
-					n->relation = $4;
-					n->va_cols = $5;
 					$$ = (Node *)n;
 				}
 			| analyze_keyword opt_verbose FULLSCAN qualified_name opt_name_list
@@ -15273,7 +15263,6 @@ unreserved_keyword:
 			| MEMORY_LIMIT
 			| MEMORY_SHARED_QUOTA
 			| MEMORY_SPILL_RATIO
-			| MERGE
 			| MINUTE_P
 			| MINVALUE
 			| MISSING

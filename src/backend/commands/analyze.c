@@ -523,17 +523,6 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 		attr_cnt = tcnt;
 	}
 
-	if (vacstmt->options & VACOPT_MERGE)
-	{
-		for (i = 0; i < attr_cnt; i++)
-		{
-			if (vacattrstats[i]->merge_stats == true)
-				break;
-			ereport(ERROR,
-					(errmsg("Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge")));
-		}
-	}
-
 	/*
 	 * Open all indexes of the relation, and see if there are any analyzable
 	 * columns in the indexes.	We do not analyze index columns if there was
@@ -652,7 +641,6 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 												&totalrows, &totaldeadrows);
 	else
 #endif
-		elog (LOG,"Needs sample for %s " , RelationGetRelationName(onerel));
 		rows = NULL;
 		numrows = (*acquirefunc) (onerel, elevel, attr_cnt, vacattrstats, &rows, targrows,
 								  &totalrows, &totaldeadrows, &totalpages,
@@ -680,8 +668,15 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 	 * each column are stored in a child context.  The calc routines are
 	 * responsible to make sure that whatever they store into the VacAttrStats
 	 * structure is allocated in anl_context.
+	 *
+	 * When we have a root partition, we use the leaf partition statistics to
+	 * derive root table statistics. In that case, we do not need to collect a
+	 * sample. Therefore, the statistics calculation depends on root level have
+	 * any tuples. In addition, we continue for statistics calculation if
+	 * optimizer_analyze_root_partition or ROOTPARTITION is specified in the
+	 * ANALYZE statement.
 	 */
-	if (numrows > 0 || (optimizer_analyze_root_partition && totalrows > 0.0))
+	if (numrows > 0 || ((optimizer_analyze_root_partition || (vacstmt->options & VACOPT_ROOTONLY)) && totalrows > 0.0))
 	{
 		HeapTuple *validRows = (HeapTuple *) palloc(numrows * sizeof(HeapTuple));
 		MemoryContext col_context,
@@ -2715,8 +2710,9 @@ std_typanalyze(VacAttrStats *stats)
 	/*
 	 * Determine which standard statistics algorithm to use
 	 */
+	List *va_cols = list_make1_int(stats->attr->attnum);
 	if (rel_part_status(attr->attrelid) == PART_STATUS_ROOT &&
-		leaf_parts_analyzed(stats) &&
+		leaf_parts_analyzed(stats->attr->attrelid, InvalidOid, va_cols) &&
 		isGreenplumDbHashable(attr->atttypid))
 	{
 		stats->merge_stats = true;
@@ -2762,7 +2758,7 @@ std_typanalyze(VacAttrStats *stats)
 		/* Might as well use the same minrows as above */
 		stats->minrows = 300 * attr->attstattarget;
 	}
-
+	list_free(va_cols);
 	return true;
 }
 
@@ -2822,7 +2818,7 @@ compute_minimal_stats(VacAttrStatsP stats,
 
 	stats->stahll = (bytea *)hyperloglog_init_def();
 
-	elog(LOG, "Computing Minimal Stats column %d", stats->attr->attnum);
+	elog(LOG, "Computing Minimal Stats : column %s", get_attname(stats->attr->attrelid, stats->attr->attnum));
 
 	for (i = 0; i < samplerows; i++)
 	{
@@ -3131,7 +3127,7 @@ compute_very_minimal_stats(VacAttrStatsP stats,
 	bool		is_varwidth = (!stats->attr->attbyval &&
 							   stats->attr->attlen < 0);
 
-	elog(LOG, "Computing Very Minimal Stats for  column %d", stats->attr->attnum);
+	elog(LOG, "Computing Very Minimal Stats : column %s", get_attname(stats->attr->attrelid, stats->attr->attnum));
 
 	for (i = 0; i < samplerows; i++)
 	{
@@ -3250,7 +3246,7 @@ compute_scalar_stats(VacAttrStatsP stats,
 	// Initialize HLL counter to be stored in stats
 	stats->stahll = (bytea *)hyperloglog_init_def();
 
-	elog(LOG, "Computing Scalar Stats  column %d", stats->attr->attnum);
+	elog(LOG, "Computing Scalar Stats : column %s", get_attname(stats->attr->attrelid, stats->attr->attnum));
 
 	/* Initial scan to find sortable values */
 	for (i = 0; i < samplerows; i++)
@@ -3769,7 +3765,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 		get_parts(stats->attr->attrelid, 0 /*level*/, 0 /*parent*/,
 				  false /* inctemplate */, true /*includesubparts*/);
 	Assert(pn);
-	elog(LOG, "Merging leaf stats");
+	elog(LOG, "Merging leaf partition stats to calculate root partition stats : column %s", get_attname(stats->attr->attrelid, stats->attr->attnum));
 	List *oid_list = all_leaf_partition_relids(pn); /* all leaves */
 	StdAnalyzeData *mystats = (StdAnalyzeData *) stats->extra_data;
 	int numPartitions = list_length(oid_list);
@@ -3918,7 +3914,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 			 * the number of distinct values for the table based on the estimator
 			 * proposed by Haas and Stokes, used later in the code.
 			 */
-			if ((fabs(samplerows - ndistinct) / (float) samplerows) < 0.003)
+			if ((fabs(samplerows - ndistinct) / (float) samplerows) < HLL_ERROR_MARGIN)
 			{
 				allDistinct = true;
 			}

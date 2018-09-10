@@ -939,8 +939,8 @@ SELECT tablename, n_distinct FROM pg_stats WHERE tablename like 'foo%' ORDER BY 
  foo_1_prt_2 |     -0.199
 (9 rows)
 
--- Test ANALYZE MERGE behavior
--- Merge stats from only one partition
+-- Test ANALYZE auto merge behavior
+-- Do not merge stats from only one partition while other partitions have not been analyzed yet
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -949,8 +949,6 @@ NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
 NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
-ANALYZE MERGE foo;
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -------------+---------+-----------+------------+------------------+-------------------+------------------
@@ -969,7 +967,6 @@ NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
-ANALYZE MERGE foo;
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -------------+---------+-----------+------------+------------------+-------------------+------------------
@@ -984,7 +981,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo_1_prt_2 | c       |         0 |          3 | {3,4,5}          | {0.34,0.34,0.32}  | 
 (9 rows)
 
--- No stats after MERGE
+-- No stats after merging 
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -993,8 +990,6 @@ NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
 NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
-ANALYZE MERGE foo;
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
  tablename | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -----------+---------+-----------+------------+------------------+-------------------+------------------
@@ -1012,8 +1007,6 @@ SET allow_system_table_mods=true;
 UPDATE pg_attribute SET attstattarget=0 WHERE attrelid = 'foo_1_prt_1'::regclass and ATTNAME in ('a','b','c');
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
-ANALYZE MERGE foo;
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -------------+---------+-----------+------------+------------------+-------------------+------------------
@@ -1031,43 +1024,12 @@ NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
 NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1(c);
-ANALYZE MERGE foo(c);
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -------------+---------+-----------+------------+------------------+-------------------+------------------
  foo_1_prt_1 | c       |         0 |          3 | {1,2,0}          | {0.34,0.34,0.32}  | 
 (1 row)
 
--- Merge fails as all partitions are not analyzed
-DROP TABLE IF EXISTS foo;
-CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
-INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
-ANALYZE MERGE foo;
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
--- Merge fails as all partitions are empty and are not analyzed
-DROP TABLE IF EXISTS foo;
-CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
-ANALYZE MERGE foo;
-ERROR:  Cannot run ANALYZE MERGE since not all non-empty leaf partitions have available statistics for the merge (analyze.c:XXX)
--- Merge errors on partition of a table
-DROP TABLE IF EXISTS foo;
-CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
-NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
-INSERT INTO foo select i, i%6, i%100 FROM generate_series(1,2000)i;
-ANALYZE MERGE foo_1_prt_1;
-WARNING:  skipping "foo_1_prt_1" --- cannot analyze a non-root partition using ANALYZE MERGE
 -- Test merging of leaf stats when one partition has
 -- FULL SCAN HLL and the other has HLL from sample
 DROP TABLE IF EXISTS foo;
@@ -1079,8 +1041,7 @@ NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 ANALYZE foo_1_prt_1;
 ANALYZE FULLSCAN foo_1_prt_2;
-ANALYZE MERGE foo;
-ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:XXX)
+ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4005)
 HINT:  Re-run ANALYZE or ANALYZE FULLSCAN
 -- Test merging of stats for a newly added partition
 -- Do not collect samples while merging stats
@@ -1099,9 +1060,6 @@ INSERT INTO foo SELECT i, i%3+6 FROM generate_series(1,500)i;
 ANALYZE foo_1_prt_new_part;
 SET log_statement='none';
 SET client_min_messages = 'log';
-ANALYZE MERGE foo;
-LOG:  Merging leaf stats
-LOG:  Merging leaf stats
 -- Insert a new column that is not analyzed in the leaf partitions.
 -- Analyzing root partition will use merging statistics for the first 2 columns, 
 -- will create a sample for the root to analyze the newly added columns since 
@@ -1109,7 +1067,237 @@ LOG:  Merging leaf stats
 ALTER TABLE foo ADD COLUMN c int;
 INSERT INTO foo SELECT i, i%9, i%100 FROM generate_series(1,500)i;
 ANALYZE rootpartition foo;
-LOG:  Needs sample for foo
-LOG:  Merging leaf stats
-LOG:  Merging leaf stats
-LOG:  Computing Scalar Stats  column 3
+LOG:  column c of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
+LOG:  Merging leaf partition stats to calculate root partition stats : column a
+LOG:  Merging leaf partition stats to calculate root partition stats : column b
+LOG:  Computing Scalar Stats : column c
+-- Testing auto merging root statistics for all columns
+-- where column attnums are differents due to dropped columns
+-- and split partitions.
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int, b int, c text, d int)
+	DISTRIBUTED BY (d) 
+	PARTITION BY RANGE (a) 
+		(START (0) END (8) EVERY (4), 
+		DEFAULT PARTITION def_part);
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_3" for table "foo"
+INSERT INTO foo SELECT i%13, i, 'something'||i::text, i%121 FROM generate_series(1,1000)i;
+ALTER TABLE foo DROP COLUMN b;
+ALTER TABLE foo SPLIT DEFAULT PARTITION START (8) END (12) INTO (PARTITION new_part, default PARTITION);
+NOTICE:  exchanged partition "def_part" of relation "foo" with relation "pg_temp_106969"
+NOTICE:  dropped partition "def_part" for relation "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_new_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+set client_min_messages to 'log';
+ANALYZE foo_1_prt_2;
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_3 is not analyzed
+LOG:  Computing Scalar Stats : column a
+LOG:  Computing Scalar Stats : column c
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_3;
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_new_part is not analyzed
+LOG:  Computing Scalar Stats : column a
+LOG:  Computing Scalar Stats : column c
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_new_part;
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_def_part is not analyzed
+LOG:  Computing Scalar Stats : column a
+LOG:  Computing Scalar Stats : column c
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_def_part;
+LOG:  Computing Scalar Stats : column a
+LOG:  Computing Scalar Stats : column c
+LOG:  Computing Scalar Stats : column d
+LOG:  Merging leaf partition stats to calculate root partition stats : column a
+LOG:  Merging leaf partition stats to calculate root partition stats : column c
+LOG:  Merging leaf partition stats to calculate root partition stats : column d
+reset client_min_messages;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+     tablename      | attname | null_frac | n_distinct | most_common_vals |           most_common_freqs           |                          histogram_bounds                           
+--------------------+---------+-----------+------------+------------------+---------------------------------------+---------------------------------------------------------------------
+ foo                | a       |         0 |         13 |                  |                                       | {0,3,6,9,12}
+ foo_1_prt_2        | a       |         0 |          4 | {1,2,3,0}        | {0.250814,0.250814,0.250814,0.247557} | 
+ foo_1_prt_3        | a       |         0 |          4 | {4,5,6,7}        | {0.25,0.25,0.25,0.25}                 | 
+ foo_1_prt_def_part | a       |         0 |          1 | {12}             | {1}                                   | 
+ foo_1_prt_new_part | a       |         0 |          4 | {8,9,10,11}      | {0.25,0.25,0.25,0.25}                 | 
+ foo                | c       |         0 |         -1 |                  |                                       | {something1,something33,something554,something776,something999}
+ foo_1_prt_2        | c       |         0 |         -1 |                  |                                       | {something1,something313,something54,something769,something991}
+ foo_1_prt_3        | c       |         0 |         -1 |                  |                                       | {something108,something33,something553,something773,something995}
+ foo_1_prt_def_part | c       |         0 |         -1 |                  |                                       | {something1000,something311,something532,something766,something987}
+ foo_1_prt_new_part | c       |         0 |         -1 |                  |                                       | {something10,something323,something554,something776,something999}
+ foo                | d       |         0 |     -0.121 |                  |                                       | {0,28,59,90,120}
+ foo_1_prt_2        | d       |         0 |  -0.394137 |                  |                                       | {0,27,59,90,120}
+ foo_1_prt_3        | d       |         0 |  -0.392857 |                  |                                       | {0,27,57,89,120}
+ foo_1_prt_def_part | d       |         0 |         -1 |                  |                                       | {0,27,57,88,118}
+ foo_1_prt_new_part | d       |         0 |  -0.392857 |                  |                                       | {0,28,58,88,120}
+(15 rows)
+
+-- Testing auto merging root statistics for a column whose attnum
+-- is aligned and the same in every partition due to dropped columns
+-- and split partitions.
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int, b int, c text, d int)
+	DISTRIBUTED BY (d) 
+	PARTITION BY RANGE (a) 
+		(START (0) END (8) EVERY (4), 
+		DEFAULT PARTITION def_part);
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_3" for table "foo"
+INSERT INTO foo SELECT i%13, i, 'something'||i::text, i%121 FROM generate_series(1,1000)i;
+ALTER TABLE foo DROP COLUMN b;
+ALTER TABLE foo SPLIT DEFAULT PARTITION START (8) END (12) INTO (PARTITION new_part, default PARTITION);
+NOTICE:  exchanged partition "def_part" of relation "foo" with relation "pg_temp_107148"
+NOTICE:  dropped partition "def_part" for relation "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_new_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+set client_min_messages to 'log';
+ANALYZE foo_1_prt_2(a);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_3 is not analyzed
+LOG:  Computing Scalar Stats : column a
+ANALYZE foo_1_prt_3(a);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_new_part is not analyzed
+LOG:  Computing Scalar Stats : column a
+ANALYZE foo_1_prt_new_part(a);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column a of partition foo_1_prt_def_part is not analyzed
+LOG:  Computing Scalar Stats : column a
+ANALYZE foo_1_prt_def_part(a);
+LOG:  Computing Scalar Stats : column a
+LOG:  Merging leaf partition stats to calculate root partition stats : column a
+reset client_min_messages;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+     tablename      | attname | null_frac | n_distinct | most_common_vals |           most_common_freqs           | histogram_bounds 
+--------------------+---------+-----------+------------+------------------+---------------------------------------+------------------
+ foo                | a       |         0 |         13 |                  |                                       | {0,3,6,9,12}
+ foo_1_prt_2        | a       |         0 |          4 | {1,2,3,0}        | {0.250814,0.250814,0.250814,0.247557} | 
+ foo_1_prt_3        | a       |         0 |          4 | {4,5,6,7}        | {0.25,0.25,0.25,0.25}                 | 
+ foo_1_prt_def_part | a       |         0 |          1 | {12}             | {1}                                   | 
+ foo_1_prt_new_part | a       |         0 |          4 | {8,9,10,11}      | {0.25,0.25,0.25,0.25}                 | 
+(5 rows)
+
+-- Testing auto merging root statistics for a column whose attnum
+-- is not aligned and different in partitions due to dropped columns
+-- and split partitions.
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int, b int, c text, d int)
+	DISTRIBUTED BY (d) 
+	PARTITION BY RANGE (a) 
+		(START (0) END (8) EVERY (4), 
+		DEFAULT PARTITION def_part);
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_3" for table "foo"
+INSERT INTO foo SELECT i%13, i, 'something'||i::text, i%121 FROM generate_series(1,1000)i;
+ALTER TABLE foo DROP COLUMN b;
+ALTER TABLE foo SPLIT DEFAULT PARTITION START (8) END (12) INTO (PARTITION new_part, default PARTITION);
+NOTICE:  exchanged partition "def_part" of relation "foo" with relation "pg_temp_107327"
+NOTICE:  dropped partition "def_part" for relation "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_new_part" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_def_part" for table "foo"
+set client_min_messages to 'log';
+ANALYZE foo_1_prt_2(d);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column d of partition foo_1_prt_3 is not analyzed
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_3(d);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column d of partition foo_1_prt_new_part is not analyzed
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_new_part(d);
+LOG:  Auto merging of leaf partition stats to calculate root partition stats is not possible because column d of partition foo_1_prt_def_part is not analyzed
+LOG:  Computing Scalar Stats : column d
+ANALYZE foo_1_prt_def_part(d);
+LOG:  Computing Scalar Stats : column d
+LOG:  Merging leaf partition stats to calculate root partition stats : column d
+reset client_min_messages;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+     tablename      | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
+--------------------+---------+-----------+------------+------------------+-------------------+------------------
+ foo                | d       |         0 |     -0.121 |                  |                   | {0,28,59,90,120}
+ foo_1_prt_2        | d       |         0 |  -0.394137 |                  |                   | {0,27,59,90,120}
+ foo_1_prt_3        | d       |         0 |  -0.392857 |                  |                   | {0,27,57,89,120}
+ foo_1_prt_def_part | d       |         0 |         -1 |                  |                   | {0,27,57,88,118}
+ foo_1_prt_new_part | d       |         0 |  -0.392857 |                  |                   | {0,28,58,88,120}
+(5 rows)
+
+-- Testing ANALYZE ROOTPARTITION and when optimizer_analyze_root_partition is off
+-- for incremental analyze.
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int, b int, c text)
+	PARTITION BY RANGE (b) 
+		(START (0) END (8) EVERY (4));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
+INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
+set optimizer_analyze_root_partition=off;
+set client_min_messages to 'log';
+-- ANALYZE ROOTPARTITION will sample the table and compute statistics since there
+-- is not stats to be merged in the leaf partitions
+ANALYZE ROOTPARTITION foo;
+LOG:  column a of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
+LOG:  column b of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
+LOG:  column c of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
+LOG:  Computing Scalar Stats : column a
+LOG:  Computing Scalar Stats : column b
+LOG:  Computing Scalar Stats : column c
+reset client_min_messages;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+ tablename | attname | null_frac | n_distinct | most_common_vals | most_common_freqs |                         histogram_bounds                         
+-----------+---------+-----------+------------+------------------+-------------------+------------------------------------------------------------------
+ foo       | a       |         0 |      -0.13 |                  |                   | {0,31,62,94,129}
+ foo       | b       |         0 |          8 |                  |                   | {0,1,3,5,7}
+ foo       | c       |         0 |         -1 |                  |                   | {something1,something322,something548,something773,something999}
+(3 rows)
+
+ANALYZE foo_1_prt_1;
+ANALYZE foo_1_prt_2;
+set client_min_messages to 'log';
+-- ANALYZE ROOT PARTITION will piggyback on the stats collected from the leaf and merge them
+ANALYZE ROOTPARTITION foo;
+LOG:  Merging leaf partition stats to calculate root partition stats : column a
+LOG:  Merging leaf partition stats to calculate root partition stats : column b
+LOG:  Merging leaf partition stats to calculate root partition stats : column c
+reset client_min_messages;
+reset optimizer_analyze_root_partition;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+  tablename  | attname | null_frac | n_distinct | most_common_vals |   most_common_freqs   |                          histogram_bounds                          
+-------------+---------+-----------+------------+------------------+-----------------------+--------------------------------------------------------------------
+ foo         | a       |         0 |     -0.131 |                  |                       | {0,31,62,94,129}
+ foo_1_prt_1 | a       |         0 |      -0.26 |                  |                       | {0,31,62,94,129}
+ foo_1_prt_2 | a       |         0 |      -0.26 |                  |                       | {0,31,62,93,129}
+ foo         | b       |         0 |          8 |                  |                       | {0,1,3,5,7}
+ foo_1_prt_1 | b       |         0 |          4 | {0,1,2,3}        | {0.25,0.25,0.25,0.25} | 
+ foo_1_prt_2 | b       |         0 |          4 | {4,5,6,7}        | {0.25,0.25,0.25,0.25} | 
+ foo         | c       |         0 |         -1 |                  |                       | {something1,something324,something548,something776,something999}
+ foo_1_prt_1 | c       |         0 |         -1 |                  |                       | {something1,something321,something547,something776,something995}
+ foo_1_prt_2 | c       |         0 |         -1 |                  |                       | {something100,something324,something548,something772,something999}
+(9 rows)
+
+-- Testing that auto merge will be disabled when optimizer_analyze_root_partition
+-- is off for incremental analyze. 
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int, b int, c text)
+	PARTITION BY RANGE (b) 
+		(START (0) END (8) EVERY (4));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_1" for table "foo"
+NOTICE:  CREATE TABLE will create partition "foo_1_prt_2" for table "foo"
+INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
+set optimizer_analyze_root_partition=off;
+ANALYZE foo_1_prt_1;
+ANALYZE foo_1_prt_2;
+SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
+  tablename  | attname | null_frac | n_distinct | most_common_vals |   most_common_freqs   |                          histogram_bounds                          
+-------------+---------+-----------+------------+------------------+-----------------------+--------------------------------------------------------------------
+ foo_1_prt_1 | a       |         0 |      -0.26 |                  |                       | {0,31,62,94,129}
+ foo_1_prt_2 | a       |         0 |      -0.26 |                  |                       | {0,31,62,93,129}
+ foo_1_prt_1 | b       |         0 |          4 | {0,1,2,3}        | {0.25,0.25,0.25,0.25} | 
+ foo_1_prt_2 | b       |         0 |          4 | {4,5,6,7}        | {0.25,0.25,0.25,0.25} | 
+ foo_1_prt_1 | c       |         0 |         -1 |                  |                       | {something1,something321,something547,something776,something995}
+ foo_1_prt_2 | c       |         0 |         -1 |                  |                       | {something100,something324,something548,something772,something999}
+(6 rows)
+
+reset optimizer_analyze_root_partition;

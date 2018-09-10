@@ -20,7 +20,6 @@
 
 #include "access/reloptions.h"
 #include "access/transam.h"
-#include "access/tuptoaster.h"
 #include "access/url.h"
 #include "access/xlog_internal.h"
 #include "cdb/cdbappendonlyam.h"
@@ -162,7 +161,6 @@ bool		gp_create_table_random_default_distribution = true;
 bool		gp_allow_non_uniform_partitioning_ddl = true;
 bool		gp_enable_exchange_default_partition = false;
 int			dtx_phase2_retry_count = 0;
-int			gp_test_toast_max_chunk_size_override = 0;
 
 bool		log_dispatch_stats = false;
 
@@ -282,9 +280,6 @@ int			gp_test_time_slice_report_level = ERROR;
 bool		gp_test_deadlock_hazard;
 int			gp_test_deadlock_hazard_report_level = ERROR;
 
-/* query cancellation GUC */
-bool		gp_cancel_query_print_log;
-int			gp_cancel_query_delay_time;
 bool		vmem_process_interrupt = false;
 bool		execute_pruned_plan = false;
 
@@ -393,6 +388,7 @@ bool		optimizer_enable_multiple_distinct_aggs;
 bool		optimizer_enable_direct_dispatch;
 bool		optimizer_enable_hashjoin_redistribute_broadcast_children;
 bool		optimizer_enable_broadcast_nestloop_outer_child;
+bool		optimizer_enable_streaming_material;
 bool		optimizer_enable_assert_maxonerow;
 bool		optimizer_enable_constant_expression_evaluation;
 bool		optimizer_enable_bitmapscan;
@@ -483,7 +479,7 @@ char	   *gp_default_storage_options = NULL;
 
 int			writable_external_table_bufsize = 64;
 
-bool		gp_external_enable_filter_pushdown = false;
+bool		gp_external_enable_filter_pushdown = true;
 
 /* Executor */
 bool		gp_enable_mk_sort = true;
@@ -1784,18 +1780,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_mapreduce_define", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Prepare mapreduce object creation"),	/* turn off statement
-																 * logging */
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NO_RESET_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_GPDB_ADDOPT
-		},
-		&gp_mapreduce_define,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
 		{"coredump_on_memerror", PGC_SUSET, DEVELOPER_OPTIONS,
 			gettext_noop("Generate core dump on memory error."),
 			NULL,
@@ -1992,17 +1976,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_GPDB_ADDOPT
 		},
 		&gp_test_deadlock_hazard,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"gp_cancel_query_print_log", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Print out debugging info for a canceled query"),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_GPDB_ADDOPT
-		},
-		&gp_cancel_query_print_log,
 		false,
 		NULL, NULL, NULL
 	},
@@ -2697,6 +2670,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_streaming_material", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable plans with a streaming material node in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_streaming_material,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enforce_subplans", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enforce correlated execution in the optimizer"),
 			NULL,
@@ -3049,7 +3032,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_GPDB_ADDOPT
 		},
 		&gp_external_enable_filter_pushdown,
-		false, NULL, NULL
+		true, NULL, NULL
 	},
 
 	{
@@ -3089,17 +3072,6 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&writable_external_table_bufsize,
 		64, 32, 131072,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"gp_cancel_query_delay_time", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("The time in milliseconds to delay a query cancellation."),
-			NULL,
-			GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_GPDB_ADDOPT
-		},
-		&gp_cancel_query_delay_time,
-		0, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 
@@ -4360,16 +4332,6 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_max_slices,
 		0, 0, INT_MAX, NULL, NULL
-	},
-
-	{
-		{"gp_test_toast_max_chunk_size_override", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Testing support for TOAST_MAX_CHUNK_SIZE changes."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
-		},
-		&gp_test_toast_max_chunk_size_override,
-		0, 0, TOAST_MAX_CHUNK_SIZE, NULL, NULL
 	},
 
 	/* End-of-list marker */

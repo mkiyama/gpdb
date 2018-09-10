@@ -43,6 +43,7 @@
 #include "catalog/pg_index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_namespace.h"
+#include "commands/analyzeutils.h"
 #include "commands/cluster.h"
 #include "commands/tablecmds.h"
 #include "commands/vacuum.h"
@@ -56,6 +57,7 @@
 #include "libpq/pqformat.h"             /* pq_beginmessage() etc. */
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "parser/parse_relation.h"
 #include "postmaster/autovacuum.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
@@ -1076,18 +1078,12 @@ get_rel_oids(Oid relid, VacuumStmt *vacstmt, int stmttype)
 						(errmsg("skipping \"%s\" --- cannot analyze a non-root partition using ANALYZE ROOTPARTITION",
 								get_rel_name(relationOid))));
 			}
-			else if (ps != PART_STATUS_ROOT && (vacstmt->options & VACOPT_MERGE))
-			{
-				ereport(WARNING,
-						(errmsg("skipping \"%s\" --- cannot analyze a non-root partition using ANALYZE MERGE",
-								get_rel_name(relationOid))));
-			}
 			else if (ps == PART_STATUS_ROOT)
 			{
 				PartitionNode *pn = get_parts(relationOid, 0 /*level*/ ,
 											  0 /*parent*/, false /* inctemplate */, true /*includesubparts*/);
 				Assert(pn);
-				if (!(vacstmt->options & VACOPT_ROOTONLY) && !(vacstmt->options & VACOPT_MERGE))
+				if (!(vacstmt->options & VACOPT_ROOTONLY))
 				{
 					oid_list = all_leaf_partition_relids(pn); /* all leaves */
 
@@ -1097,6 +1093,45 @@ get_rel_oids(Oid relid, VacuumStmt *vacstmt, int stmttype)
 					}
 				}
 				oid_list = lappend_oid(oid_list, relationOid); /* root partition */
+			}
+			else if (ps == PART_STATUS_LEAF)
+			{
+				Oid root_rel_oid = rel_partition_get_master(relationOid);
+				oid_list = list_make1_oid(relationOid);
+
+				List *va_root_attnums = NIL;
+				if (vacstmt->va_cols != NIL)
+				{
+					ListCell *lc;
+					int i;
+					foreach(lc, vacstmt->va_cols)
+					{
+						char	   *col = strVal(lfirst(lc));
+
+						i = get_attnum(root_rel_oid, col);
+						if (i == InvalidAttrNumber)
+							ereport(ERROR,
+									(errcode(ERRCODE_UNDEFINED_COLUMN),
+									 errmsg("column \"%s\" of relation \"%s\" does not exist",
+											col, get_rel_name(root_rel_oid))));
+						va_root_attnums = lappend_int(va_root_attnums, i);
+					}
+				}
+				else
+				{
+					Relation onerel = RelationIdGetRelation(root_rel_oid);
+					int attr_cnt = onerel->rd_att->natts;
+					for (int i = 1; i <= attr_cnt; i++)
+					{
+						Form_pg_attribute attr = onerel->rd_att->attrs[i-1];
+						if (attr->attisdropped)
+							continue;
+						va_root_attnums = lappend_int(va_root_attnums, i);
+					}
+					RelationClose(onerel);
+				}
+				if(leaf_parts_analyzed(root_rel_oid, relationOid, va_root_attnums))
+					oid_list = lappend_oid(oid_list, root_rel_oid);
 			}
 			else if (ps == PART_STATUS_INTERIOR) /* analyze an interior partition directly */
 			{
@@ -2388,7 +2423,7 @@ vacuum_appendonly_indexes(Relation aoRelation, VacuumStmt *vacstmt)
 }
 
 
-/* GDPB_91_MERGE_FIXME: 'amindexnulls' is gone. Do we need this function anymore? */
+/* GPDB_91_MERGE_FIXME: 'amindexnulls' is gone. Do we need this function anymore? */
 #if 0
 /*
  * Is an index partial (ie, could it contain fewer tuples than the heap?)
@@ -2457,7 +2492,7 @@ scan_index(Relation indrel, double num_tuples, bool check_stats, int elevel)
 			  stats->pages_deleted, stats->pages_free,
 			  pg_rusage_show(&ru0))));
 
-	/* GDPB_91_MERGE_FIXME: vac_is_partial_index() doesn't work. Do we need this sanity check? */
+	/* GPDB_91_MERGE_FIXME: vac_is_partial_index() doesn't work. Do we need this sanity check? */
 #if 0 	
 	/*
 	 * Check for tuple count mismatch.	If the index is partial, then it's OK

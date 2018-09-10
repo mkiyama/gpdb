@@ -1204,7 +1204,7 @@ exec_mpp_query(const char *query_string,
 	}
 
 
-	if (log_statement != LOGSTMT_NONE && !gp_mapreduce_define)
+	if (log_statement != LOGSTMT_NONE)
 	{
 		/*
 		 * TODO need to log SELECT INTO as DDL
@@ -1340,7 +1340,7 @@ exec_mpp_query(const char *query_string,
 		/*
 		 * Start the portal.
 		 */
-		PortalStart(portal, paramLI, 0, false, ddesc);
+		PortalStart(portal, paramLI, 0, InvalidSnapshot, ddesc);
 
 		/*
 		 * Select text output format, the default.
@@ -1558,16 +1558,7 @@ exec_simple_query(const char *query_string)
 	char		msec_str[32];
 
 	if (Gp_role != GP_ROLE_EXECUTE)
-	{
 		increment_command_count();
-
-		MyProc->queryCommandId = gp_command_count;
-		if (gp_cancel_query_print_log)
-		{
-			elog(NOTICE, "running query (sessionId, commandId): (%d, %d)",
-				 MyProc->mppSessionId, gp_command_count);
-		}
-	}
 
 	/*
 	 * Report query to various monitoring facilities.
@@ -2621,24 +2612,7 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 			}
 		}
 		if (is_utility_stmt)
-		{
 			increment_command_count();
-
-			MyProc->queryCommandId = gp_command_count;
-			if (gp_cancel_query_print_log)
-			{
-				elog(NOTICE, "running query (sessionId, commandId): (%d, %d)",
-						MyProc->mppSessionId, gp_command_count);
-				elog(LOG, "In exec_execute_message found utility statement, incrementing command_count");
-			}
-		}
-		else
-		{
-			if (gp_cancel_query_print_log)
-			{
-				elog(LOG, "In exec_execute_message found non-utility statement, NOT incrementing command count");
-			}
-		}
 	}
 
 	/* Does the portal contain a transaction command? */
@@ -2829,10 +2803,6 @@ check_log_statement(List *stmt_list)
 {
 	ListCell   *stmt_item;
 
-	/* Disable statement logging during mapreduce */
-	if (gp_mapreduce_define)
-		return false;
-
 	if (log_statement == LOGSTMT_NONE)
 		return false;
 	if (log_statement == LOGSTMT_ALL)
@@ -2868,10 +2838,6 @@ check_log_statement(List *stmt_list)
 int
 check_log_duration(char *msec_str, bool was_logged)
 {
-	/* Disable statement logging during mapreduce */
-	if (gp_mapreduce_define)
-		return 0;
-
 	if (log_duration || log_min_duration_statement >= 0)
 	{
 		long		secs;

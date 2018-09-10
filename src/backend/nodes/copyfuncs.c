@@ -1096,6 +1096,8 @@ _copyAgg(const Agg *from)
 
 	COPY_SCALAR_FIELD(aggstrategy);
 	COPY_SCALAR_FIELD(numCols);
+	COPY_SCALAR_FIELD(combineStates);
+	COPY_SCALAR_FIELD(finalizeAggs);
 	if (from->numCols > 0)
 	{
 		COPY_POINTER_FIELD(grpColIdx, from->numCols * sizeof(AttrNumber));
@@ -1661,8 +1663,6 @@ _copyWindowFunc(const WindowFunc *from)
 	COPY_SCALAR_FIELD(winstar);
 	COPY_SCALAR_FIELD(winagg);
 	COPY_SCALAR_FIELD(windistinct);
-	COPY_SCALAR_FIELD(winindex);
-	COPY_SCALAR_FIELD(winstage);
 	COPY_LOCATION_FIELD(location);
 
 	return newnode;

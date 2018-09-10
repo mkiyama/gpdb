@@ -274,7 +274,6 @@ extern bool gp_create_table_random_default_distribution;
 extern bool gp_allow_non_uniform_partitioning_ddl;
 extern bool gp_enable_exchange_default_partition;
 extern int  dtx_phase2_retry_count;
-extern int	gp_test_toast_max_chunk_size_override;
 
 /* WAL replication debug gucs */
 extern bool debug_walrepl_snd;
@@ -323,8 +322,6 @@ extern int	temp_file_limit;
 
 extern int	num_temp_buffers;
 
-extern bool gp_cancel_query_print_log;
-extern int gp_cancel_query_delay_time;
 extern bool vmem_process_interrupt;
 extern bool execute_pruned_plan;
 
@@ -448,6 +445,7 @@ extern bool optimizer_enable_outerjoin_rewrite;
 extern bool optimizer_enable_multiple_distinct_aggs;
 extern bool optimizer_enable_hashjoin_redistribute_broadcast_children;
 extern bool optimizer_enable_broadcast_nestloop_outer_child;
+extern bool optimizer_enable_streaming_material;
 extern bool optimizer_enable_assert_maxonerow;
 extern bool optimizer_enable_constant_expression_evaluation;
 extern bool optimizer_enable_bitmapscan;

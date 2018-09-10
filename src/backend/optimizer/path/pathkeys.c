@@ -20,6 +20,7 @@
 #include "postgres.h"
 
 #include "access/skey.h"
+#include "cdb/cdbhash.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/plannodes.h"
@@ -122,7 +123,6 @@ gen_implied_qual(PlannerInfo *root,
 	Relids		new_qualscope;
 	ListCell   *lc;
 	RestrictInfo *new_rinfo;
-	Relids		required_relids;
 
 	/* Expression types must match */
 	Assert(exprType(old_expr) == exprType(new_expr)
@@ -149,7 +149,7 @@ gen_implied_qual(PlannerInfo *root,
 		return;
 
 	/* No inferences may be performed across an outer join */
-	if (old_rinfo->ojscope_relids && !bms_is_subset(new_qualscope, old_rinfo->ojscope_relids))
+	if (old_rinfo->outer_relids)
 		return;
 
 	/*
@@ -171,16 +171,13 @@ gen_implied_qual(PlannerInfo *root,
 	 * equivalence class machinery, because it's derived from a clause that
 	 * wasn't either.
 	 */
-	required_relids = bms_union(new_qualscope, old_rinfo->ojscope_relids);
-
 	new_rinfo = make_restrictinfo((Expr *) new_clause,
 								  old_rinfo->is_pushed_down,
 								  old_rinfo->outerjoin_delayed,
 								  old_rinfo->pseudoconstant,
-								  required_relids,
-								  old_rinfo->outer_relids, /* GPDB_92_MERGE_FIXME */
-								  old_rinfo->nullable_relids,
-								  old_rinfo->ojscope_relids);
+								  new_qualscope,
+								  old_rinfo->outer_relids,
+								  old_rinfo->nullable_relids);
 	check_mergejoinable(new_rinfo);
 	check_hashjoinable(new_rinfo);
 
@@ -196,9 +193,17 @@ gen_implied_qual(PlannerInfo *root,
 										   PVC_RECURSE_AGGREGATES,
 										   PVC_INCLUDE_PLACEHOLDERS);
 
-		add_vars_to_targetlist(root, vars, required_relids, false);
+		add_vars_to_targetlist(root, vars, new_qualscope, false);
 		list_free(vars);
 	}
+
+	/*
+	 * If the clause has a mergejoinable operator, set the EquivalenceClass
+	 * links. Otherwise, a mergejoinable operator with NULL left_ec/right_ec
+	 * will cause update_mergeclause_eclasses fails at assertion.
+	 */
+	if (new_rinfo->mergeopfamilies)
+		initialize_mergeclause_eclasses(root, new_rinfo);
 
 	distribute_restrictinfo_to_rels(root, new_rinfo);
 }
@@ -1193,7 +1198,7 @@ cdb_make_pathkey_for_expr(PlannerInfo *root,
 									  typeoid,
 									  exprCollation(expr),
 									  0,
-									  NULL, /* GPDB_92_MERGE_FIXME: What is the expected rel here? */
+									  NULL,
 									  true);
 	if (!canonical)
 		pk = makePathKey(eclass, opfamily, strategy, false);
@@ -1360,6 +1365,57 @@ make_pathkeys_for_sortclauses(PlannerInfo *root,
 			pathkeys = lappend(pathkeys, pathkey);
 	}
 	return pathkeys;
+}
+
+/****************************************************************************
+ *		DISTRIBUTION KEYS
+ ****************************************************************************/
+
+/*
+ * Make a list of PathKeys, and a list of plain expressions, to represent a
+ * distribution key that is suitable for implementing grouping on the given
+ * grouping clause. Only expressions that are GPDB-hashable are included,
+ * so the resulting lists can be shorter than 'groupclause', or even empty.
+ *
+ * The result is stored in *partition_dist_keys and *partition_dist_exprs.
+ * *partition_dist_keys is set to a list of PathKeys, and
+ * *partition_dist_exprs to a corresponding list of plain expressions.
+ */
+void
+make_distribution_keys_for_groupclause(PlannerInfo *root, List *groupclause, List *tlist,
+									   List **partition_dist_keys,
+									   List **partition_dist_exprs)
+{
+	List	   *pathkeys = NIL;
+	List	   *exprs = NIL;
+	ListCell   *l;
+
+	foreach(l, groupclause)
+	{
+		SortGroupClause *sortcl = (SortGroupClause *) lfirst(l);
+		Expr	   *expr;
+		PathKey    *pathkey;
+
+		expr = (Expr *) get_sortgroupclause_expr(sortcl, tlist);
+
+		if (!isGreenplumDbHashable(exprType((Node *) expr)))
+			continue;
+
+		Assert(OidIsValid(sortcl->sortop));
+		pathkey = make_pathkey_from_sortop(root,
+										   expr,
+										   sortcl->sortop,
+										   sortcl->nulls_first,
+										   sortcl->tleSortGroupRef,
+										   true,
+										   false);
+
+		pathkeys = lappend(pathkeys, pathkey);
+		exprs = lappend(exprs, expr);
+	}
+
+	*partition_dist_keys = pathkeys;
+	*partition_dist_exprs = exprs;
 }
 
 /****************************************************************************
