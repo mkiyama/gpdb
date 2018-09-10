@@ -231,6 +231,8 @@ FaultInjectorIdentifierEnumToString[] = {
 		/* inject fault at the start of finish prepare step executed by QEs */
 	_("filerep_verification"),
 	    /* inject fault to start verification */
+	_("changetracking_add_buffer"),
+		/* inject fault before recording a changed buffer in change tracking log */
 	_("twophase_transaction_commit_prepared"),
 		/* inject fault before transaction commit is recorded in xlog */
 	_("twophase_transaction_abort_prepared"),
@@ -359,6 +361,8 @@ FaultInjectorIdentifierEnumToString[] = {
 		/* inject fault before create resource group committing */
 	_("create_gang_in_progress"),
 		/* inject fault during gang creation, before check for interrupts */
+	_("decrease_toast_max_chunk_size"),
+		/* inject fault when creating new TOAST tables, to modify the chunk size */
 	_("not recognized"),
 };
 
@@ -1064,6 +1068,8 @@ FaultInjector_NewHashEntry(
 			case AutoVacWorkerBeforeDoAutovacuum:
 			case CreateResourceGroupFail:
 			case CreateGangInProgress:
+
+			case DecreaseToastMaxChunkSize:
 
 				break;
 			default:

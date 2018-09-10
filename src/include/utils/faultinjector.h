@@ -140,6 +140,8 @@ typedef enum FaultInjectorIdentifier_e {
 
 	FileRepVerification,
 		/* trigger filerep verification for testing */
+
+	ChangeTrackingAddBuffer,
 	
 	TwoPhaseTransactionCommitPrepared,
 	
@@ -242,6 +244,8 @@ typedef enum FaultInjectorIdentifier_e {
 
 	CreateResourceGroupFail,
 	CreateGangInProgress,
+
+	DecreaseToastMaxChunkSize,
 
 	/* INSERT has to be done before that line */
 	FaultInjectorIdMax,
