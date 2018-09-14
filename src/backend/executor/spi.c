@@ -2213,7 +2213,6 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, int64 tcount)
 
 			/* 
 			 * Checking if we need to put this through resource queue.
-			 * Same as in pquery.c, except we check ActivePortal->releaseResLock.
 			 * If the Active portal already hold a lock on the queue, we cannot
 			 * acquire it again.
 			 */
@@ -2236,13 +2235,10 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, int64 tcount)
 				 */
 				if (ActivePortal)
 				{
-					if (!ActivePortal->releaseResLock)
+					if (!IsResQueueLockedForPortal(ActivePortal))
 					{
 						/** TODO: siva - can we ever reach this point? */
-						ActivePortal->status = PORTAL_QUEUE;
-					
-						ActivePortal->releaseResLock =
-							ResLockPortal(ActivePortal, queryDesc);
+						ResLockPortal(ActivePortal, queryDesc);
 						ActivePortal->status = PORTAL_ACTIVE;
 					} 
 				}
