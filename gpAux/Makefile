@@ -192,10 +192,8 @@ ifneq (false, ${PG_LANG})
 ifeq ($(BLD_ARCH), sles11_x86_64)
 CONFIGFLAGS+= --with-python
 else
-ifeq ($(BLD_ARCH),win32)
-# GPDB_91_MERGE_FIXME: Our MinGW environment doesn't currently include Python.
-CONFIGFLAGS+= --with-perl
-else
+ifneq ($(BLD_ARCH),win32)
+# GPDB_91_MERGE_FIXME: Our MinGW environment doesn't currently include Perl and Python.
 CONFIGFLAGS+= --with-perl --with-python
 endif   # win32
 endif   # sles11_x86_64
@@ -344,7 +342,7 @@ define BUILD_STEPS
 	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) mkpgbench INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	if [ "$(findstring $(BLD_ARCH),$(SERVER_PLATFORMS))" != "" ]; then \
-	  $(MAKE) mkgphdfs INSTLOC=$(INSTLOC) && \
+	  $(MAKE) -C ../gpcontrib mkgphdfs INSTLOC=$(INSTLOC) && \
 	  $(MAKE) mkorafce INSTLOC=$(INSTLOC);  \
 	fi
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
@@ -879,9 +877,6 @@ set_scripts_version :
 #---------------------------------------------------------------------
 # Internal functions
 #---------------------------------------------------------------------
-
-mkgphdfs:
-	@cd extensions && $(MAKE) mkgphdfs OPT="$(INSTCFLAGS)" INSTLOC=$(INSTLOC)
 
 mkorafce:
 	@cd extensions && $(MAKE) mkorafce OPT="$(INSTCFLAGS)" INSTLOC=$(INSTLOC)

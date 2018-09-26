@@ -266,7 +266,9 @@ getCdbComponentInfo(bool DNSLookupAsError)
 		 */
 		if (pRow->hostaddrs[0] == NULL &&
 			pRow->role == GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
-			elog(DNSLookupAsError ? ERROR : LOG, "Cannot resolve network address for dbid=%d", dbid);
+			ereport(DNSLookupAsError ? ERROR : LOG,
+					(errcode(ERRCODE_CONNECTION_FAILURE),
+					errmsg("cannot resolve network address for dbid=%d", dbid)));
 
 		if (pRow->hostaddrs[0] != NULL)
 			pRow->hostip = pstrdup(pRow->hostaddrs[0]);
@@ -1232,10 +1234,6 @@ contentid_get_dbid(int16 contentid, char role, bool getPreferredRoleNotCurrentRo
 
 /*
  * Returns the number of segments
- *
- * N.B.  Gp_role must be either dispatch or execute, since
- * when utiliy	no GP catalog tables are read.  An Assert is
- * thrown if Gp_role = utility.
  */
 int
 getgpsegmentCount(void)
@@ -1244,12 +1242,11 @@ getgpsegmentCount(void)
 	{
 		if (GpIdentity.numsegments <= 0)
 		{
-			elog(DEBUG5, "getgpsegmentCount called when Gp_role == utility. returning zero segments.");
+			elog(DEBUG5, "getgpsegmentCount called when Gp_role == utility, returning zero segments.");
 			return 0;
 		}
 
 		elog(DEBUG1, "getgpsegmentCount called when Gp_role == utility, but is relying on gp_id info");
-
 	}
 
 	verifyGpIdentityIsSet();

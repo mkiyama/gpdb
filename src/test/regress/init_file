@@ -13,6 +13,7 @@ m/^WARNING:  gpmon:.*Connection refused.*/
 
 m/^ Optimizer status:.*/
 m/^ Optimizer: PQO version .*/
+m/^ Optimizer: legacy query optimizer/
 m/^ Settings:.*/
 
 # There are a number of NOTICE and HINT messages around table distribution,
@@ -98,8 +99,8 @@ m/Table "pg_temp_\d+.temp/
 s/Table "pg_temp_\d+.temp/Table "pg_temp_#####/
 
 # Mask out some numbers (part of temp table schema) that vary from run to run.
-m/Hash Cond: pg_temp_\d+/
-s/Hash Cond: pg_temp_\d+/Hash Cond: pg_temp_#####/
+m/Hash Cond: \(pg_temp_\d+/
+s/Hash Cond: \(pg_temp_\d+/Hash Cond: \(pg_temp_#####/
 
 # Mask out oid in error concurrent drop message
 m/\d+ was concurrently dropped/

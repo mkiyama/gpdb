@@ -326,7 +326,7 @@ DynamicScan_InitSingleRelation(ScanState *scanState, PartitionInitMethod *partit
 	if (NULL == scanState->ss_currentRelation)
 	{
 		/* Open the relation and initalize the expressions (targetlist, qual etc.) */
-		InitScanStateRelationDetails(scanState, scanState->ps.plan, scanState->ps.state);
+		InitScanStateRelationDetails(scanState, scanState->ps.plan, scanState->ps.state, 0 /* eflags */);
 		partitionInitMethod(scanState, NULL /* No dropped column mapping */);
 	}
 	else
@@ -821,9 +821,6 @@ isDynamicScan(const Plan *plan)
 		case T_IndexScan:
 		case T_BitmapHeapScan:
 		case T_TidScan:
-		case T_AppendOnlyScan:
-		case T_AOCSScan:
-		case T_TableScan:
 		case T_DynamicTableScan:
 		case T_DynamicIndexScan:
 		case T_DynamicBitmapIndexScan:

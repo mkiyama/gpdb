@@ -313,16 +313,6 @@
 
  CREATE FUNCTION gp_rle_type_validator(internal) RETURNS void LANGUAGE internal IMMUTABLE AS 'rle_type_validator' WITH(OID=9923, DESCRIPTION="Type speific RLE compression validator");
 
- CREATE FUNCTION gp_zstd_constructor(internal, internal, bool) RETURNS internal LANGUAGE internal VOLATILE AS 'zstd_constructor' WITH (OID=7071, DESCRIPTION="zstd compressor and decompressor constructor");
-
- CREATE FUNCTION gp_zstd_destructor(internal) RETURNS void LANGUAGE internal VOLATILE AS 'zstd_destructor' WITH(OID=7072, DESCRIPTION="zstd compressor and decompressor destructor");
-
- CREATE FUNCTION gp_zstd_compress(internal, int4, internal, int4, internal, internal) RETURNS void LANGUAGE internal IMMUTABLE AS 'zstd_compress' WITH(OID=7073, DESCRIPTION="zstd compressor");
-
- CREATE FUNCTION gp_zstd_decompress(internal, int4, internal, int4, internal, internal) RETURNS void LANGUAGE internal IMMUTABLE AS 'zstd_decompress' WITH(OID=7074, DESCRIPTION="zstd decompressor");
-
- CREATE FUNCTION gp_zstd_validator(internal) RETURNS void LANGUAGE internal IMMUTABLE AS 'zstd_validator' WITH(OID=7075, DESCRIPTION="zstdcompression validator");
-
  CREATE FUNCTION gp_dummy_compression_constructor(internal, internal, bool) RETURNS internal LANGUAGE internal VOLATILE AS 'dummy_compression_constructor' WITH (OID=7064, DESCRIPTION="Dummy compression destructor");
 
  CREATE FUNCTION gp_dummy_compression_destructor(internal) RETURNS internal LANGUAGE internal VOLATILE AS 'dummy_compression_destructor' WITH (OID=7065, DESCRIPTION="Dummy compression destructor");
@@ -403,7 +393,7 @@
  
  CREATE FUNCTION complex_um(complex) RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'complex_um' WITH (OID=3565);
  
- CREATE FUNCTION complex_mul(complex, complex) RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'complex_mul' WITH (OID=3566);
+ CREATE FUNCTION complex_mul(complex, complex) RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'complex_mul' WITH (OID=6566);
  
  CREATE FUNCTION complex_div(complex, complex) RETURNS complex LANGUAGE internal IMMUTABLE STRICT AS 'complex_div' WITH (OID=6567);
  
@@ -459,9 +449,9 @@
  
  CREATE FUNCTION complex_lt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lt' WITH (OID=7598);
  
- CREATE FUNCTION complex_gt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_gt' WITH (OID=3594);
+ CREATE FUNCTION complex_gt(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_gt' WITH (OID=6594);
  
- CREATE FUNCTION complex_lte(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lte' WITH (OID=3595);
+ CREATE FUNCTION complex_lte(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_lte' WITH (OID=6595);
 
  CREATE FUNCTION complex_gte(complex, complex) RETURNS bool  LANGUAGE internal IMMUTABLE STRICT AS 'complex_gte' WITH (OID=7596);
 

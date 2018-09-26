@@ -981,7 +981,7 @@ cdbexplain_collectStatsFromNode(PlanState *planstate, CdbExplain_SendStatCtx *ct
 	si->workmemused = instr->workmemused;
 	si->workmemwanted = instr->workmemwanted;
 	si->workfileCreated = instr->workfileCreated;
-	si->peakMemBalance = MemoryAccounting_GetAccountPeakBalance(planstate->plan->memoryAccountId);
+	si->peakMemBalance = MemoryAccounting_GetAccountPeakBalance(planstate->memoryAccountId);
 	si->firststart = instr->firststart;
 	si->numPartScanned = instr->numPartScanned;
 	si->sortMethod = String2ExplainSortMethod(instr->sortMethod);
@@ -2343,7 +2343,8 @@ show_motion_keys(PlanState *planstate, List *hashExpr, int nkeys, AttrNumber *ke
 	/* Set up deparse context */
 	context = deparse_context_for_planstate((Node *) planstate,
 											ancestors,
-											es->rtable);
+											es->rtable,
+											es->rtable_names);
 
     /* Merge Receive ordering key */
     for (keyno = 0; keyno < nkeys; keyno++)
@@ -2354,7 +2355,7 @@ show_motion_keys(PlanState *planstate, List *hashExpr, int nkeys, AttrNumber *ke
 
 	    /* Deparse the expression, showing any top-level cast */
 	    if (target)
-	        exprstr = deparse_expr_sweet((Node *) target->expr, context,
+	        exprstr = deparse_expression((Node *) target->expr, context,
 								         useprefix, true);
         else
         {
@@ -2373,7 +2374,7 @@ show_motion_keys(PlanState *planstate, List *hashExpr, int nkeys, AttrNumber *ke
     if (hashExpr)
     {
 	    /* Deparse the expression */
-	    exprstr = deparse_expr_sweet((Node *)hashExpr, context, useprefix, true);
+	    exprstr = deparse_expression((Node *)hashExpr, context, useprefix, true);
 		ExplainPropertyText("Hash Key", exprstr, es);
     }
 }
@@ -2395,11 +2396,12 @@ explain_partition_selector(PartitionSelector *ps, PlanState *parentstate,
 		/* Set up deparsing context */
 		context = deparse_context_for_planstate((Node *) parentstate,
 												ancestors,
-												es->rtable);
+												es->rtable,
+												es->rtable_names);
 		useprefix = list_length(es->rtable) > 1;
 
 		/* Deparse the expression */
-		exprstr = deparse_expr_sweet(ps->printablePredicate, context, useprefix, false);
+		exprstr = deparse_expression(ps->printablePredicate, context, useprefix, false);
 
 		ExplainPropertyText("Filter", exprstr, es);
 	}
@@ -2437,7 +2439,8 @@ show_grouping_keys(PlanState *planstate, int nkeys, AttrNumber *subplanColIdx,
 	/* Set up deparse context */
 	context = deparse_context_for_planstate((Node *) subplanstate,
 											ancestors,
-											es->rtable);
+											es->rtable,
+											es->rtable_names);
 	useprefix = (list_length(es->rtable) > 1 || es->verbose);
 
 	if (IsA(plan, Agg))
@@ -2467,7 +2470,7 @@ show_grouping_keys(PlanState *planstate, int nkeys, AttrNumber *subplanColIdx,
 		}
 		else
 			/* Deparse the expression, showing any top-level cast */
-			exprstr = deparse_expr_sweet((Node *) target->expr, context,
+			exprstr = deparse_expression((Node *) target->expr, context,
 										 useprefix, true);
 
 		result = lappend(result, exprstr);

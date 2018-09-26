@@ -14,7 +14,9 @@
  */
 #include "postgres.h"
 
+#include "access/htup_details.h"
 #include "catalog/pg_operator.h"
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/subselect.h"	/* convert_testexpr() */
@@ -784,10 +786,16 @@ add_notin_subquery_rte(Query *parse, Query *subselect)
 	RangeTblEntry *subq_rte;
 	int			subq_indx;
 
+	/*
+	 * Create a RTE entry in the parent query for the subquery.
+	 * It is marked as lateral, because any correlation quals will
+	 * refer to other RTEs in the parent query.
+	 */
 	subselect->targetList = mutate_targetlist(subselect->targetList);
 	subq_rte = addRangeTableEntryForSubquery(NULL,	/* pstate */
 											 subselect,
 											 makeAlias("NotIn_SUBQUERY", NIL),
+											 false, /* not lateral */
 											 false /* inFromClause */ );
 	parse->rtable = lappend(parse->rtable, subq_rte);
 
@@ -827,9 +835,15 @@ add_expr_subquery_rte(Query *parse, Query *subselect)
 		teNum++;
 	}
 
+	/*
+	 * Create a RTE entry in the parent query for the subquery.
+	 * It is marked as lateral, because any correlation quals will
+	 * refer to other RTEs in the parent query.
+	 */
 	subq_rte = addRangeTableEntryForSubquery(NULL,	/* pstate */
 											 subselect,
 											 makeAlias("Expr_SUBQUERY", NIL),
+											 true, /* lateral */
 											 false /* inFromClause */ );
 	parse->rtable = lappend(parse->rtable, subq_rte);
 
@@ -1191,6 +1205,9 @@ find_nonnullable_vars_walker(Node *node, NonNullableVarsContext *context)
  * This method simply determines if the targetlist i.e. (t1.x, t2.y) is nullable.
  * A targetlist is "nullable" if all entries in the targetlist
  * cannot be proven to be non-nullable.
+ *
+ * We don't use NULL for the 'dummy' column, because is_targetlist_nullable() 
+ * would then treat the target list as nullable
  */
 static bool
 is_targetlist_nullable(Query *subq)
@@ -1241,8 +1258,10 @@ is_targetlist_nullable(Query *subq)
 			 */
 			Const	   *constant = (Const *) tle->expr;
 
-			if (strcmp(tle->resname, DUMMY_COLUMN_NAME) != 0
-				&& constant->constisnull == true)
+			/**
+			 *  Note: the 'dummy' column is not NULL, so we don't need any special handling for it 
+			 */	
+			if (constant->constisnull == true)
 			{
 				result = true;
 			}

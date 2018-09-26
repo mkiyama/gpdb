@@ -186,7 +186,6 @@ bool		debug_latch = false;
 
 bool		gp_crash_recovery_suppress_ao_eof = false;
 bool		gp_keep_all_xlog = false;
-int			keep_wal_segments = 0;
 
 #define DEBUG_DTM_ACTION_PRIMARY_DEFAULT true
 bool		Debug_dtm_action_primary = DEBUG_DTM_ACTION_PRIMARY_DEFAULT;
@@ -389,6 +388,7 @@ bool		optimizer_enable_direct_dispatch;
 bool		optimizer_enable_hashjoin_redistribute_broadcast_children;
 bool		optimizer_enable_broadcast_nestloop_outer_child;
 bool		optimizer_enable_streaming_material;
+bool		optimizer_enable_gather_on_segment_for_dml;
 bool		optimizer_enable_assert_maxonerow;
 bool		optimizer_enable_constant_expression_evaluation;
 bool		optimizer_enable_bitmapscan;
@@ -2680,6 +2680,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_gather_on_segment_for_dml", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable DML optimization by enforcing a non-master gather in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_gather_on_segment_for_dml,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enforce_subplans", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enforce correlated execution in the optimizer"),
 			NULL,
@@ -4265,7 +4275,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_SUPERUSER_ONLY
 		},
 		&repl_catchup_within_range,
-		1, 0, XLogSegsPerFile,
+		1, 0, UINT_MAX / XLogSegSize,
 		NULL, NULL, NULL
 	},
 	{

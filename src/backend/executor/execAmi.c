@@ -3,7 +3,7 @@
  * execAmi.c
  *	  miscellaneous executor access method routines
  *
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2013, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	src/backend/executor/execAmi.c
@@ -12,6 +12,7 @@
  */
 #include "postgres.h"
 
+#include "access/htup_details.h"
 #include "executor/execdebug.h"
 #include "executor/instrument.h"
 #include "executor/nodeAgg.h"
@@ -164,9 +165,7 @@ ExecReScan(PlanState *node)
 			break;
 
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
-			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
+			elog(ERROR, "SeqScan is defunct");
 			break;
 
 		case T_IndexScanState:
@@ -342,8 +341,6 @@ ExecMarkPos(PlanState *node)
 			break;
 
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
 			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
 			break;
 
@@ -424,9 +421,7 @@ ExecRestrPos(PlanState *node)
 			break;
 
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
-			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
+			elog(ERROR, "SeqScan is defunct");
 			break;
 
 		case T_IndexScanState:
@@ -642,9 +637,7 @@ ExecEagerFree(PlanState *node)
 			break;
 			
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
-			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
+			elog(ERROR, "SeqScan is defunct");
 			break;
 			
 		case T_ExternalScanState:
@@ -824,9 +817,7 @@ ExecEagerFreeChildNodes(PlanState *node, bool subplanDone)
 		}
 
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
-			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
+			elog(ERROR, "SeqScan is defunct");
 			break;
 
 		case T_NestLoopState:

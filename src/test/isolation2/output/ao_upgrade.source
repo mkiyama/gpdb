@@ -21,8 +21,12 @@ CREATE
 
 INSERT INTO ao_upgrade_test (SELECT a, convert_to_v4((a + 5) !) FROM generate_series(1, 10) a);
 INSERT 10
+INSERT INTO ao_upgrade_test VALUES(11, convert_to_v4('NaN'));
+INSERT 1
 INSERT INTO aocs_upgrade_test (SELECT a, convert_to_v4((a + 5) !) FROM generate_series(1, 10) a);
 INSERT 10
+INSERT INTO aocs_upgrade_test VALUES(11, convert_to_v4('NaN'));
+INSERT 1
 
 -- For the RLE test case, insert a bunch of identical numerics so they will be
 -- run-length compressed.
@@ -34,44 +38,46 @@ INSERT 10
 SELECT * FROM ao_upgrade_test;
 rowid|n     
 -----+------
+1    |720   
 3    |4.0   
-4    |36.3  
-5    |362.9 
-6    |3991.7
+4    |36.2  
 7    |4.79  
 8    |62.27 
-9    |871.78
-10   |1.308 
-1    |720   
+11   |0     
 2    |5040  
-(10 rows)
+5    |362.8 
+6    |3991.6
+9    |871.78
+10   |1.307 
+(11 rows)
 SELECT * FROM aocs_upgrade_test;
 rowid|n     
 -----+------
+1    |720   
 3    |4.0   
-4    |36.3  
-5    |362.9 
-6    |3991.7
+2    |5040  
+5    |362.8 
+6    |3991.6
+9    |871.78
+10   |1.307 
+4    |36.2  
 7    |4.79  
 8    |62.27 
-9    |871.78
-10   |1.308 
-1    |720   
-2    |5040  
-(10 rows)
+11   |0     
+(11 rows)
 SELECT * FROM aocs_rle_upgrade_test;
 rowid|n   
 -----+----
-8    |36.3
-9    |36.3
-10   |36.3
-3    |36.3
-4    |36.3
-5    |36.3
-6    |36.3
-7    |36.3
-1    |36.3
-2    |36.3
+1    |36.2
+3    |36.2
+2    |36.2
+5    |36.2
+6    |36.2
+9    |36.2
+10   |36.2
+4    |36.2
+7    |36.2
+8    |36.2
 (10 rows)
 
 -- Downgrade to GPDB4 (AO version 2).
@@ -145,6 +151,7 @@ rowid|n
 8    |6227020800   
 9    |87178291200  
 10   |1307674368000
+11   |NaN          
 1    |720          
 2    |5040         
 3    |40320        
@@ -152,7 +159,7 @@ rowid|n
 5    |3628800      
 6    |39916800     
 7    |479001600    
-(10 rows)
+(11 rows)
 SELECT * FROM aocs_upgrade_test;
 rowid|n            
 -----+-------------
@@ -166,7 +173,8 @@ rowid|n
 8    |6227020800   
 9    |87178291200  
 10   |1307674368000
-(10 rows)
+11   |NaN          
+(11 rows)
 SELECT * FROM aocs_rle_upgrade_test;
 rowid|n     
 -----+------

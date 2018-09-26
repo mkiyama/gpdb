@@ -56,6 +56,7 @@
 #include "cdb/cdbpullup.h"
 #include "cdb/cdbsetop.h"
 #include "cdb/cdbvars.h"
+#include "cdb/cdbutil.h"
 #include "cdb/cdbtargeteddispatch.h"
 
 #include "nodes/print.h"
@@ -992,7 +993,9 @@ make_union_motion(Plan *lefttree, int destSegIndex, bool useExecutorVarFormat)
 
 	outSegIdx[0] = destSegIndex;
 
-	motion = make_motion(NULL, lefttree, NIL, useExecutorVarFormat);
+	motion = make_motion(NULL, lefttree,
+						 0, NULL, NULL, NULL, NULL, /* no ordering */
+						 useExecutorVarFormat);
 	add_slice_to_motion(motion, MOTIONTYPE_FIXED, NULL, 1, outSegIdx);
 	return motion;
 }
@@ -1000,8 +1003,9 @@ make_union_motion(Plan *lefttree, int destSegIndex, bool useExecutorVarFormat)
 Motion *
 make_sorted_union_motion(PlannerInfo *root,
 						 Plan *lefttree,
+						 int numSortCols, AttrNumber *sortColIdx,
+						 Oid *sortOperators, Oid *collations, bool *nullsFirst,
 						 int destSegIndex,
-						 List *sortPathKeys,
 						 bool useExecutorVarFormat)
 {
 	Motion	   *motion;
@@ -1009,7 +1013,9 @@ make_sorted_union_motion(PlannerInfo *root,
 
 	outSegIdx[0] = destSegIndex;
 
-	motion = make_motion(root, lefttree, sortPathKeys, useExecutorVarFormat);
+	motion = make_motion(root, lefttree,
+						 numSortCols, sortColIdx, sortOperators, collations, nullsFirst,
+						 useExecutorVarFormat);
 	add_slice_to_motion(motion, MOTIONTYPE_FIXED, NULL, 1, outSegIdx);
 	return motion;
 }
@@ -1032,7 +1038,9 @@ make_hashed_motion(Plan *lefttree,
 			elog(ERROR, "cannot use expression as distribution key, because it is not hashable");
 	}
 
-	motion = make_motion(NULL, lefttree, NIL, useExecutorVarFormat);
+	motion = make_motion(NULL, lefttree,
+						 0, NULL, NULL, NULL, NULL, /* no ordering */
+						 useExecutorVarFormat);
 	add_slice_to_motion(motion, MOTIONTYPE_HASH, hashExpr, 0, NULL);
 	return motion;
 }
@@ -1042,7 +1050,9 @@ make_broadcast_motion(Plan *lefttree, bool useExecutorVarFormat)
 {
 	Motion	   *motion;
 
-	motion = make_motion(NULL, lefttree, NIL, useExecutorVarFormat);
+	motion = make_motion(NULL, lefttree,
+						 0, NULL, NULL, NULL, NULL, /* no ordering */
+						 useExecutorVarFormat);
 
 	add_slice_to_motion(motion, MOTIONTYPE_FIXED, NULL, 0, NULL);
 	return motion;
@@ -1053,7 +1063,9 @@ make_explicit_motion(Plan *lefttree, AttrNumber segidColIdx, bool useExecutorVar
 {
 	Motion	   *motion;
 
-	motion = make_motion(NULL, lefttree, NIL, useExecutorVarFormat);
+	motion = make_motion(NULL, lefttree,
+						 0, NULL, NULL, NULL, NULL, /* no ordering */
+						 useExecutorVarFormat);
 
 	Assert(segidColIdx > 0 && segidColIdx <= list_length(lefttree->targetlist));
 
@@ -1385,13 +1397,9 @@ failIfUpdateTriggers(Relation relation)
 	}
 
 	if (found || child_triggers(relation->rd_id, TRIGGER_TYPE_UPDATE))
-	{
-		ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						errmsg("UPDATE on distributed key columns is now supported in general."
-						       "But disabled for current statement because result relation has update triggers. "
-							   "Running trigger across segment is not supported")));
-		relation_close(relation, NoLock);
-	}
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+				 errmsg("UPDATE on distributed key column not allowed on relation with update triggers")));
 }
 
 static void

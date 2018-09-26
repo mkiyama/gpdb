@@ -4,7 +4,7 @@
  *	  prototypes for clauses.c.
  *
  *
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2013, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/clauses.h
@@ -54,6 +54,8 @@ extern Expr *make_opclause(Oid opno, Oid opresulttype, bool opretset,
 			  Oid opcollid, Oid inputcollid);
 extern Node *get_leftop(const Expr *clause);
 extern Node *get_rightop(const Expr *clause);
+extern Node *get_leftscalararrayop(const Expr *clause);
+extern Node *get_rightscalararrayop(const Expr *clause);
 
 extern bool not_clause(Node *clause);
 extern Expr *make_notclause(Expr *notclause);
@@ -76,6 +78,7 @@ extern bool contain_window_function(Node *clause);
 extern WindowFuncLists *find_window_functions(Node *clause, Index maxWinRef);
 
 extern double expression_returns_set_rows(Node *clause);
+extern double tlist_returns_set_rows(List *tlist);
 
 extern bool contain_subplans(Node *clause);
 
@@ -100,8 +103,6 @@ extern void CommuteOpExpr(OpExpr *clause);
 extern void CommuteRowCompareExpr(RowCompareExpr *clause);
 
 extern Node *strip_implicit_coercions(Node *node);
-
-extern void set_coercionform_dontcare(Node *node);
 
 extern Node *eval_const_expressions(PlannerInfo *root, Node *node);
 

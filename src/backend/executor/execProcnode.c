@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2013, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -35,6 +35,7 @@
  *		the number of employees in that department.  So we have the query:
  *
  *				select DEPT.no_emps, EMP.age
+ *				from DEPT, EMP
  *				where EMP.name = DEPT.mgr and
  *					  DEPT.name = "shoe"
  *
@@ -362,10 +363,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 			 * scan nodes
 			 */
 		case T_SeqScan:
-		case T_AppendOnlyScan:
-		case T_AOCSScan:
-		case T_TableScan:
-			/* SeqScan, AppendOnlyScan and AOCSScan are defunct */
+			/* SeqScan is defunct */
 			curMemoryAccountId = CREATE_EXECUTOR_MEMORY_ACCOUNT(isAlienPlanNode, node, TableScan);
 
 			START_MEMORY_ACCOUNT(curMemoryAccountId);
@@ -896,7 +894,7 @@ ExecProcNode(PlanState *node)
 {
 	TupleTableSlot *result = NULL;
 
-	START_MEMORY_ACCOUNT(node->plan->memoryAccountId);
+	START_MEMORY_ACCOUNT(node->memoryAccountId);
 	{
 
 	CHECK_FOR_INTERRUPTS();
@@ -1192,7 +1190,7 @@ MultiExecProcNode(PlanState *node)
 
 	Assert(NULL != node->plan);
 
-	START_MEMORY_ACCOUNT(node->plan->memoryAccountId);
+	START_MEMORY_ACCOUNT(node->memoryAccountId);
 {
 	TRACE_POSTGRESQL_EXECPROCNODE_ENTER(GpIdentity.segindex, currentSliceId, nodeTag(node), node->plan->plan_node_id);
 
@@ -1426,9 +1424,7 @@ ExecEndNode(PlanState *node)
 			 * scan nodes
 			 */
 		case T_SeqScanState:
-		case T_AppendOnlyScanState:
-		case T_AOCSScanState:
-			insist_log(false, "SeqScan/AppendOnlyScan/AOCSScan are defunct");
+			elog(ERROR, "SeqScan is defunct");
 			break;
 
 		case T_TableScanState:

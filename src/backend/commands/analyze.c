@@ -3,7 +3,7 @@
  * analyze.c
  *	  the Postgres statistics generator
  *
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2013, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -16,6 +16,7 @@
 
 #include <math.h>
 
+#include "access/multixact.h"
 #include "access/transam.h"
 #include "access/tupconvert.h"
 #include "access/tuptoaster.h"
@@ -30,6 +31,7 @@
 #include "cdb/cdbhash.h"
 #include "cdb/cdbpartition.h"
 #include "cdb/cdbtm.h"
+#include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "commands/analyzeutils.h"
 #include "commands/dbcommands.h"
@@ -291,11 +293,12 @@ analyze_rel_internal(Oid relid, VacuumStmt *vacstmt, BufferAccessStrategy bstrat
 	}
 
 	/*
-	 * Check that it's a plain table or foreign table; we used to do this in
-	 * get_rel_oids() but seems safer to check after we've locked the
-	 * relation.
+	 * Check that it's a plain table, materialized view, or foreign table; we
+	 * used to do this in get_rel_oids() but seems safer to check after we've
+	 * locked the relation.
 	 */
-	if (onerel->rd_rel->relkind == RELKIND_RELATION &&
+	if ((onerel->rd_rel->relkind == RELKIND_RELATION ||
+		 onerel->rd_rel->relkind == RELKIND_MATVIEW) &&
 		!RelationIsExternal(onerel))
 	{
 		/* Regular table, so we'll use the regular row acquisition function */
@@ -320,7 +323,7 @@ analyze_rel_internal(Oid relid, VacuumStmt *vacstmt, BufferAccessStrategy bstrat
 		FdwRoutine *fdwroutine;
 		bool		ok = false;
 
-		fdwroutine = GetFdwRoutineByRelId(RelationGetRelid(onerel));
+		fdwroutine = GetFdwRoutineForRelation(onerel, false);
 
 		if (fdwroutine->AnalyzeForeignTable != NULL)
 			ok = fdwroutine->AnalyzeForeignTable(onerel,
@@ -749,8 +752,8 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 
 					old_context = MemoryContextSwitchTo(stats->anl_context);
 					hll_values = (Datum *) palloc(sizeof(Datum));
-					int2 hll_length = 0;
-					int2 stakind = 0;
+					int16 hll_length = 0;
+					int16 stakind = 0;
 					if(stats->stahll_full != NULL)
 					{
 						hll_length = datumGetSize(PointerGetDatum(stats->stahll_full), false, -1);
@@ -856,6 +859,7 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 							visibilitymap_count(onerel),
 							hasindex,
 							InvalidTransactionId,
+							InvalidMultiXactId,
 							false /* isvacuum */);
 	else
 	{
@@ -865,6 +869,7 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 							visibilitymap_count(onerel),
 							onerel->rd_rel->relhasindex,
 							InvalidTransactionId,
+							InvalidMultiXactId,
 							false /* isvacuum */);
 	}
 
@@ -907,7 +912,11 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 			totalindexrows = ceil(thisdata->tupleFract * totalrows);
 			vac_update_relstats(Irel[ind],
 								estimatedIndexPages,
-								totalindexrows, 0, false, InvalidTransactionId,
+								totalindexrows,
+								0,
+								false,
+								InvalidTransactionId,
+								InvalidMultiXactId,
 								false /* isvacuum */);
 		}
 	}
@@ -1519,7 +1528,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 					 * right.  (Note: this works out properly when the row was
 					 * both inserted and deleted in our xact.)
 					 */
-					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmax(targtuple.t_data)))
+					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetUpdateXid(targtuple.t_data)))
 						deadrows += 1;
 					else
 						liverows += 1;

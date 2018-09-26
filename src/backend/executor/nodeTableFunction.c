@@ -43,15 +43,13 @@
 #include "cdb/cdbvars.h"
 #include "executor/executor.h"
 #include "executor/nodeTableFunction.h"
+#include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "utils/lsyscache.h"
 
 
 static void setupFunctionArguments(TableFunctionState *node);
 static TupleTableSlot *TableFunctionNext(TableFunctionState *node);
-static void initGpmonPktForTableFunction(Plan *planNode,
-										 gpmon_packet_t *gpmon_pkt, 
-										 EState *estate);
 
 /* Private structure forward declared in tablefuncapi.h */
 typedef struct AnyTableData
@@ -132,7 +130,7 @@ setupFunctionArguments(TableFunctionState *node)
 }
 
 /*
- * TableFunctionNext - ExecScan callback function for table funciton scans 
+ * TableFunctionNext - ExecScan callback function for table function scans
  */
 static TupleTableSlot *
 TableFunctionNext(TableFunctionState *node)
@@ -301,7 +299,6 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 {
 	TableFunctionState	*scanstate;
 	PlanState           *subplan;
-	RangeTblEntry		*rte;
 	Oid					 funcrettype;
 	TypeFuncClass		 functypclass;
 	FuncExpr            *func;
@@ -344,25 +341,17 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 	subplan   = outerPlanState(scanstate);
 	inputdesc = CreateTupleDescCopy(ExecGetResultType(subplan));
 
-	/* get info about the function */
-	rte	 = rt_fetch(node->scan.scanrelid, estate->es_range_table);
-	Insist(rte->rtekind == RTE_TABLEFUNCTION);
-
-	/* get info about the function */
-	rte	 = rt_fetch(node->scan.scanrelid, estate->es_range_table);
-	Insist(rte->rtekind == RTE_TABLEFUNCTION);
-
 	/* 
 	 * The funcexpr must be a function call.  This check is to verify that
 	 * the planner didn't try to perform constant folding or other inlining
 	 * on a function invoked as a table function.
 	 */
-	if (!rte->funcexpr || !IsA(rte->funcexpr, FuncExpr))
+	if (!node->funcexpr || !IsA(node->funcexpr, FuncExpr))
 	{
 		/* should not be possible */
 		elog(ERROR, "table function expression is not a function expression");
 	}
-	func = (FuncExpr *) rte->funcexpr;
+	func = (FuncExpr *) node->funcexpr;
 	functypclass = get_expr_result_type((Node*) func, &funcrettype, &resultdesc);
 	
 	switch (functypclass)
@@ -379,10 +368,10 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 		case TYPEFUNC_RECORD:
 		{
 			/* Record data type: Construct tuple desc based on rangeTable */
-			resultdesc = BuildDescFromLists(rte->eref->colnames,
-											rte->funccoltypes,
-											rte->funccoltypmods,
-											rte->funccolcollations);
+			resultdesc = BuildDescFromLists(node->funccolnames,
+											node->funccoltypes,
+											node->funccoltypmods,
+											node->funccolcollations);
 			scanstate->is_rowtype = true;
 			break;
 		}
@@ -390,7 +379,7 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 		case TYPEFUNC_SCALAR:
 		{
 			/* Scalar data type: Construct a tuple descriptor manually */
-			char	   *attname = strVal(linitial(rte->eref->colnames));
+			char	   *attname = strVal(linitial(node->funccolnames));
 
 			resultdesc = CreateTemplateTupleDesc(1, false);
 			TupleDescInitEntry(resultdesc,
@@ -399,6 +388,9 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 							   funcrettype,
 							   -1,
 							   0);
+			TupleDescInitEntryCollation(resultdesc,
+										(AttrNumber) 1,
+										exprCollation(node->funcexpr));
 			scanstate->is_rowtype = false;
 			break;
 		}
@@ -416,12 +408,15 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 	 * doesn't.)
 	 */
 	BlessTupleDesc(resultdesc);
+
 	scanstate->resultdesc = resultdesc;
 	ExecAssignScanType(&scanstate->ss, resultdesc);
 
-	/* Other node-specific setup */
+	/*
+	 * Other node-specific setup
+	 */
 	scanstate->fcache = (FuncExprState*)
-		ExecInitExpr((Expr *) rte->funcexpr, (PlanState *) scanstate);
+		ExecInitExpr((Expr *) node->funcexpr, (PlanState *) scanstate);
 	Assert(scanstate->fcache && IsA(scanstate->fcache, FuncExprState));
 
 	scanstate->rsinfo.type		   = T_ReturnSetInfo;
@@ -433,7 +428,7 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 	scanstate->rsinfo.setResult    = NULL;
 	scanstate->rsinfo.setDesc	   = NULL;
 
-	scanstate->userdata = rte->funcuserdata;
+	scanstate->userdata = node->funcuserdata;
 	/* Initialize a function cache for the function expression */
 	init_fcache(func->funcid, func->inputcollid, scanstate->fcache, 
 				econtext->ecxt_per_query_memory, true);
@@ -453,9 +448,6 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 	/* Initialize result tuple type and projection info */
 	ExecAssignResultTypeFromTL(&scanstate->ss.ps);
 	ExecAssignScanProjectionInfo(&scanstate->ss);
-
-	initGpmonPktForTableFunction((Plan *)node, 
-								 &scanstate->ss.ps.gpmon_pkt, estate);
 	
 	return scanstate;
 }
@@ -480,19 +472,6 @@ ExecReScanTableFunction(TableFunctionState *node)
 {
 	/* TableFunction Planner marks TableFunction nodes as not rescannable */
 	elog(ERROR, "invalid rescan of TableFunctionScan");
-}
-
-
-void
-initGpmonPktForTableFunction(Plan *planNode, 
-							 gpmon_packet_t *gpmon_pkt, 
-							 EState *estate)
-{
-	Assert(planNode != NULL);
-	Assert(gpmon_pkt != NULL);
-	Assert(IsA(planNode, TableFunctionScan));
-
-	InitPlanNodeGpmonPkt(planNode, gpmon_pkt, estate);
 }
 
 

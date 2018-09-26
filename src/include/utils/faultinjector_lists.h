@@ -148,6 +148,8 @@ FI_IDENT(AppendOnlyInsert, "appendonly_insert")
 FI_IDENT(AppendOnlyDelete, "appendonly_delete")
 /* inject fault before an append-only update */
 FI_IDENT(AppendOnlyUpdate, "appendonly_update")
+/* inject fault before creating an appendonly hash entry*/
+FI_IDENT(BeforeCreatingAnAOHashEntry, "before_creating_an_ao_hash_entry")
 /* inject fault in append-only compression function */
 FI_IDENT(AppendOnlySkipCompression, "appendonly_skip_compression")
 /* inject fault while reindex db is in progress */
@@ -262,22 +264,18 @@ FI_IDENT(CleanupGang, "cleanup_gang")
 #ifdef FI_TYPE
 FI_TYPE(FaultInjectorTypeNotSpecified = 0, "")
 FI_TYPE(FaultInjectorTypeSleep, "sleep")
-FI_TYPE(FaultInjectorTypeFault, "fault")
 FI_TYPE(FaultInjectorTypeFatal, "fatal")
 FI_TYPE(FaultInjectorTypePanic, "panic")
 FI_TYPE(FaultInjectorTypeError, "error")
 FI_TYPE(FaultInjectorTypeInfiniteLoop, "infinite_loop")
-FI_TYPE(FaultInjectorTypeDataCorruption, "data_corruption")
 FI_TYPE(FaultInjectorTypeSuspend, "suspend")
 FI_TYPE(FaultInjectorTypeResume, "resume")
 FI_TYPE(FaultInjectorTypeSkip, "skip")
-FI_TYPE(FaultInjectorTypeMemoryFull, "memory_full")
 FI_TYPE(FaultInjectorTypeReset, "reset")
 FI_TYPE(FaultInjectorTypeStatus, "status")
 FI_TYPE(FaultInjectorTypeSegv, "segv")
 FI_TYPE(FaultInjectorTypeInterrupt, "interrupt")
 FI_TYPE(FaultInjectorTypeFinishPending, "finish_pending")
-FI_TYPE(FaultInjectorTypeCheckpointAndPanic, "checkpoint_and_panic")
 FI_TYPE(FaultInjectorTypeWaitUntilTriggered, "wait_until_triggered")
 #endif
 

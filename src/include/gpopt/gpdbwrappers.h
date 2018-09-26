@@ -307,7 +307,7 @@ namespace gpdb {
 	void GetOrderedPartKeysAndKinds(Oid oid, List **pkeys, List **pkinds);
 
 	// parts of a partitioned table
-	PartitionNode *GetParts(Oid relid, int2 level, Oid parent, bool inctemplate, bool includesubparts);
+	PartitionNode *GetParts(Oid relid, int16 level, Oid parent, bool inctemplate, bool includesubparts);
 
 	// keys of the relation with the given oid
 	List *GetRelationKeys(Oid relid);
@@ -415,10 +415,9 @@ namespace gpdb {
 	Var *MakeVar(Index varno, AttrNumber varattno, Oid vartype, int32 vartypmod, Index varlevelsup);
 
 	// memory allocation functions
-	void *MemCtxtAllocImpl(MemoryContext context, Size size, const char* file, const char * func, int line);
-	void *MemCtxtAllocZeroAlignedImpl(MemoryContext context, Size size, const char* file, const char * func, int line);
-	void *MemCtxtAllocZeroImpl(MemoryContext context, Size size, const char* file, const char * func, int line);
-	void *MemCtxtReallocImpl(void *pointer, Size size, const char* file, const char * func, int line);
+	void *MemCtxtAllocZeroAligned(MemoryContext context, Size size);
+	void *MemCtxtAllocZero(MemoryContext context, Size size);
+	void *MemCtxtRealloc(void *pointer, Size size);
 	void *GPDBAlloc(Size size);
 	void GPDBFree(void *ptr);
 
@@ -595,7 +594,10 @@ namespace gpdb {
 	
 	// hash a const value with GPDB's hash function
 	int32 CdbHashConst(Const *constant, int num_segments);
-	
+
+	// pick a random segment from a pool of segments using GPDB's hash function
+	int32 CdbHashRandom(int num_segments);
+
 	// hash a list of const values with GPDB's hash function
 	int32 CdbHashConstList(List *constants, int num_segments);
 	
@@ -616,7 +618,7 @@ namespace gpdb {
 	Expr *EvaluateExpr(Expr *expr, Oid result_type, int32 typmod);
 	
 	// interpret the value of "With oids" option from a list of defelems
-	bool InterpretOidsOption(List *options);
+	bool InterpretOidsOption(List *options, bool allowOids);
 	
 	// extract string value from defelem's value
 	char *DefGetString(DefElem *defelem);
@@ -685,8 +687,8 @@ namespace gpdb {
 
 #define Palloc0Fast(sz) \
 	( MemSetTest(0, (sz)) ? \
-		gpdb::MemCtxtAllocZeroAlignedImpl(CurrentMemoryContext, (sz), __FILE__, PG_FUNCNAME_MACRO, __LINE__) : \
-		gpdb::MemCtxtAllocZeroImpl(CurrentMemoryContext, (sz), __FILE__, PG_FUNCNAME_MACRO, __LINE__))
+		gpdb::MemCtxtAllocZeroAligned(CurrentMemoryContext, (sz)) : \
+		gpdb::MemCtxtAllocZero(CurrentMemoryContext, (sz)))
 
 #ifdef __GNUC__
 

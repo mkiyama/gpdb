@@ -59,7 +59,7 @@
 #include "utils/visibility_summary.h"
 
 AOCSFileSegInfo *
-NewAOCSFileSegInfo(int4 segno, int4 nvp)
+NewAOCSFileSegInfo(int32 segno, int32 nvp)
 {
 	AOCSFileSegInfo *seginfo;
 
@@ -75,7 +75,7 @@ NewAOCSFileSegInfo(int4 segno, int4 nvp)
 }
 
 void
-InsertInitialAOCSFileSegInfo(Relation prel, int4 segno, int4 nvp)
+InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp)
 {
 	bool	   *nulls = palloc0(sizeof(bool) * Natts_pg_aocsseg);
 	Datum	   *values = palloc0(sizeof(Datum) * Natts_pg_aocsseg);
@@ -1059,7 +1059,7 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
 	d[Anum_pg_aocs_varblockcount - 1] = fastgetattr(oldtup, Anum_pg_aocs_varblockcount, tupdesc, &null[Anum_pg_aocs_varblockcount - 1]);
 	Assert(!null[Anum_pg_aocs_varblockcount - 1]);
 	d[Anum_pg_aocs_varblockcount - 1] += varblockadded;
-	repl[Anum_pg_aocs_tupcount - 1] = true;
+	repl[Anum_pg_aocs_varblockcount - 1] = true;
 
 	d[Anum_pg_aocs_modcount - 1] = fastgetattr(oldtup, Anum_pg_aocs_modcount, tupdesc, &null[Anum_pg_aocs_modcount - 1]);
 	Assert(!null[Anum_pg_aocs_modcount - 1]);
