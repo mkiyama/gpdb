@@ -144,9 +144,6 @@ bool		gp_appendonly_verify_write_block = false;
 bool		gp_appendonly_compaction = true;
 int			gp_appendonly_compaction_threshold = 0;
 bool		gp_heap_require_relhasoids_match = true;
-bool		Debug_appendonly_rezero_quicklz_compress_scratch = false;
-bool		Debug_appendonly_rezero_quicklz_decompress_scratch = false;
-bool		Debug_appendonly_guard_end_quicklz_scratch = false;
 bool		gp_local_distributed_cache_stats = false;
 bool		debug_xlog_record_read = false;
 bool		Debug_cancel_print = false;
@@ -206,7 +203,7 @@ int			Debug_dtm_action_target = DEBUG_DTM_ACTION_TARGET_DEFAULT;
 
 int			Debug_dtm_action_protocol = DEBUG_DTM_ACTION_PROTOCOL_DEFAULT;
 
-#define DEBUG_DTM_ACTION_SEGMENT_DEFAULT 1
+#define DEBUG_DTM_ACTION_SEGMENT_DEFAULT -2
 #define DEBUG_DTM_ACTION_NESTINGLEVEL_DEFAULT 0
 
 int			Debug_dtm_action_segment = DEBUG_DTM_ACTION_SEGMENT_DEFAULT;
@@ -531,6 +528,7 @@ static const struct config_enum_entry explain_memory_verbosity_options[] = {
 	{"suppress", EXPLAIN_MEMORY_VERBOSITY_SUPPRESS},
 	{"summary", EXPLAIN_MEMORY_VERBOSITY_SUMMARY},
 	{"detail", EXPLAIN_MEMORY_VERBOSITY_DETAIL},
+	{"debug", EXPLAIN_MEMORY_VERBOSITY_DEBUG},
 	{NULL, 0}
 };
 
@@ -1117,39 +1115,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_heap_require_relhasoids_match,
 		true,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"debug_appendonly_rezero_quicklz_compress_scratch", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Zero the QuickLZ scratch buffer before each append-only block that is being compressed."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
-		},
-		&Debug_appendonly_rezero_quicklz_compress_scratch,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"debug_appendonly_guard_end_quicklz_scratch", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Put a guard area of all zeroes after the QuickLZ scratch buffers and verify it is still zero before and after compress and decompress operations."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
-		},
-		&Debug_appendonly_guard_end_quicklz_scratch,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"debug_appendonly_rezero_quicklz_decompress_scratch", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Zero the QuickLZ scratch buffer before each append-only block that is being decompressed."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
-		},
-		&Debug_appendonly_rezero_quicklz_decompress_scratch,
-		false,
 		NULL, NULL, NULL
 	},
 
@@ -3102,7 +3067,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&Debug_dtm_action_segment,
-		DEBUG_DTM_ACTION_SEGMENT_DEFAULT, 0, 1000,
+		DEBUG_DTM_ACTION_SEGMENT_DEFAULT, -2, 1000,
 		NULL, NULL, NULL
 	},
 
@@ -3598,17 +3563,6 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_connections_per_thread", PGC_BACKEND, GP_ARRAY_TUNING,
-			gettext_noop("Sets the number of client connections handled in each thread."),
-			NULL,
-			GUC_GPDB_ADDOPT
-		},
-		&gp_connections_per_thread,
-		0, 0, INT_MAX,
-		NULL, assign_gp_connections_per_thread, NULL
-	},
-
-	{
 		{"gp_subtrans_warn_limit", PGC_POSTMASTER, RESOURCES,
 			gettext_noop("Sets the warning limit on number of subtransactions in a transaction."),
 			NULL,
@@ -3626,7 +3580,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&gp_cached_gang_threshold,
-		5, 0, INT_MAX,
+		5, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 
@@ -4973,7 +4927,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 	{
 		{"explain_memory_verbosity", PGC_USERSET, RESOURCES_MEM,
 			gettext_noop("Experimental feature: show memory account usage in EXPLAIN ANALYZE."),
-			gettext_noop("Valid values are SUPPRESS, SUMMARY, and DETAIL."),
+			gettext_noop("Valid values are SUPPRESS, SUMMARY, DETAIL, and DEBUG."),
 			GUC_GPDB_ADDOPT
 		},
 		&explain_memory_verbosity,

@@ -148,7 +148,7 @@ CTranslatorUtils::GetTableDescr
 	IMDRelation::Ereldistrpolicy distribution_policy = rel->GetRelDistribution();
 
 	if (NULL != is_distributed_table &&
-		(IMDRelation::EreldistrHash == distribution_policy || IMDRelation::EreldistrRandom == distribution_policy))
+		(IMDRelation::EreldistrHash == distribution_policy || IMDRelation::EreldistrRandom == distribution_policy || IMDRelation::EreldistrReplicated == distribution_policy))
 	{
 		*is_distributed_table = true;
 	}
@@ -2400,33 +2400,6 @@ CTranslatorUtils::CheckRTEPermissions
 	)
 {
 	gpdb::CheckRTPermissions(range_table_list);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorUtils::CheckAggregateWindowFn
-//
-//	@doc:
-//		Check if the window function is an aggregate and has 
-//      a combine function
-//
-//---------------------------------------------------------------------------
-void
-CTranslatorUtils::CheckAggregateWindowFn
-	(
-	Node *node
-	)
-{
-	GPOS_ASSERT(NULL != node);
-	GPOS_ASSERT(IsA(node, WindowFunc));
-
-	WindowFunc *winfunc = (WindowFunc *) node;
-
-	if (gpdb::AggregateExists(winfunc->winfnoid) && !gpdb::AggHasCombineFunc(winfunc->winfnoid))
-	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				GPOS_WSZ_LIT("Aggregate window function without combine function"));
-	}
 }
 
 

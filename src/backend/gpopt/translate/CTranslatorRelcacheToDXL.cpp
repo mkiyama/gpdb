@@ -565,6 +565,15 @@ CTranslatorRelcacheToDXL::RetrieveRel
 		GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported, GPOS_WSZ_LIT("Foreign Data"));
 	}
 
+	if (NULL != rel->rd_cdbpolicy &&
+		gpdb::GetGPSegmentCount() != rel->rd_cdbpolicy->numsegments)
+	{
+		// GPORCA does not support partially distributed tables yet
+		gpdb::CloseRelation(rel);
+		GPOS_RAISE(gpdxl::ExmaMD,
+				   gpdxl::ExmiDXLInvalidAttributeValue,
+				   GPOS_WSZ_LIT("Partially Distributed Data"));
+	}
 
 	CMDName *mdname = NULL;
 	IMDRelation::Erelstoragetype rel_storage_type = IMDRelation::ErelstorageSentinel;
@@ -908,6 +917,11 @@ CTranslatorRelcacheToDXL::GetRelDistribution
 	if (NULL == gp_policy)
 	{
 		return IMDRelation::EreldistrMasterOnly;
+	}
+
+	if (POLICYTYPE_REPLICATED == gp_policy->ptype)
+	{
+		return IMDRelation::EreldistrReplicated;
 	}
 
 	if (POLICYTYPE_PARTITIONED == gp_policy->ptype)
@@ -1946,11 +1960,11 @@ CTranslatorRelcacheToDXL::RetrieveAgg
 	
 	// GPDB does not support splitting of ordered aggs and aggs without a
 	// combine function
-	BOOL is_splittable = !is_ordered && gpdb::AggHasCombineFunc(agg_oid);
+	BOOL is_splittable = !is_ordered && gpdb::IsAggPartialCapable(agg_oid);
 	
 	// cannot use hash agg for ordered aggs or aggs without a combine func
 	// due to the fact that hashAgg may spill
-	BOOL is_hash_agg_capable = !is_ordered && gpdb::AggHasCombineFunc(agg_oid);
+	BOOL is_hash_agg_capable = !is_ordered && gpdb::IsAggPartialCapable(agg_oid);
 
 	CMDAggregateGPDB *pmdagg = GPOS_NEW(mp) CMDAggregateGPDB
 											(
@@ -2300,7 +2314,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 		BlockNumber pg_attribute_unused() pages = 0;
 		double pg_attribute_unused() allvisfrac = 0.0;
 		GpPolicy *gp_policy = gpdb::GetDistributionPolicy(rel);
-		if (!gp_policy ||gp_policy->ptype != POLICYTYPE_PARTITIONED)
+		if (!gp_policy || (gp_policy->ptype != POLICYTYPE_PARTITIONED && gp_policy->ptype != POLICYTYPE_REPLICATED))
 		{
 			gpdb::EstimateRelationSize(rel, NULL, &pages, &num_rows, &allvisfrac);
 		}

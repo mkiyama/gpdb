@@ -359,21 +359,29 @@ static
 CdbComponentDatabases *readCdbComponentInfoAndUpdateStatus(MemoryContext probeContext)
 {
 	int i;
-	MemoryContext save = MemoryContextSwitchTo(probeContext);
-	/* cdbs is free'd by FtsLoop(). */
-	CdbComponentDatabases *cdbs = getCdbComponentInfo(false);
-	MemoryContextSwitchTo(save);
+	int primary = 0;
+	CdbComponentDatabases *cdbs = cdbcomponent_getCdbComponents(false);
 
 	for (i=0; i < cdbs->total_segment_dbs; i++)
 	{
 		CdbComponentDatabaseInfo *segInfo = &cdbs->segment_db_info[i];
 		uint8	segStatus = 0;
 
+		/*
+		 * cdbs->total_segment_dbs includes both primaries and mirrors,
+		 * count primaries separately.
+		 */
+		if (segInfo->role == 'p')
+			primary++;
+
 		if (SEGMENT_IS_ALIVE(segInfo))
 			FTS_STATUS_SET_UP(segStatus);
 
 		ftsProbeInfo->fts_status[segInfo->dbid] = segStatus;
 	}
+
+	ftsProbeInfo->total_segment_dbs = primary;
+	GpIdentity.numsegments = primary;
 
 	/*
 	 * Initialize fts_stausVersion after populating the config details in
@@ -515,12 +523,6 @@ void FtsLoop()
 
 		probe_start_time = time(NULL);
 
-		if (cdbs != NULL)
-		{
-			freeCdbComponentDatabases(cdbs);
-			cdbs = NULL;
-		}
-
 		/* Need a transaction to access the catalogs */
 		StartTransactionCommand();
 
@@ -546,6 +548,7 @@ void FtsLoop()
 			elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,
 				   "skipping FTS probes due to %s",
 				   !has_mirrors ? "no mirrors" : "fts_probe fault");
+
 		}
 		else
 		{
@@ -566,12 +569,15 @@ void FtsLoop()
 
 			/* free any pallocs we made inside probeSegments() */
 			MemoryContextReset(probeContext);
-			cdbs = NULL;
 
 			/* Bump the version if configuration was updated. */
 			if (updated_probe_state)
 				ftsProbeInfo->fts_statusVersion++;
 		}
+
+		/* free current components info and free ip addr caches */	
+		cdbcomponent_destroyCdbComponents();
+
 		/* Notify any waiting backends about probe cycle completion. */
 		ftsProbeInfo->probeTick++;
 

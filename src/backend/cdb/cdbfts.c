@@ -129,7 +129,7 @@ FtsIsSegmentUp(CdbComponentDatabaseInfo *dBInfo)
 	 * initialized yet, just return positively back.  This is mainly to avoid
 	 * queries incorrectly failing just after QD restarts if FTS process is yet
 	 * to start and complete initializing the cached status.  We shouldn't be
-	 * checking against uninitialzed variable.
+	 * checking against an uninitialized variable.
 	 */
 	return ftsProbeInfo->fts_statusVersion ?
 		FTS_STATUS_IS_UP(ftsProbeInfo->fts_status[dBInfo->dbid]) :
@@ -142,13 +142,13 @@ FtsIsSegmentUp(CdbComponentDatabaseInfo *dBInfo)
  * returns true if any segment DB is down.
  */
 bool
-FtsTestSegmentDBIsDown(SegmentDatabaseDescriptor *segdbDesc, int size)
+FtsTestSegmentDBIsDown(SegmentDatabaseDescriptor **segdbDesc, int size)
 {
 	int			i = 0;
 
 	for (i = 0; i < size; i++)
 	{
-		CdbComponentDatabaseInfo *segInfo = segdbDesc[i].segment_database_info;
+		CdbComponentDatabaseInfo *segInfo = segdbDesc[i]->segment_database_info;
 
 		elog(DEBUG2, "FtsTestSegmentDBIsDown: looking for real fault on segment dbid %d", (int) segInfo->dbid);
 
@@ -167,4 +167,17 @@ uint8
 getFtsVersion(void)
 {
 	return ftsProbeInfo->fts_statusVersion;
+}
+
+uint32
+FtsGetTotalSegments(void)
+{
+	/*
+	 * ftsProbeInfo is stored in shared memory, so check whether shared memory
+	 * has been initialized
+	 */
+	if (ftsProbeInfo)
+		return ftsProbeInfo->total_segment_dbs;
+	else
+		return GpIdentity.numsegments;
 }

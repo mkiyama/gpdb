@@ -27,10 +27,18 @@ test: python_processed64bit
 test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp notin percentile join_gp union_gp gpcopy gp_create_table gp_create_view window_views
 test: filter gpctas gpdist matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var guc_gp gp_explain distributed_transactions explain_format
 
-test: bitmap_index gp_dump_query_oids analyze gp_owner_permission incremental_analyze
+# bitmap_index triggers recovery, run it seperately
+test: bitmap_index
+test: gp_dump_query_oids analyze gp_owner_permission incremental_analyze
 test: indexjoin as_alias regex_gp gpparams with_clause transient_types gp_rules
 # dispatch should always run seperately from other cases.
 test: dispatch
+
+# event triggers cannot run concurrently with any test that runs DDL
+test: event_trigger_gp
+
+# test partially distributed tables
+test: partial_table
 
 # deadlock tests run separately - because we don't know which one gets stuck.
 test: deadlock
@@ -67,7 +75,7 @@ test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_grou
 
 # 'partition' runs for a long time, so try to keep it together with other
 # long-running tests.
-test: partition partition1 partition_indexing parruleord partition_storage partition_ddl
+test: partition partition1 partition_indexing parruleord partition_storage partition_ddl partition_with_user_defined_function
 # 'partition_locking' gets confused if other backends run concurrently and
 # hold locks.
 test: partition_locking
@@ -143,7 +151,7 @@ test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_dml_oids trigger_set
 test: qp_misc_jiras qp_with_clause qp_executor qp_olap_windowerr qp_olap_window qp_derived_table qp_bitmapscan qp_dropped_cols
 test: qp_with_functional_inlining qp_with_functional_noinlining
 test: qp_functions_in_contexts_setup
-test: qp_misc_rio_join_small qp_misc_rio qp_correlated_query qp_targeted_dispatch qp_gist_indexes2 qp_gist_indexes3 qp_gist_indexes4 qp_query_execution qp_functions_in_from qp_functions_in_select qp_functions_in_subquery qp_functions_in_subquery_constant qp_functions_in_with
+test: qp_misc_rio_join_small qp_misc_rio qp_correlated_query qp_targeted_dispatch qp_gist_indexes2 qp_gist_indexes3 qp_gist_indexes4 qp_query_execution qp_functions_in_from qp_functions_in_select qp_functions_in_subquery qp_functions_in_subquery_column qp_functions_in_subquery_constant qp_functions_in_with
 
 test: dpe qp_dpe qp_subquery qp_left_anti_semi_join qp_union_intersect qp_functions qp_functions_idf qp_regexp qp_resource_queue qp_orca_fallback
 
@@ -211,7 +219,7 @@ test: metadata_track
 test: workfile_mgr_test
 test: session_reset
 
-test: psql_gp_commands pg_resetxlog
+test: psql_gp_commands pg_resetxlog dropdb_check_shared_buffer_cache
 
 # Check for shmem leak for instrumentation slots
 test: instr_in_shmem_verify

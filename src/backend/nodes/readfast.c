@@ -2214,6 +2214,7 @@ _readFlow(void)
 	READ_ENUM_FIELD(req_move, Movement);
 	READ_ENUM_FIELD(locustype, CdbLocusType);
 	READ_INT_FIELD(segindex);
+	READ_INT_FIELD(numsegments);
 
 	READ_NODE_FIELD(hashExpr);
 	READ_NODE_FIELD(flow_before_req_move);
@@ -2370,6 +2371,7 @@ _readSlice(void)
 	READ_NODE_FIELD(directDispatch.contentIds); /* List of int index */
 	READ_DUMMY_FIELD(primaryGang, NULL);
 	READ_NODE_FIELD(primaryProcesses); /* List of (CDBProcess *) */
+	READ_BITMAPSET_FIELD(processesMap);
 
 	READ_DONE();
 }
@@ -2487,6 +2489,19 @@ _readCreateTableSpaceStmt(void)
 	READ_NODE_FIELD(options);
 
 	READ_DONE();
+}
+
+static AlterTableSpaceOptionsStmt *
+_readAlterTableSpaceOptionsStmt(void)
+{
+	READ_LOCALS(AlterTableSpaceOptionsStmt);
+
+	READ_STRING_FIELD(tablespacename);
+	READ_NODE_FIELD(options);
+	READ_BOOL_FIELD(isReset);
+
+	READ_DONE();
+
 }
 
 static DropTableSpaceStmt *
@@ -2751,6 +2766,7 @@ _readDistributedBy(void)
 	READ_LOCALS(DistributedBy);
 
 	READ_ENUM_FIELD(ptype, GpPolicyType);
+	READ_INT_FIELD(numsegments);
 	READ_NODE_FIELD(keys);
 
 	READ_DONE();
@@ -2940,6 +2956,8 @@ _readGpPolicy(void)
 	READ_LOCALS(GpPolicy);
 
 	READ_ENUM_FIELD(ptype, GpPolicyType);
+
+	READ_INT_FIELD(numsegments);
 
 	READ_INT_FIELD(nattrs);
 	READ_INT_ARRAY(attrs, local_node->nattrs, AttrNumber);
@@ -3693,7 +3711,9 @@ readNodeBinary(void)
 			case T_CreateTableSpaceStmt:
 				return_value = _readCreateTableSpaceStmt();
 				break;
-
+			case T_AlterTableSpaceOptionsStmt:
+				return_value = _readAlterTableSpaceOptionsStmt();
+				break;
 			case T_DropTableSpaceStmt:
 				return_value = _readDropTableSpaceStmt();
 				break;

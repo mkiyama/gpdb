@@ -194,6 +194,8 @@ FI_IDENT(SendQEDetailsInitBackend, "send_qe_details_init_backend")
 FI_IDENT(ProcessStartupPacketFault, "process_startup_packet")
 /* inject fault in cdbdisp_dispatchX*/
 FI_IDENT(AfterOneSliceDispatched, "after_one_slice_dispatched")
+/* inject fault in cdbdisp_dispatchX*/
+FI_IDENT(BeforeOneSliceDispatched, "before_one_slice_dispatched")
 /* inject fault in interconnect to skip sending the stop ack */
 FI_IDENT(InterconnectStopAckIsLost, "interconnect_stop_ack_is_lost")
 /* inject fault in interconnect to make palloc0 fail in setup */
@@ -245,8 +247,6 @@ FI_IDENT(CreateResourceGroupFail, "create_resource_group_fail")
 FI_IDENT(AutoVacWorkerBeforeDoAutovacuum, "auto_vac_worker_before_do_autovacuum")
 /* inject fault when search DNS cache */
 FI_IDENT(GetDnsCachedAddress, "get_dns_cached_address")
-/* inject fault before notify fts probe */
-FI_IDENT(BeforeFtsNotify, "before_fts_notify")
 /* inject fault before aquiring lock during AlterTableCreateAoBlkdirTable */
 FI_IDENT(BeforeAcquireLockDuringCreateAoBlkdirTable, "before_acquire_lock_during_create_ao_blkdir_table")
 /* inject fault during gang creation, before check for interrupts */
@@ -254,7 +254,7 @@ FI_IDENT(CreateGangInProgress, "create_gang_in_progress")
 /* inject fault when creating new TOAST tables, to modify the chunk size */
 FI_IDENT(DecreaseToastMaxChunkSize, "decrease_toast_max_chunk_size")
 /* inject fault to let cleanupGang return false */
-FI_IDENT(CleanupGang, "cleanup_gang")
+FI_IDENT(CleanupQE, "cleanup_qe")
 #endif
 
 /*

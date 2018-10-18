@@ -1540,7 +1540,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 	}
 
 	/* get the total valid primary segdb count */
-	db_info = getCdbComponentDatabases();
+	db_info = cdbcomponent_getCdbComponents(true);
 	total_primaries = 0;
 	for (i = 0; i < db_info->total_segment_dbs; i++)
 	{
@@ -2111,8 +2111,6 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			filenames = lappend(filenames, n);
 		}
 	}
-
-	freeCdbComponentDatabases(db_info);
 
 	return filenames;
 }
@@ -5154,8 +5152,7 @@ make_sort(PlannerInfo *root, Plan *lefttree, int numCols,
 	Plan	   *plan = &node->plan;
 
 	copy_plan_costsize(plan, lefttree); /* only care about copying size */
-	plan = add_sort_cost(root, plan, numCols, sortColIdx, sortOperators,
-						 limit_tuples);
+	plan = add_sort_cost(root, plan, limit_tuples);
 
 	plan->targetlist = cdbpullup_targetlist(lefttree,
 				 cdbpullup_exprHasSubplanRef((Expr *) lefttree->targetlist));
@@ -5190,14 +5187,9 @@ make_sort(PlannerInfo *root, Plan *lefttree, int numCols,
  * that root may be NULL (e.g. when called outside make_sort).
  */
 Plan *
-add_sort_cost(PlannerInfo *root, Plan *input, int numCols,
-			  AttrNumber *sortColIdx, Oid *sortOperators, double limit_tuples)
+add_sort_cost(PlannerInfo *root, Plan *input, double limit_tuples)
 {
 	Path		sort_path;		/* dummy for result of cost_sort */
-
-	UnusedArg(numCols);
-	UnusedArg(sortColIdx);
-	UnusedArg(sortOperators);
 
 	cost_sort(&sort_path, root, NIL,
 			  input->total_cost,
@@ -5902,9 +5894,7 @@ make_agg(PlannerInfo *root, List *tlist, List *qual,
 	copy_plan_costsize(plan, lefttree); /* only care about copying size */
 
 	add_agg_cost(root, plan, tlist, qual, aggstrategy, streaming,
-				 numGroupCols, grpColIdx,
-				 numGroups, num_nullcols,
-				 aggcosts);
+				 numGroupCols, numGroups, aggcosts);
 
 	plan->qual = qual;
 	plan->targetlist = tlist;
@@ -5917,30 +5907,25 @@ make_agg(PlannerInfo *root, List *tlist, List *qual,
 	return node;
 }
 
-/* add_agg_cost -- basic routine to accumulate Agg cost into a
+/*
+ * add_agg_cost -- basic routine to accumulate Agg cost into a
  * plan node representing the input cost.
  *
- * Unused arguments (e.g., streaming, grpColIdx, num_nullcols)
- * are included to allow for future improvements to aggregate
- * costing.  Note that root may be NULL (e.g., when called from
- * outside make_agg).
+ * Note that root may be NULL (e.g., when called from * outside make_agg).
  */
 Plan *
 add_agg_cost(PlannerInfo *root, Plan *plan,
 			 List *tlist, List *qual,
 			 AggStrategy aggstrategy,
 			 bool streaming,
-			 int numGroupCols, AttrNumber *grpColIdx,
-			 long numGroups, int num_nullcols,
+			 int numGroupCols,
+			 long numGroups,
 			 const AggClauseCosts *aggcosts)
 {
 	Path		agg_path;		/* dummy for result of cost_agg */
 	QualCost	qual_cost;
 	HashAggTableSizes hash_info;
 	double entrywidth;
-
-	UnusedArg(grpColIdx);
-	UnusedArg(num_nullcols);
 
     /* Solution for MPP-11942
      * Before this fix, we calculated the width from the sub_tlist which
@@ -6574,6 +6559,7 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 			   *lcp;
 	bool		all_subplans_entry = true,
 				all_subplans_replicated = true;
+	int			numsegments = -1;
 
 	if (node->operation == CMD_INSERT)
 	{
@@ -6591,10 +6577,33 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 			targetPolicy = GpPolicyFetch(CurrentMemoryContext, rte->relid);
 			targetPolicyType = targetPolicy->ptype;
 
+			if (numsegments >= 0)
+			{
+				/*
+				 * We require a table T's sub tables all have the same
+				 * numsegments with T
+				 */
+				Assert(numsegments == targetPolicy->numsegments);
+			}
+
+			numsegments = targetPolicy->numsegments;
+
 			if (targetPolicyType == POLICYTYPE_PARTITIONED)
 			{
 				all_subplans_entry = false;
 				all_subplans_replicated = false;
+
+				/*
+				 * A query to reach here: INSERT INTO t1 VALUES(1).
+				 * There is no need to add a motion from General, we could
+				 * simply put General on the same segments with target table.
+				 */
+				/* FIXME: also do this for other targetPolicyType? */
+				/* FIXME: also do this for all the subplans */
+				if (subplan->flow->locustype == CdbLocusType_General)
+				{
+					subplan->flow->numsegments = numsegments;
+				}
 
 				if (gp_enable_fast_sri && IsA(subplan, Result))
 					sri_optimize_for_result(root, subplan, rte, &targetPolicy, &hashExpr);
@@ -6605,7 +6614,7 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 														 targetPolicy->attrs,
 														 false);
 
-				if (!repartitionPlan(subplan, false, false, hashExpr))
+				if (!repartitionPlan(subplan, false, false, hashExpr, numsegments))
 					ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
 									errmsg("Cannot parallelize that INSERT yet")));
 			}
@@ -6650,7 +6659,28 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 					subplan->flow->flotype == FLOW_SINGLETON &&
 					subplan->flow->locustype == CdbLocusType_SegmentGeneral &&
 					!contain_volatile_functions((Node *)subplan->targetlist))
-					break;
+				{
+					if (subplan->flow->numsegments >= numsegments)
+					{
+						/*
+						 * A query to reach here:
+						 *     INSERT INTO d1 SELECT * FROM d1;
+						 * There is no need to add a motion from General, we
+						 * could simply put General on the same segments with
+						 * target table.
+						 */
+						subplan->flow->numsegments = numsegments;
+						continue;
+					}
+
+					/*
+					 * Otherwise a broadcast motion is needed otherwise d2 will
+					 * only have data on segment 0.
+					 *
+					 * A query to reach here:
+					 *     INSERT INTO d2 SELECT * FROM d1;
+					 */
+				}
 
 				/* plan's data are available on all segment, no motion needed */
 				if (optimizer_replicated_table_insert &&
@@ -6659,10 +6689,24 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 					!contain_volatile_functions((Node *)subplan->targetlist))
 				{
 					subplan->dispatch = DISPATCH_PARALLEL;
-					break;
+					if (subplan->flow->numsegments >= numsegments)
+					{
+						/*
+						 * A query to reach here: INSERT INTO d1 VALUES(1).
+						 * There is no need to add a motion from General, we
+						 * could simply put General on the same segments with
+						 * target table.
+						 */
+						subplan->flow->numsegments = numsegments;
+					}
+					else
+					{
+						/* FIXME: is here reachable? */
+					}
+					continue;
 				}
 
-				if (!broadcastPlan(subplan, false, false))
+				if (!broadcastPlan(subplan, false, false, numsegments))
 					ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
 								errmsg("Cannot parallelize that INSERT yet")));
 
@@ -6687,6 +6731,17 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 			targetPolicy = GpPolicyFetch(CurrentMemoryContext, rte->relid);
 			targetPolicyType = targetPolicy->ptype;
 
+			if (numsegments >= 0)
+			{
+				/*
+				 * We require a table T's sub tables all have the same
+				 * numsegments with T
+				 */
+				Assert(numsegments == targetPolicy->numsegments);
+			}
+
+			numsegments = targetPolicy->numsegments;
+
 			if (targetPolicyType == POLICYTYPE_PARTITIONED)
 			{
 				all_subplans_entry = false;
@@ -6705,12 +6760,20 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 					List	   *hashExpr;
 					Plan	*new_subplan;
 
+					if (Gp_role == GP_ROLE_UTILITY)
+					{
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("Cannot update distribution key columns in utility mode")));
+					}
+
 					new_subplan = (Plan *) make_splitupdate(root, (ModifyTable *) node, subplan, rte, rti);
 					hashExpr = getExprListFromTargetList(new_subplan->targetlist,
 														 targetPolicy->nattrs,
 														 targetPolicy->attrs,
 														 false);
-					if (!repartitionPlan(new_subplan, false, false, hashExpr))
+					if (!repartitionPlan(new_subplan, false, false, hashExpr,
+										 targetPolicy->numsegments))
 						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
 										errmsg("Cannot parallelize that UPDATE yet")));
 
@@ -6773,6 +6836,8 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 		}
 	}
 
+	Assert(numsegments >= 0);
+
 	/*
 	 * Set the distribution of the ModifyTable node itself. If there is only
 	 * one subplan, or all the subplans have a compatible distribution, then
@@ -6790,11 +6855,11 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node)
 	}
 	else if (all_subplans_replicated)
 	{
-		mark_plan_replicated((Plan *) node);
+		mark_plan_replicated((Plan *) node, numsegments);
 	}
 	else
 	{
-		mark_plan_strewn((Plan *) node);
+		mark_plan_strewn((Plan *) node, numsegments);
 
 		if (list_length(node->plans) == 1)
 		{
@@ -7034,6 +7099,9 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 {
 	Motion	   *motion = NULL;
 	Path	   *subpath = path->subpath;
+	int			numsegments;
+
+	numsegments = CdbPathLocus_NumSegments(path->path.locus);
 
 	/* Send all tuples to a single process? */
 	if (CdbPathLocus_IsBottleneck(path->path.locus))
@@ -7091,14 +7159,16 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 												  collations,
 												  nullsFirst,
 												  destSegIndex,
-												  false /* useExecutorVarFormat */);
+												  false /* useExecutorVarFormat */,
+												  numsegments);
 			}
 			else
 			{
 				/* Degenerate ordering... build unordered Union Receive */
 				motion = make_union_motion(subplan,
 										   destSegIndex,
-										   false	/* useExecutorVarFormat */);
+										   false	/* useExecutorVarFormat */,
+										   numsegments);
 			}
 		}
 
@@ -7106,14 +7176,16 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 		else
 			motion = make_union_motion(subplan,
 									   destSegIndex,
-									   false	/* useExecutorVarFormat */
+									   false	/* useExecutorVarFormat */,
+									   numsegments
 				);
 	}
 
 	/* Send all of the tuples to all of the QEs in gang above... */
 	else if (CdbPathLocus_IsReplicated(path->path.locus))
 		motion = make_broadcast_motion(subplan,
-									   false	/* useExecutorVarFormat */
+									   false	/* useExecutorVarFormat */,
+									   numsegments
 			);
 
 	/* Hashed redistribution to all QEs in gang above... */
@@ -7144,7 +7216,8 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
         }
         motion = make_hashed_motion(subplan,
                                     hashExpr,
-                                    false /* useExecutorVarFormat */);
+                                    false /* useExecutorVarFormat */,
+									numsegments);
     }
     else
         Insist(0);

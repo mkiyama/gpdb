@@ -259,7 +259,7 @@ static ResGroupProcData *self = &__self;
 /* If we are waiting on a group, this points to the associated group */
 static ResGroupData *groupAwaited = NULL;
 
-/* the resource group self is running in in bypass mode */
+/* the resource group self is running in bypass mode */
 static ResGroupData *bypassedGroup = NULL;
 /* a fake slot used in bypass mode */
 static ResGroupSlotData bypassedSlot;
@@ -515,7 +515,6 @@ InitResGroups(void)
 	HeapTuple	tuple;
 	SysScanDesc	sscan;
 	int			numGroups;
-	CdbComponentDatabases *cdbComponentDBs;
 	CdbComponentDatabaseInfo *qdinfo;
 	ResGroupCaps		caps;
 	Relation			relResGroup;
@@ -541,8 +540,7 @@ InitResGroups(void)
 	if (Gp_role == GP_ROLE_DISPATCH && pResGroupControl->segmentsOnMaster == 0)
 	{
 		Assert(IS_QUERY_DISPATCHER());
-		cdbComponentDBs = getCdbComponentDatabases();
-		qdinfo = &cdbComponentDBs->entry_db_info[0];
+		qdinfo = cdbcomponent_getComponentInfo(MASTER_CONTENT_ID); 
 		pResGroupControl->segmentsOnMaster = qdinfo->hostSegs;
 		Assert(pResGroupControl->segmentsOnMaster > 0);
 	}
@@ -3894,7 +3892,6 @@ groupMemOnDumpForCgroup(ResGroupData *group, StringInfo str)
 
 /*
  * Parse cpuset to bitset
- * if onlyCheck is true, the function only check whether cpuset is valid
  * If cpuset is "1,3-5", Bitmapset 1,3,4,5 are set.
  */
 Bitmapset *

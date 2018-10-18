@@ -1271,8 +1271,19 @@ _outGpPolicy(StringInfo str, GpPolicy *node)
 	WRITE_NODE_TYPE("GPPOLICY");
 
 	WRITE_ENUM_FIELD(ptype, GpPolicyType);
+	WRITE_INT_FIELD(numsegments);
 	WRITE_INT_FIELD(nattrs);
 	WRITE_INT_ARRAY(attrs, node->nattrs, AttrNumber);
+}
+
+static void
+_outAlterTableSpaceOptionsStmt(StringInfo str, AlterTableSpaceOptionsStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERTABLESPACEOPTIONS");
+
+	WRITE_STRING_FIELD(tablespacename);
+	WRITE_NODE_FIELD(options);
+	WRITE_BOOL_FIELD(isReset);
 }
 
 /*
@@ -2206,6 +2217,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_DistributedBy:
 				_outDistributedBy(str, obj);
+				break;
+			case T_AlterTableSpaceOptionsStmt:
+				_outAlterTableSpaceOptionsStmt(str, obj);
 				break;
 			default:
 				elog(ERROR, "could not serialize unrecognized node type: %d",

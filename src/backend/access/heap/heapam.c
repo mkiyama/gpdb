@@ -65,6 +65,7 @@
 #include "storage/smgr.h"
 #include "storage/standby.h"
 #include "utils/datum.h"
+#include "utils/gpexpand.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
@@ -317,8 +318,8 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 	OffsetNumber lineoff;
 	ItemId		lpp;
 	bool		all_visible;
-	TransactionId t_xmin, t_xmax;
-	CommandId     t_cid;
+	TransactionId t_xmin;
+	CommandId	t_cid;
 
 	Assert(page < scan->rs_nblocks);
 
@@ -364,7 +365,7 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 	lines = PageGetMaxOffsetNumber(dp);
 	ntup = 0;
 
-	t_xmin = t_xmax = 0;
+	t_xmin = 0;
 	t_cid = 0;
 
 	/*
@@ -407,25 +408,40 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 			{
 				valid = true;
 			}
-			/* GPDB: We have a one-item cache for the common case that a lot of
-			 * tuples have the same visibility info. */
-			// GPDB_93_MERGE_FIXME: does this still work with the new multixid stuff?
-			// Should we check some additional flags too, to check if the xmax if
-			// locked only or something?
-			else if (t_xmax == HeapTupleHeaderGetRawXmax(theader) &&
-					 t_xmin == HeapTupleHeaderGetXmin(theader) &&
-					 t_cid == HeapTupleHeaderGetRawCommandId(theader))
-			{
-				valid = true;
-			}
 			else
 			{
-				valid = HeapTupleSatisfiesVisibility(scan->rs_rd, &loctup, snapshot, buffer);
-				if (valid)
+				/*
+				 * GPDB: We have a one-item cache for the common case that a
+				 * lot of tuples have the same visibility info. Don't use the
+				 * cache, if the tuple was ever deleted, though (i.e. if xmax
+				 * is valid, and not just for tuple-locking). We could cache
+				 * the xmax too, but the visibility rules get more complicated
+				 * with locked-only tuples and multi-XIDs, so it seems better
+				 * to just give up early.
+				 */
+				bool		use_cache;
+
+				if ((theader->t_infomask & HEAP_XMAX_INVALID) != 0 ||
+					HEAP_XMAX_IS_LOCKED_ONLY(theader->t_infomask))
+					use_cache = true;
+				else
+					use_cache = false;
+
+				if (use_cache &&
+					t_xmin == HeapTupleHeaderGetXmin(theader) &&
+					t_cid == HeapTupleHeaderGetRawCommandId(theader))
 				{
-					t_xmax = HeapTupleHeaderGetRawXmax(loctup.t_data);
-					t_xmin = HeapTupleHeaderGetXmin(loctup.t_data);
-					t_cid = HeapTupleHeaderGetRawCommandId(loctup.t_data);
+					valid = true;
+				}
+				else
+				{
+					valid = HeapTupleSatisfiesVisibility(scan->rs_rd, &loctup, snapshot, buffer);
+
+					if (valid && use_cache)
+					{
+						t_xmin = HeapTupleHeaderGetXmin(loctup.t_data);
+						t_cid = HeapTupleHeaderGetRawCommandId(loctup.t_data);
+					}
 				}
 			}
 
@@ -2398,6 +2414,8 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	Buffer		vmbuffer = InvalidBuffer;
 	bool		all_visible_cleared = false;
 
+	gp_expand_protect_catalog_changes(relation);
+
 	/*
 	 * Fill in tuple header fields, assign an OID, and toast the tuple if
 	 * necessary.
@@ -3003,6 +3021,8 @@ heap_delete(Relation relation, ItemPointer tid,
 	Assert(ItemPointerIsValid(tid));
 	Assert(RelationIsHeap(relation));
 
+	gp_expand_protect_catalog_changes(relation);
+
 	block = ItemPointerGetBlockNumber(tid);
 	buffer = ReadBuffer(relation, block);
 	page = BufferGetPage(buffer);
@@ -3404,6 +3424,8 @@ heap_update_internal(Relation relation, ItemPointer otid, HeapTuple newtup,
 
 	Assert(ItemPointerIsValid(otid));
 	Assert(!RelationIsAppendOptimized(relation));
+
+	gp_expand_protect_catalog_changes(relation);
 
 	/*
 	 * Fetch the list of attributes to be checked for HOT update.  This is

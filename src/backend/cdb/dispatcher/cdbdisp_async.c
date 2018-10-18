@@ -82,15 +82,14 @@ typedef struct CdbDispatchCmdAsync
 
 } CdbDispatchCmdAsync;
 
-static void *cdbdisp_makeDispatchParams_async(int maxSlices, char *queryText, int len);
+static void *cdbdisp_makeDispatchParams_async(int maxSlices, int largestGangSize, char *queryText, int len);
 
 static void cdbdisp_checkDispatchResult_async(struct CdbDispatcherState *ds,
 								  DispatchWaitMode waitMode);
 
 static void cdbdisp_dispatchToGang_async(struct CdbDispatcherState *ds,
 							 struct Gang *gp,
-							 int sliceIndex,
-							 CdbDispatchDirectDesc *dispDirect);
+							 int sliceIndex);
 static void	cdbdisp_waitDispatchFinish_async(struct CdbDispatcherState *ds);
 
 static bool	cdbdisp_checkForCancel_async(struct CdbDispatcherState *ds);
@@ -98,7 +97,6 @@ static int cdbdisp_getWaitSocketFd_async(struct CdbDispatcherState *ds);
 
 DispatcherInternalFuncs DispatcherAsyncFuncs =
 {
-	NULL,
 	cdbdisp_checkForCancel_async,
 	cdbdisp_getWaitSocketFd_async,
 	cdbdisp_makeDispatchParams_async,
@@ -278,10 +276,10 @@ cdbdisp_waitDispatchFinish_async(struct CdbDispatcherState *ds)
 static void
 cdbdisp_dispatchToGang_async(struct CdbDispatcherState *ds,
 							 struct Gang *gp,
-							 int sliceIndex,
-							 CdbDispatchDirectDesc *dispDirect)
+							 int sliceIndex)
 {
 	int			i;
+
 	CdbDispatchCmdAsync *pParms = (CdbDispatchCmdAsync *) ds->dispatchParams;
 
 	/*
@@ -291,17 +289,9 @@ cdbdisp_dispatchToGang_async(struct CdbDispatcherState *ds,
 	{
 		CdbDispatchResult *qeResult;
 
-		SegmentDatabaseDescriptor *segdbDesc = &gp->db_descriptors[i];
+		SegmentDatabaseDescriptor *segdbDesc = gp->db_descriptors[i];
 
 		Assert(segdbDesc != NULL);
-
-		if (dispDirect->directed_dispatch)
-		{
-			/* We can direct dispatch to one segment DB only */
-			Assert(dispDirect->count == 1);
-			if (dispDirect->content[0] != segdbDesc->segindex)
-				continue;
-		}
 
 		/*
 		 * Initialize the QE's CdbDispatchResult object.
@@ -360,9 +350,9 @@ cdbdisp_checkDispatchResult_async(struct CdbDispatcherState *ds,
  * memory context.
  */
 static void *
-cdbdisp_makeDispatchParams_async(int maxSlices, char *queryText, int len)
+cdbdisp_makeDispatchParams_async(int maxSlices, int largestGangSize, char *queryText, int len)
 {
-	int			maxResults = maxSlices * getgpsegmentCount();
+	int			maxResults = maxSlices * largestGangSize;
 	int			size = 0;
 
 	CdbDispatchCmdAsync *pParms = palloc0(sizeof(CdbDispatchCmdAsync));

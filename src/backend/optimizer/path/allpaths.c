@@ -1278,7 +1278,8 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	subquery_path = create_subqueryscan_path(root, rel, pathkeys, required_outer);
 
 	if (forceDistRand)
-		CdbPathLocus_MakeStrewn(&subquery_path->locus);
+		CdbPathLocus_MakeStrewn(&subquery_path->locus,
+								CdbPathLocus_NumSegments(subquery_path->locus));
 
 	add_path(rel, subquery_path);
 
@@ -1832,7 +1833,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
 	 * We should have a single rel at the final level.
 	 */
 	if (root->join_rel_level[levels_needed] == NIL)
-		return NULL;
+		elog(ERROR, "failed to build any %d-way joins", levels_needed);
 	Assert(list_length(root->join_rel_level[levels_needed]) == 1);
 
 	rel = (RelOptInfo *) linitial(root->join_rel_level[levels_needed]);
@@ -2111,9 +2112,9 @@ check_output_expressions(Query *subquery, bool *unsafeColumns)
 
 		/* MPP-19244:
 		 * if subquery has WINDOW clause, it is safe to push-down quals that
-		 * use columns included in in the Partition-By clauses of every OVER
+		 * use columns included in the Partition-By clauses of every OVER
 		 * clause in the subquery
-		 * */
+		 */
 		if (subquery->windowClause != NIL)
 		{
 			ListCell   *lc;

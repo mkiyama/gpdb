@@ -65,6 +65,7 @@
 #include "cdb/cdbpath.h"
 #include "cdb/cdbplan.h"
 #include "cdb/cdbpullup.h"
+#include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbhash.h"		/* isGreenplumDbHashable() */
 
@@ -559,17 +560,20 @@ cdb_grouping_planner(PlannerInfo *root,
 				 * duplicates, but there is no key to hash on.
 				 */
 				plan_1p.group_prep = MPP_GRP_PREP_HASH_GROUPS;
-				CdbPathLocus_MakeGeneral(&plan_1p.output_locus);
+				CdbPathLocus_MakeGeneral(&plan_1p.output_locus,
+										 CdbPathLocus_NumSegments(plan_1p.input_locus));
 			}
 			else if (gp_hash_safe_grouping(root))
 			{
 				plan_1p.group_prep = MPP_GRP_PREP_HASH_GROUPS;
-				CdbPathLocus_MakeHashed(&plan_1p.output_locus, root->group_pathkeys);
+				CdbPathLocus_MakeHashed(&plan_1p.output_locus, root->group_pathkeys,
+										CdbPathLocus_NumSegments(plan_1p.input_locus));
 			}
 			else
 			{
 				plan_1p.group_prep = MPP_GRP_PREP_FOCUS_QE;
-				CdbPathLocus_MakeSingleQE(&plan_1p.output_locus);
+				CdbPathLocus_MakeSingleQE(&plan_1p.output_locus,
+										  CdbPathLocus_NumSegments(plan_1p.input_locus));
 			}
 		}
 	}
@@ -577,7 +581,8 @@ cdb_grouping_planner(PlannerInfo *root,
 								 * replicated  */
 	{
 		plan_1p.group_prep = MPP_GRP_PREP_FOCUS_QE;
-		CdbPathLocus_MakeSingleQE(&plan_1p.output_locus);
+		CdbPathLocus_MakeSingleQE(&plan_1p.output_locus,
+								  CdbPathLocus_NumSegments(plan_1p.input_locus));
 	}
 
 	/*
@@ -680,7 +685,7 @@ cdb_grouping_planner(PlannerInfo *root,
 		 * functions per DQA and were willing to plan some DQAs as single and
 		 * some as multiple phases.  Not currently, however.
 		 */
-		if (agg_costs->missing_combinefunc)
+		if (agg_costs->hasNonCombine || agg_costs->hasNonSerial)
 			allowed_agg &= ~AGG_MULTIPHASE;
 
 		/*
@@ -756,14 +761,17 @@ cdb_grouping_planner(PlannerInfo *root,
 		{
 			plan_2p.group_type = MPP_GRP_TYPE_GROUPED_2STAGE;
 			if (root->group_pathkeys == NIL)
-				CdbPathLocus_MakeGeneral(&plan_2p.output_locus);
+				CdbPathLocus_MakeGeneral(&plan_2p.output_locus,
+										 CdbPathLocus_NumSegments(plan_2p.input_locus));
 			else
-				CdbPathLocus_MakeHashed(&plan_2p.output_locus, root->group_pathkeys);
+				CdbPathLocus_MakeHashed(&plan_2p.output_locus, root->group_pathkeys,
+										CdbPathLocus_NumSegments(plan_2p.input_locus));
 		}
 		else
 		{
 			plan_2p.group_type = MPP_GRP_TYPE_PLAIN_2STAGE;
-			CdbPathLocus_MakeSingleQE(&plan_2p.output_locus);
+			CdbPathLocus_MakeSingleQE(&plan_2p.output_locus,
+									  CdbPathLocus_NumSegments(plan_2p.input_locus));
 		}
 
 		if (consider_agg & AGG_2PHASE_DQA)
@@ -784,7 +792,8 @@ cdb_grouping_planner(PlannerInfo *root,
 			if (!cdbpathlocus_collocates(root, plan_2p.input_locus, l, false /* exact_match */ ))
 			{
 				plan_2p.group_prep = MPP_GRP_PREP_HASH_DISTINCT;
-				CdbPathLocus_MakeHashed(&plan_2p.input_locus, l);
+				CdbPathLocus_MakeHashed(&plan_2p.input_locus, l,
+										CdbPathLocus_NumSegments(plan_2p.input_locus));
 			}
 			else
 			{
@@ -806,14 +815,17 @@ cdb_grouping_planner(PlannerInfo *root,
 		{
 			plan_3p.group_type = MPP_GRP_TYPE_GROUPED_DQA_2STAGE;
 			if (root->group_pathkeys == NIL)
-				CdbPathLocus_MakeGeneral(&plan_3p.output_locus);
+				CdbPathLocus_MakeGeneral(&plan_3p.output_locus,
+										 CdbPathLocus_NumSegments(plan_3p.input_locus));
 			else
-				CdbPathLocus_MakeHashed(&plan_3p.output_locus, root->group_pathkeys);
+				CdbPathLocus_MakeHashed(&plan_3p.output_locus, root->group_pathkeys,
+										CdbPathLocus_NumSegments(plan_3p.input_locus));
 		}
 		else
 		{
 			plan_3p.group_type = MPP_GRP_TYPE_PLAIN_DQA_2STAGE;
-			CdbPathLocus_MakeSingleQE(&plan_3p.output_locus);
+			CdbPathLocus_MakeSingleQE(&plan_3p.output_locus,
+									  CdbPathLocus_NumSegments(plan_3p.input_locus));
 		}
 	}
 
@@ -1429,7 +1441,7 @@ make_two_stage_agg_plan(PlannerInfo *root,
 										0,	/* rollup_gs_times */
 										result_plan);
 		/* May lose useful locus and sort. Unlikely, but could do better. */
-		mark_plan_strewn(result_plan);
+		mark_plan_strewn(result_plan, ctx->output_locus.numsegments);
 		current_pathkeys = NIL;
 	}
 
@@ -3039,7 +3051,7 @@ cdbpathlocus_from_flow(Flow *flow)
 {
 	CdbPathLocus locus;
 
-	CdbPathLocus_MakeNull(&locus);
+	CdbPathLocus_MakeNull(&locus, flow->numsegments);
 
 	if (!flow)
 		return locus;
@@ -3048,15 +3060,16 @@ cdbpathlocus_from_flow(Flow *flow)
 	{
 		case FLOW_SINGLETON:
 			if (flow->segindex == -1)
+				/* FIXME: should numsegments be set to flow->numsegments? */
 				CdbPathLocus_MakeEntry(&locus);
 			else
-				CdbPathLocus_MakeSingleQE(&locus);
+				CdbPathLocus_MakeSingleQE(&locus, flow->numsegments);
 			break;
 		case FLOW_REPLICATED:
-			CdbPathLocus_MakeReplicated(&locus);
+			CdbPathLocus_MakeReplicated(&locus, flow->numsegments);
 			break;
 		case FLOW_PARTITIONED:
-			CdbPathLocus_MakeStrewn(&locus);
+			CdbPathLocus_MakeStrewn(&locus, flow->numsegments);
 			break;
 		case FLOW_UNDEFINED:
 		default:
@@ -4867,8 +4880,8 @@ cost_1phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 		add_agg_cost(NULL, &input_dummy,
 					 ctx->sub_tlist, (List *) root->parse->havingQual,
 					 AGG_HASHED, false,
-					 ctx->numGroupCols, ctx->groupColIdx,
-					 numGroups, 0,
+					 ctx->numGroupCols,
+					 numGroups,
 					 ctx->agg_costs);
 	}
 	else
@@ -4878,23 +4891,20 @@ cost_1phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 			/* PlainAgg */
 			add_agg_cost(NULL, &input_dummy,
 						 ctx->sub_tlist, (List *) root->parse->havingQual,
-						 AGG_PLAIN, false,
-						 0, NULL,
-						 1, 0,
-						 ctx->agg_costs);
+						 AGG_PLAIN, false, 0, 1, ctx->agg_costs);
 		}
 		else
 		{
 			/* GroupAgg */
 			if (!is_sorted)
 			{
-				add_sort_cost(NULL, &input_dummy, ctx->numGroupCols, NULL, NULL, -1.0);
+				add_sort_cost(NULL, &input_dummy, -1.0);
 			}
 			add_agg_cost(NULL, &input_dummy,
 						 ctx->sub_tlist, (List *) root->parse->havingQual,
 						 AGG_SORTED, false,
-						 ctx->numGroupCols, ctx->groupColIdx,
-						 numGroups, 0,
+						 ctx->numGroupCols,
+						 numGroups,
 						 ctx->agg_costs);
 		}
 
@@ -4980,8 +4990,8 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 		add_agg_cost(NULL, &input_dummy,
 					 NIL, NIL,	/* Don't know preliminary tlist, qual IS NIL */
 					 AGG_HASHED, root->config->gp_hashagg_streambottom,
-					 ctx->numGroupCols, ctx->groupColIdx,
-					 numGroups, 0,
+					 ctx->numGroupCols,
+					 numGroups,
 					 ctx->agg_costs);
 
 		if (gp_hashagg_streambottom)
@@ -4998,8 +5008,8 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 						 NIL, NIL,	/* Don't know preliminary tlist, qual IS
 									 * NIL */
 						 AGG_PLAIN, false,
-						 0, NULL,
-						 1, 0,
+						 0,
+						 1,
 						 ctx->agg_costs);
 		}
 		else
@@ -5007,14 +5017,14 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 			/* Preliminary GroupAgg */
 			if (!is_sorted)
 			{
-				add_sort_cost(NULL, &input_dummy, ctx->numGroupCols, NULL, NULL, -1.0);
+				add_sort_cost(NULL, &input_dummy, -1.0);
 			}
 			add_agg_cost(NULL, &input_dummy,
 						 NIL, NIL,	/* Don't know preliminary tlist, qual IS
 									 * NIL */
 						 AGG_SORTED, false,
-						 ctx->numGroupCols, ctx->groupColIdx,
-						 numGroups, 0,
+						 ctx->numGroupCols,
+						 numGroups,
 						 ctx->agg_costs);
 		}
 
@@ -5074,8 +5084,8 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 		add_agg_cost(NULL, &input_dummy,
 					 NIL, NIL,	/* Don't know tlist or qual */
 					 AGG_HASHED, false,
-					 ctx->numGroupCols, ctx->groupColIdx,
-					 numGroups, 0,
+					 ctx->numGroupCols,
+					 numGroups,
 					 ctx->agg_costs);
 	}
 	else
@@ -5086,19 +5096,19 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 			add_agg_cost(NULL, &input_dummy,
 						 NIL, NIL,	/* Don't know tlist or qual */
 						 AGG_PLAIN, false,
-						 0, NULL,
-						 1, 0,
+						 0,
+						 1,
 						 ctx->agg_costs);
 		}
 		else
 		{
 			/* GroupAgg */
-			add_sort_cost(NULL, &input_dummy, ctx->numGroupCols, NULL, NULL, -1.0);
+			add_sort_cost(NULL, &input_dummy, -1.0);
 			add_agg_cost(NULL, &input_dummy,
 						 NIL, NIL,	/* Don't know tlist or qual */
 						 AGG_SORTED, false,
-						 ctx->numGroupCols, ctx->groupColIdx,
-						 numGroups, 0,
+						 ctx->numGroupCols,
+						 numGroups,
 						 ctx->agg_costs);
 		}
 	}
@@ -5368,11 +5378,11 @@ initAggPlanInfo(AggPlanInfo *info, Path *input_path, Plan *input_plan)
 	if (input_path != NULL)
 		info->input_locus = input_path->locus;
 	else
-		CdbPathLocus_MakeNull(&info->input_locus);
+		CdbPathLocus_MakeNull(&info->input_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
 
 	info->group_type = MPP_GRP_TYPE_BASEPLAN;
 	info->group_prep = MPP_GRP_PREP_NONE;
-	CdbPathLocus_MakeNull(&info->output_locus);
+	CdbPathLocus_MakeNull(&info->output_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
 	info->distinctkey_collocate = false;
 
 	info->valid = false;
@@ -5562,7 +5572,7 @@ incremental_sort_cost(double rows, int width, int numKeyCols)
 	dummy.plan_rows = rows;
 	dummy.plan_width = width;
 
-	add_sort_cost(NULL, &dummy, numKeyCols, NULL, NULL, -1.0);
+	add_sort_cost(NULL, &dummy, -1.0);
 
 	return dummy.total_cost;
 }
@@ -5583,8 +5593,8 @@ incremental_agg_cost(double rows, int width, AggStrategy strategy,
 	add_agg_cost(NULL, &dummy,
 				 NULL, NULL,
 				 strategy, false,
-				 numGroupCols, NULL,
-				 numGroups, 0, aggcosts);
+				 numGroupCols,
+				 numGroups, aggcosts);
 
 	return dummy.total_cost;
 }
@@ -5668,7 +5678,12 @@ add_motion_to_dqa_child(Plan *plan, PlannerInfo *root, bool *motion_added)
 
 	if (CdbPathLocus_IsPartitioned(locus) && NIL != plan->flow->hashExpr)
 	{
-		locus = cdbpathlocus_from_exprs(root, plan->flow->hashExpr);
+		/*
+		 * We want to create a locus to representing the exprs of the flow,
+		 * it must have the same numsegments with the flow.
+		 */
+		locus = cdbpathlocus_from_exprs(root, plan->flow->hashExpr,
+										plan->flow->numsegments);
 	}
 
 	if (!cdbpathlocus_collocates(root, locus, pathkeys, true /* exact_match */ ))

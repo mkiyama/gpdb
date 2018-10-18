@@ -5175,12 +5175,24 @@ CTranslatorDXLToPlStmt::TranslateDXLPhyCtasToDistrPolicy
 		num_of_distr_cols_alloc = num_of_distr_cols;
 	}
 	
-	GpPolicy *distr_policy = gpdb::MakeGpPolicy(NULL, POLICYTYPE_PARTITIONED, num_of_distr_cols_alloc);
+	// always set numsegments to ALL for CTAS
+	GpPolicy *distr_policy = gpdb::MakeGpPolicy(NULL, POLICYTYPE_PARTITIONED,
+												num_of_distr_cols_alloc,
+												gpdb::GetGPSegmentCount());
 
 	GPOS_ASSERT(IMDRelation::EreldistrHash == dxlop->Ereldistrpolicy() ||
-				IMDRelation::EreldistrRandom == dxlop->Ereldistrpolicy());
-	
-	distr_policy->ptype = POLICYTYPE_PARTITIONED;
+				IMDRelation::EreldistrRandom == dxlop->Ereldistrpolicy() ||
+				IMDRelation::EreldistrReplicated == dxlop->Ereldistrpolicy()) ;
+
+	if (IMDRelation::EreldistrReplicated == dxlop->Ereldistrpolicy())
+	{
+		distr_policy->ptype = POLICYTYPE_REPLICATED;
+	}
+	else
+	{
+		distr_policy->ptype = POLICYTYPE_PARTITIONED;
+	}
+
 	distr_policy->nattrs = 0;
 	if (IMDRelation::EreldistrHash == dxlop->Ereldistrpolicy())
 	{

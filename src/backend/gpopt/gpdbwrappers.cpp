@@ -765,7 +765,7 @@ gpdb::IsOrderedAgg
 }
 
 bool
-gpdb::AggHasCombineFunc
+gpdb::IsAggPartialCapable
 	(
 	Oid aggid
 	)
@@ -773,7 +773,7 @@ gpdb::AggHasCombineFunc
 	GP_WRAP_START;
 	{
 		/* catalog tables: pg_aggregate */
-		return has_agg_combinefunc(aggid);
+		return is_agg_partial_capable(aggid);
 	}
 	GP_WRAP_END;
 	return false;
@@ -2647,7 +2647,7 @@ gpdb::GetComponentDatabases(void)
 	GP_WRAP_START;
 	{
 		/* catalog tables: gp_segment_config */
-		return getCdbComponentDatabases();
+		return cdbcomponent_getCdbComponents(true);
 	}
 	GP_WRAP_END;
 	return NULL;
@@ -3211,15 +3211,19 @@ gpdb::IsAbortRequested
 
 GpPolicy *
 gpdb::MakeGpPolicy
-       (
-               MemoryContext mcxt,
-               GpPolicyType ptype,
-               int nattrs
-       )
+		(
+			MemoryContext mcxt,
+			GpPolicyType ptype,
+			int nattrs,
+			int numsegments
+		)
 {
 	GP_WRAP_START;
 	{
-		return makeGpPolicy(mcxt, ptype, nattrs);
+		/*
+		 * FIXME_TABLE_EXPAND: it used by ORCA, help...
+		 */
+		return makeGpPolicy(mcxt, ptype, nattrs, numsegments);
 	}
 	GP_WRAP_END;
 }
