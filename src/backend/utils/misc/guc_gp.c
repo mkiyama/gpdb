@@ -520,6 +520,7 @@ bool		optimizer_enable_direct_dispatch;
 bool		optimizer_enable_hashjoin_redistribute_broadcast_children;
 bool		optimizer_enable_broadcast_nestloop_outer_child;
 bool		optimizer_enable_streaming_material;
+bool		optimizer_enable_gather_on_segment_for_dml;
 bool		optimizer_enable_assert_maxonerow;
 bool		optimizer_enable_constant_expression_evaluation;
 bool		optimizer_enable_bitmapscan;
@@ -2997,6 +2998,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_gather_on_segment_for_dml", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable DML optimization by enforcing a non-master gather in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_gather_on_segment_for_dml,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enforce_subplans", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enforce correlated execution in the optimizer"),
 			NULL,
@@ -4994,7 +5005,7 @@ struct config_string ConfigureNamesString_gp[] =
 	{
 		{"explain_memory_verbosity", PGC_USERSET, RESOURCES_MEM,
 			gettext_noop("Experimental feature: show memory account usage in EXPLAIN ANALYZE."),
-			gettext_noop("Valid values are SUPPRESS, SUMMARY, and DETAIL."),
+			gettext_noop("Valid values are SUPPRESS, SUMMARY, DETAIL, and DEBUG."),
 			GUC_GPDB_ADDOPT
 		},
 		&explain_memory_verbosity_str,
@@ -5801,6 +5812,11 @@ assign_explain_memory_verbosity(const char *newval, bool doit, GucSource source)
 	{
 		if (doit)
 			explain_memory_verbosity = EXPLAIN_MEMORY_VERBOSITY_DETAIL;
+	}
+	else if (pg_strcasecmp(newval, "debug") == 0)
+	{
+		if (doit)
+			explain_memory_verbosity = EXPLAIN_MEMORY_VERBOSITY_DEBUG;
 	}
 	else
 	{

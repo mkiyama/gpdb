@@ -123,7 +123,6 @@ groups:
 {% if "UD" in test_sections %}
   ## --------------------------------------------------------------------
   - gate_ud_start
-  - regression_tests_pxf
   - regression_tests_gphdfs_hadoop_centos
   - regression_tests_gphdfs_mapr_centos
   - gate_ud_end
@@ -283,7 +282,6 @@ groups:
 - name: G:UD
   jobs:
   - gate_ud_start
-  - regression_tests_pxf
   - regression_tests_gphdfs_hadoop_centos
   - regression_tests_gphdfs_mapr_centos
   - gate_ud_end
@@ -378,15 +376,15 @@ resources:
   type: terraform
   source:
     env:
-      AWS_ACCESS_KEY_ID: {{gpdb4-tf-machine-access-key-id}}
-      AWS_SECRET_ACCESS_KEY: {{gpdb4-tf-machine-secret-access-key}}
+      AWS_ACCESS_KEY_ID: {{tf-machine-access-key-id}}
+      AWS_SECRET_ACCESS_KEY: {{tf-machine-secret-access-key}}
     storage:
-      access_key_id: {{gpdb4-tf-machine-access-key-id}}
-      secret_access_key: {{gpdb4-tf-machine-secret-access-key}}
+      access_key_id: {{tf-machine-access-key-id}}
+      secret_access_key: {{tf-machine-secret-access-key}}
       region_name: {{aws-region}}
       # This is not parameterized, on purpose. All tfstates will go to this spot,
       # and different teams will place there clusters' tfstate files under different paths
-      bucket: pivotal-pa-toolsmiths-pipeline-dynamic-terraform
+      bucket: gpdb5-pipeline-dynamic-terraform
       bucket_path: clusters-aws/
 
 {% endif %}
@@ -423,21 +421,6 @@ resources:
     private_key: {{gpaddon-git-key}}
     uri: {{gpaddon-git-remote}}
 
-{% if "UD" in test_sections %}
-- name: pxf_infra_src
-  type: git
-  source:
-    branch: {{pxf_infra-git-branch}}
-    private_key: {{pxf_infra-git-key}}
-    uri: {{pxf_infra-git-remote}}
-
-- name: centos6-gpdb-dev-pxf-hdp
-  type: docker-image
-  source:
-    repository: pivotaldata/gpdb-pxf-dev
-    tag: centos6-hdp-server
-
-{% endif %}
 - name: debian_release
   type: git
   source:
@@ -542,17 +525,6 @@ resources:
     region_name: {{aws-region}}
     secret_access_key: {{bucket-secret-access-key}}
     versioned_file: release_candidates/bin_gpdb_sles11/gpdb5/bin_gpdb.tar.gz
-
-{% endif %}
-{% if "UD" in test_sections %}
-- name: pxf_tarball
-  type: s3
-  source:
-    access_key_id: {{bucket-access-key-id}}
-    bucket: {{pxf-aws-bucket-name}}
-    region_name: {{aws-region}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: pxf_artifacts/prod/gpdb_branch_5X_STABLE/stable/pxf.tar.gz
 
 {% endif %}
 - name: compiled_bits_ubuntu16
@@ -882,7 +854,7 @@ dpm_ccp_destroy_anchor: &dpm_ccp_destroy
   params:
     action: destroy
     env_name_file: terraform_for_dpm/name
-    terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+    terraform_source: ccp_src/aws/
     vars:
       aws_instance-node-instance_type: t2.micro #t2.micro is ignored in destroy, but aws_instance-node-instance_type is required.
   get_params:
@@ -896,12 +868,12 @@ ccp_gen_cluster_default_params_anchor: &ccp_gen_cluster_default_params
   BUCKET_NAME: {{tf-bucket-name}}
   CLOUD_PROVIDER: google
 
-ccp_gpdb4_gen_cluster_default_params_anchor: &ccp_gpdb4_gen_cluster_default_params
-  AWS_ACCESS_KEY_ID: {{gpdb4-tf-machine-access-key-id}}
-  AWS_SECRET_ACCESS_KEY: {{gpdb4-tf-machine-secret-access-key}}
+ccp_aws_gen_cluster_default_params_anchor: &ccp_aws_gen_cluster_default_params
+  AWS_ACCESS_KEY_ID: {{tf-machine-access-key-id}}
+  AWS_SECRET_ACCESS_KEY: {{tf-machine-secret-access-key}}
   AWS_DEFAULT_REGION: {{aws-region}}
   BUCKET_PATH: clusters-aws/
-  BUCKET_NAME: pivotal-pa-toolsmiths-pipeline-dynamic-terraform
+  BUCKET_NAME: {{tf-bucket-name}}
   CLOUD_PROVIDER: aws
 
 set_failed_anchor: &set_failed
@@ -2579,7 +2551,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["ddboost"]
@@ -2589,7 +2561,7 @@ jobs:
     tags: ["ddboost"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -2657,7 +2629,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["ddboost"]
@@ -2667,7 +2639,7 @@ jobs:
     tags: ["ddboost"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -2735,7 +2707,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["ddboost"]
@@ -2745,7 +2717,7 @@ jobs:
     tags: ["ddboost"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -2815,7 +2787,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["netbackup"]
@@ -2825,7 +2797,7 @@ jobs:
     tags: ["netbackup"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -2873,7 +2845,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["netbackup"]
@@ -2883,7 +2855,7 @@ jobs:
     tags: ["netbackup"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -2931,7 +2903,7 @@ jobs:
   - put: terraform_for_dpm
     params:
       <<: *ccp_default_params
-      terraform_source: ccp_src/aws-pivotal-pa-toolsmiths/
+      terraform_source: ccp_src/aws/
       vars:
         <<: *ccp_aws_default_vars
     tags: ["netbackup"]
@@ -2941,7 +2913,7 @@ jobs:
     tags: ["netbackup"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
-      <<: *ccp_gpdb4_gen_cluster_default_params
+      <<: *ccp_aws_gen_cluster_default_params
     on_failure:
       <<: *dpm_ccp_destroy
   - task: gpinitsystem
@@ -3289,28 +3261,6 @@ jobs:
       passed:
       - gate_compile_end
 
-- name: regression_tests_pxf
-  plan:
-  - aggregate:
-    - get: gpdb_src
-      passed: [gate_ud_start]
-    - get: bin_gpdb
-      resource: bin_gpdb_centos6
-      passed: [gate_ud_start]
-      trigger: [[ test_trigger ]]
-    - get: pxf_tarball
-      trigger: [[ test_trigger ]]
-    - get: pxf_infra_src
-    - get: centos6-gpdb-dev-pxf-hdp
-  - task: test_pxf
-    file: pxf_infra_src/concourse/test_pxf.yml
-    image: centos6-gpdb-dev-pxf-hdp
-    params:
-      GROUP: smoke
-      HADOOP_CLIENT: HDP
-      TARGET_OS: centos
-      TARGET_OS_VERSION: 6
-
 - name: regression_tests_gphdfs_hadoop_centos
   plan:
   - aggregate:
@@ -3367,7 +3317,6 @@ jobs:
   - aggregate:
     - get: gpdb_src
       passed: &gate_ud_end
-      - regression_tests_pxf
       - regression_tests_gphdfs_hadoop_centos
       - regression_tests_gphdfs_mapr_centos
       trigger: true
@@ -3642,7 +3591,6 @@ jobs:
       - QP_memory-accounting
       - regression_tests_gphdfs_hadoop_centos
       - regression_tests_gphdfs_mapr_centos
-      - regression_tests_pxf
       - DPM_backup-restore_ddboost_part1
       - DPM_backup-restore_ddboost_part2
       - DPM_backup-restore_ddboost_part3
