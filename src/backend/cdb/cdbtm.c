@@ -41,6 +41,7 @@
 #include "access/twophase.h"
 #include "access/distributedlog.h"
 #include "postmaster/postmaster.h"
+#include "port/atomics.h"
 #include "storage/procarray.h"
 
 #include "cdb/cdbllize.h"
@@ -67,10 +68,9 @@ extern bool Test_print_direct_dispatch_info;
 #define UTILITYMODEDTMREDO_FILE "savedtmredo.file"
 
 static LWLockId shmControlLock;
-static slock_t *shmControlSeqnoLock;
 static volatile bool *shmTmRecoverred;
 volatile DistributedTransactionTimeStamp *shmDistribTimeStamp;
-static volatile DistributedTransactionId *shmGIDSeq = NULL;
+volatile DistributedTransactionId *shmGIDSeq;
 
 volatile bool *shmDtmStarted;
 uint32 *shmNextSnapshotId;
@@ -777,6 +777,7 @@ doNotifyingCommitPrepared(void)
 	bool		badGangs;
 	int			retry = 0;
 	volatile int savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;;
 
 	CdbDispatchDirectDesc direct = default_dispatch_direct_desc;
 
@@ -806,6 +807,7 @@ doNotifyingCommitPrepared(void)
 		/*
 		 * restore the previous value, which is reset to 0 in errfinish.
 		 */
+		MemoryContextSwitchTo(oldcontext);
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
 		succeeded = false;
 		FlushErrorState();
@@ -855,6 +857,7 @@ doNotifyingCommitPrepared(void)
 			/*
 			 * restore the previous value, which is reset to 0 in errfinish.
 			 */
+			MemoryContextSwitchTo(oldcontext);
 			InterruptHoldoffCount = savedInterruptHoldoffCount;
 			succeeded = false;
 			FlushErrorState();
@@ -881,6 +884,7 @@ retryAbortPrepared(void)
 	bool		succeeded = false;
 	bool		badGangs = false;
 	volatile int savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;;
 
 	CdbDispatchDirectDesc direct = default_dispatch_direct_desc;
 
@@ -920,6 +924,7 @@ retryAbortPrepared(void)
 			/*
 			 * restore the previous value, which is reset to 0 in errfinish.
 			 */
+			MemoryContextSwitchTo(oldcontext);
 			InterruptHoldoffCount = savedInterruptHoldoffCount;
 			succeeded = false;
 			FlushErrorState();
@@ -941,6 +946,7 @@ doNotifyingAbort(void)
 	bool		succeeded;
 	bool		badGangs;
 	volatile int savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	CdbDispatchDirectDesc direct = default_dispatch_direct_desc;
 
@@ -1027,6 +1033,7 @@ doNotifyingAbort(void)
 			/*
 			 * restore the previous value, which is reset to 0 in errfinish.
 			 */
+			MemoryContextSwitchTo(oldcontext);
 			InterruptHoldoffCount = savedInterruptHoldoffCount;
 			succeeded = false;
 			FlushErrorState();
@@ -1364,7 +1371,7 @@ getSuperuser(Oid *userOid)
 				BoolGetDatum(true));
 
 	auth_rel = heap_open(AuthIdRelationId, AccessShareLock);
-	auth_scan = heap_beginscan(auth_rel, SnapshotNow, 2, key);
+	auth_scan = heap_beginscan_catalog(auth_rel, 2, key);
 
 	while (HeapTupleIsValid(auth_tup = heap_getnext(auth_scan,
 													ForwardScanDirection)))
@@ -1570,7 +1577,6 @@ tmShmemInit(void)
 		elog(FATAL, "could not initialize transaction manager share memory");
 
 	shmControlLock = shared->ControlLock;
-	shmControlSeqnoLock = &shared->ControlSeqnoLock;
 	shmTmRecoverred = &shared->recoverred;
 	shmDistribTimeStamp = &shared->distribTimeStamp;
 	shmGIDSeq = &shared->seqno;
@@ -1588,6 +1594,7 @@ tmShmemInit(void)
 		elog(DEBUG1, "DTM start timestamp %u", *shmDistribTimeStamp);
 
 		*shmGIDSeq = FirstDistributedTransactionId;
+		ShmemVariableCache->latestCompletedDxid = InvalidDistributedTransactionId;
 	}
 	shmDtmStarted = &shared->DtmStarted;
 	shmNextSnapshotId = &shared->NextSnapshotId;
@@ -1600,7 +1607,6 @@ tmShmemInit(void)
 		shared->ControlLock = LWLockAssign();
 		shmControlLock = shared->ControlLock;
 
-		SpinLockInit(shmControlSeqnoLock);
 		*shmNextSnapshotId = 0;
 		*shmDtmStarted = false;
 		*shmTmRecoverred = false;
@@ -2242,31 +2248,13 @@ generateGID(void)
 {
 	DistributedTransactionId gxid;
 
-	SpinLockAcquire(shmControlSeqnoLock);
+	gxid = pg_atomic_add_fetch_u32((pg_atomic_uint32*)shmGIDSeq, 1);
+	if (gxid == LastDistributedTransactionId)
+		ereport(PANIC,
+				(errmsg("reached the limit of %u global transactions per start",
+						LastDistributedTransactionId)));
 
-	/* tm lock acquired by caller */
-	if (*shmGIDSeq >= LastDistributedTransactionId)
-	{
-		SpinLockRelease(shmControlSeqnoLock);
-		ereport(FATAL,
-				(errmsg("reached limit of %u global transactions per start", LastDistributedTransactionId)));
-	}
-	gxid = ++(*shmGIDSeq);
-
-	SpinLockRelease(shmControlSeqnoLock);
 	return gxid;
-}
-
-/*
- * Return the highest global transaction id that has been generated.
- */
-DistributedTransactionId
-getMaxDistributedXid(void)
-{
-	if (!shmGIDSeq)
-		return 0;
-
-	return *shmGIDSeq;
 }
 
 /*
@@ -2306,9 +2294,6 @@ recoverTM(void)
 	recoverInDoubtTransactions();
 
 	/* finished recovery successfully. */
-
-	*shmGIDSeq = 1;
-
 	*shmDtmStarted = true;
 	elog(LOG, "DTM Started");
 }

@@ -24,7 +24,7 @@ test: gp_tablespace gp_aggregates gp_metadata variadic_parameters default_parame
 test: spi_processed64bit
 test: python_processed64bit
 
-test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp notin percentile join_gp union_gp gpcopy gp_create_table gp_create_view window_views
+test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp notin percentile join_gp union_gp gpcopy gp_create_table gp_create_view window_views namespace_gp
 test: filter gpctas gpdist matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var guc_gp gp_explain distributed_transactions explain_format
 
 # bitmap_index triggers recovery, run it seperately
@@ -223,6 +223,11 @@ test: psql_gp_commands pg_resetxlog dropdb_check_shared_buffer_cache
 
 # Check for shmem leak for instrumentation slots
 test: instr_in_shmem_verify
+
+# This cannot run in parallel because other tests could increment the Oid
+# counters and make the Oid counter observations hardcoded in the answer file
+# incorrect.
+test: oid_wraparound
 
 # fts_recovery_in_progresss uses fault injectors to simulate FTS fault states,
 # hence it should be run in isolation.
