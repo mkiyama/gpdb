@@ -464,6 +464,7 @@ _outModifyTable(StringInfo str, const ModifyTable *node)
 	WRITE_NODE_FIELD(action_col_idxes);
 	WRITE_NODE_FIELD(ctid_col_idxes);
 	WRITE_NODE_FIELD(oid_col_idxes);
+	WRITE_BOOL_FIELD(isReshuffle);
 }
 
 static void
@@ -1211,6 +1212,21 @@ _outSplitUpdate(StringInfo str, const SplitUpdate *node)
 	WRITE_NODE_FIELD(insertColIdx);
 	WRITE_NODE_FIELD(deleteColIdx);
 
+	_outPlanInfo(str, (Plan *) node);
+}
+
+/*
+ * _outReshuffle
+ */
+static void
+_outReshuffle(StringInfo str, const Reshuffle *node)
+{
+	WRITE_NODE_TYPE("Reshuffle");
+
+	WRITE_INT_FIELD(tupleSegIdx);
+	WRITE_NODE_FIELD(policyAttrs);
+	WRITE_INT_FIELD(oldSegs);
+	WRITE_INT_FIELD(ptype);
 	_outPlanInfo(str, (Plan *) node);
 }
 
@@ -3433,6 +3449,7 @@ _outUpdateStmt(StringInfo str, const UpdateStmt *node)
 	WRITE_NODE_FIELD(fromClause);
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(withClause);
+	WRITE_BOOL_FIELD(needReshuffle);
 }
 
 static void
@@ -3762,6 +3779,7 @@ _outQuery(StringInfo str, const Query *node)
 	WRITE_NODE_FIELD(setOperations);
 	WRITE_NODE_FIELD(constraintDeps);
 	WRITE_BOOL_FIELD(isCTAS);
+	WRITE_BOOL_FIELD(needReshuffle);
 
 	/* Don't serialize policy */
 }
@@ -4584,6 +4602,19 @@ _outAlterTSDictionaryStmt(StringInfo str, const AlterTSDictionaryStmt *node)
 
 #ifndef COMPILING_BINARY_FUNCS
 static void
+_outReshuffleExpr(StringInfo str, const ReshuffleExpr *node)
+{
+	WRITE_NODE_TYPE("RESHUFFLEEXPR");
+
+	WRITE_INT_FIELD(newSegs);
+	WRITE_INT_FIELD(oldSegs);
+	WRITE_NODE_FIELD(hashKeys);
+	WRITE_NODE_FIELD(hashTypes);
+	WRITE_INT_FIELD(ptype);
+}
+
+
+static void
 _outTupleDescNode(StringInfo str, const TupleDescNode *node)
 {
 	int			i;
@@ -4789,6 +4820,9 @@ _outNode(StringInfo str, const void *obj)
 				break;
 			case T_SplitUpdate:
 				_outSplitUpdate(str, obj);
+				break;
+			case T_Reshuffle:
+				_outReshuffle(str, obj);
 				break;
 			case T_RowTrigger:
 				_outRowTrigger(str, obj);
@@ -5522,7 +5556,9 @@ _outNode(StringInfo str, const void *obj)
 			case T_AlterTSDictionaryStmt:
 				_outAlterTSDictionaryStmt(str, obj);
 				break;
-
+			case T_ReshuffleExpr:
+                _outReshuffleExpr(str, obj);
+				break;
 			default:
 
 				/*

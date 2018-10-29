@@ -362,6 +362,7 @@ typedef struct ModifyTable
 	List	   *action_col_idxes;
 	List	   *ctid_col_idxes;
 	List	   *oid_col_idxes;
+	bool		isReshuffle;
 } ModifyTable;
 
 /* ----------------
@@ -1309,8 +1310,20 @@ typedef struct SplitUpdate
 	AttrNumber	tupleoidColIdx;		/* index of tuple oid column into the target list */
 	List		*insertColIdx;		/* list of columns to INSERT into the target list */
 	List		*deleteColIdx;		/* list of columns to DELETE into the target list */
-
 } SplitUpdate;
+
+/*
+ * Reshuffle Node
+ * More details please read the description in the nodeReshuffle.c
+ */
+typedef struct Reshuffle
+{
+	Plan plan;
+	AttrNumber tupleSegIdx;
+	List *policyAttrs;
+	int oldSegs;
+	GpPolicyType ptype;
+} Reshuffle;
 
 /*
  * AssertOp Node

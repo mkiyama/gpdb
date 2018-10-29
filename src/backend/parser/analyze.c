@@ -50,6 +50,7 @@
 #include "utils/rel.h"
 
 #include "cdb/cdbvars.h"
+#include "cdb/cdbutil.h"
 #include "catalog/gp_policy.h"
 #include "access/htup_details.h"
 #include "optimizer/clauses.h"
@@ -3051,6 +3052,8 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 
 	assign_query_collations(pstate, qry);
 
+	qry->needReshuffle = stmt->needReshuffle;
+
 	return qry;
 }
 
@@ -3663,6 +3666,8 @@ setQryDistributionPolicy(IntoClause *into, Query *qry)
 
 	dist = (DistributedBy *)into->distributedBy;
 
+	dist->numsegments = GP_POLICY_ALL_NUMSEGMENTS;
+
 	/*
 	 * We have a DISTRIBUTED BY column list specified by the user
 	 * Process it now and set the distribution policy.
@@ -3674,7 +3679,7 @@ setQryDistributionPolicy(IntoClause *into, Query *qry)
 						MaxPolicyAttributeNumber)));
 
 	if (dist->ptype == POLICYTYPE_REPLICATED)
-		qry->intoPolicy = createReplicatedGpPolicy(NULL, dist->numsegments);
+		qry->intoPolicy = createReplicatedGpPolicy(dist->numsegments);
 	else
 	{
 		List	*policykeys = NIL;
@@ -3696,7 +3701,7 @@ setQryDistributionPolicy(IntoClause *into, Query *qry)
 			policykeys = lappend_int(policykeys, keyindex);
 		}
 
-		qry->intoPolicy = createHashPartitionedPolicy(NULL, policykeys,
+		qry->intoPolicy = createHashPartitionedPolicy(policykeys,
 													  dist->numsegments);
 	}
 }

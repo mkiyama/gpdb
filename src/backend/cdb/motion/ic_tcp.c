@@ -346,7 +346,7 @@ InitMotionTCP(int *listenerSocketFd, uint16 *listenerPort)
 	tval.tv_usec = 500000;
 
 #ifdef pg_on_solaris
-	listenerBacklog = Min(1024, Max(GpIdentity.numsegments * 4, listenerBacklog));
+	listenerBacklog = Min(1024, Max(getgpsegmentCount() * 4, listenerBacklog));
 #endif
 
 	setupTCPListeningSocket(listenerBacklog, listenerSocketFd, listenerPort);
@@ -1029,7 +1029,8 @@ readRegisterMessage(ChunkTransportState *transportStates,
 	RegisterMessage msg;
 	MotionConn *newConn;
 	ChunkTransportStateEntry *pEntry = NULL;
-	CdbProcess *cdbproc;
+	CdbProcess *cdbproc = NULL;
+	ListCell	*lc;
 
 	/* Get ready to receive the Register message. */
 	if (conn->state != mcsRecvRegMsg)
@@ -1150,19 +1151,20 @@ readRegisterMessage(ChunkTransportState *transportStates,
 	getChunkTransportState(transportStates, msg.sendSliceIndex, &pEntry);
 	Assert(pEntry);
 
-	/*
-	 * Find and verify the CdbProcess node for the sending process.
-	 */
-	if (list_length(pEntry->sendSlice->primaryProcesses) == 1)
-		iconn = 0;
-	else
-		iconn = msg.srcContentId;
+	foreach_with_count(lc, pEntry->sendSlice->primaryProcesses, iconn)
+	{
+		cdbproc = (CdbProcess *)lfirst(lc);
 
-	cdbproc = (CdbProcess *) list_nth(pEntry->sendSlice->primaryProcesses, iconn);
+		if (!cdbproc)
+			continue;
 
-	if (msg.srcContentId != cdbproc->contentid ||
-		msg.srcListenerPort != cdbproc->listenerPort ||
-		msg.srcPid != cdbproc->pid)
+		if (msg.srcContentId == cdbproc->contentid &&
+			msg.srcListenerPort == cdbproc->listenerPort &&
+			msg.srcPid == cdbproc->pid)
+			break;
+	}
+
+	if (iconn == list_length(pEntry->sendSlice->primaryProcesses))
 	{
 		ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 						errmsg("Interconnect error: Invalid registration "

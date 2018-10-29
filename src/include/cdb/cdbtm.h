@@ -232,10 +232,10 @@ typedef struct TMGXACT
 
 	bool						badPrepareGangs;
 
-	bool						directTransaction;
-	uint16						directTransactionContentId;
 	bool						writerGangLost;
-	bool						gxidDispatched;
+
+	Bitmapset					*twophaseSegmentsMap;
+	List						*twophaseSegments;
 }	TMGXACT;
 
 typedef struct TMGXACTSTATUS
@@ -352,6 +352,6 @@ extern void markCurrentGxactWriterGangLost(void);
 
 extern bool currentGxactWriterGangLost(void);
 
-extern bool isSafeToRecreateWriter(void);
-extern void markCurrentGxactDispatched(void);
+extern void addToGxactTwophaseSegments(struct Gang* gp);
+
 #endif   /* CDBTM_H */

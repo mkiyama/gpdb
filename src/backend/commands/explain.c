@@ -893,7 +893,6 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 		{
 			if (slice->directDispatch.isDirectDispatch)
 			{
-				Assert(list_length(slice->directDispatch.contentIds) == 1);
 				segments = list_length(slice->directDispatch.contentIds);
 			}
 			else if (es->pstmt->planGen == PLANGEN_PLANNER)
@@ -1442,7 +1441,6 @@ ExplainNode(PlanState *planstate, List *ancestors,
 					if (slice->directDispatch.isDirectDispatch)
 					{
 						/* Special handling on direct dispatch */
-						Assert(list_length(slice->directDispatch.contentIds) == 1);
 						motion_snd = list_length(slice->directDispatch.contentIds);
 					}
 					else if (plan->lefttree->flow->flotype == FLOW_SINGLETON)
@@ -1494,6 +1492,9 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 		case T_SplitUpdate:
 			pname = sname = "Split";
+			break;
+		case T_Reshuffle:
+			pname = "Reshuffle";
 			break;
 		case T_AssertOp:
 			pname = sname = "Assert";

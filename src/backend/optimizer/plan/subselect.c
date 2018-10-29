@@ -425,7 +425,7 @@ static bool QueryHasDistributedRelation(Query *q)
 		if (rte->relid != InvalidOid
 				&& rte->rtekind == RTE_RELATION)
 		{
-			GpPolicy *policy = GpPolicyFetch(CurrentMemoryContext, rte->relid);
+			GpPolicy *policy = GpPolicyFetch(rte->relid);
 			if (GpPolicyIsPartitioned(policy))
 			{
 				pfree(policy);
@@ -2822,6 +2822,7 @@ finalize_plan(PlannerInfo *root, Plan *plan, Bitmapset *valid_params,
 		case T_SetOp:
 		case T_Repeat:
 		case T_SplitUpdate:
+		case T_Reshuffle:
 			break;
 
 		default:
