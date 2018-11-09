@@ -1046,9 +1046,6 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 	 * Since we intend to execute the plan, inventory the slice tree,
 	 * allocate gangs, and associate them with slices.
 	 *
-	 * For now, always use segment 'gp_singleton_segindex' for
-	 * singleton gangs.
-	 *
 	 * On return, gangs have been allocated and CDBProcess lists have
 	 * been filled in in the slice table.)
 	 * 
@@ -1122,9 +1119,9 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 		Assert(primaryGang != NULL);
 
 		if (Test_print_direct_dispatch_info)
-			elog(INFO, "Dispatch command to %s",
+			elog(INFO, "(slice %d) Dispatch command to %s", slice->sliceIndex,
 				 		segmentsToContentStr(slice->directDispatch.isDirectDispatch ?
-											slice->directDispatch.contentIds : NULL));
+											slice->directDispatch.contentIds : slice->segments));
 
 		/*
 		 * Bail out if already got an error or cancellation request.

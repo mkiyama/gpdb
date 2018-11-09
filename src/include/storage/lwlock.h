@@ -136,11 +136,9 @@ extern PGDLLIMPORT LWLockPadded *MainLWLockArray;
 #define ResQueueLock				(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 4].lock)
 #define ResGroupLock				(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 5].lock)
 #define ErrorLogLock				(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 6].lock)
-#define SessionStateLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 8].lock)
-#define RelfilenodeGenLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 9].lock)
-#define TablespaceHashLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 10].lock)
-#define GpReplicationConfigFileLock	(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 11].lock)
-#define GP_NUM_INDIVIDUAL_LWLOCKS		11
+#define SessionStateLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 7].lock)
+#define RelfilenodeGenLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 8].lock)
+#define GP_NUM_INDIVIDUAL_LWLOCKS		8
 
 /*
  * It would probably be better to allocate separate LWLock tranches

@@ -91,6 +91,7 @@
             <li>
               <xref href="#default_tablespace"/>
             </li>
+            <li><xref href="#default_text_search_config" format="dita"/></li>
             <li>
               <xref href="#default_transaction_isolation"/>
             </li>
@@ -1656,6 +1657,39 @@
       </table>
     </body>
   </topic>
+  <topic id="default_text_search_config">
+    <title>default_text_search_config</title>
+    <body>
+      <p>Selects the text search configuration that is used by those variants of the text search
+        functions that do not have an explicit argument specifying the configuration. See <xref
+          href="../../admin_guide/textsearch/full-text-search.xml#full-text-search"/> for further information. The
+        built-in default is <codeph>pg_catalog.simple</codeph>, but <codeph>initdb</codeph> will
+        initialize the configuration file with a setting that corresponds to the chosen
+          <codeph>lc_ctype</codeph> locale, if a configuration matching that locale can be
+        identified.</p>
+      <table id="table_enc_3mb_lfb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">The name of a text search configuration.</entry>
+              <entry colname="col2"><codeph>pg_catalog.simple</codeph></entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="default_transaction_isolation">
     <title>default_transaction_isolation</title>
     <body>
@@ -2569,9 +2603,17 @@
       <p>For <cmdname>CREATE TABLE</cmdname>, if the value of the parameter is <codeph>off</codeph>
         (the default), and the table creation command does not contain a <cmdname>DISTRIBUTED
           BY</cmdname> clause, Greenplum Database chooses the table distribution key based on the
-        command. If the <cmdname>LIKE</cmdname> or <cmdname>INHERITS</cmdname> clause is specified
-        in table creation command, the created table uses the same distribution key as the source or
-        parent table. </p>
+          command:<ul id="ul_rjb_gty_qfb">
+          <li>If a <codeph>LIKE</codeph> or <codeph>INHERITS</codeph> clause is specified, then
+            Greenplum copies the distribution key from the source or parent table.</li>
+          <li>If a <codeph>PRIMARY KEY</codeph> or <codeph>UNIQUE</codeph> constraints are
+            specified, then Greenplum chooses the largest subset of all the key columns as the
+            distribution key.</li>
+          <li>If neither constraints nor a <codeph>LIKE</codeph> or <codeph>INHERITS</codeph> clause
+            is specified, then Greenplum chooses the first suitable column as the distribution key.
+            (Columns with geometric or user-defined data types are not eligible as Greenplum
+            distribution key columns.)</li>
+        </ul></p>
       <p>If the value of the parameter is set to <codeph>on</codeph>, Greenplum Database follows
         these rules to create a table when the <cmdname>DISTRIBUTED BY</cmdname> clause is not
           specified:<ul id="ul_tbr_5kq_kq">

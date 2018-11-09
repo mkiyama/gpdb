@@ -7848,6 +7848,8 @@ dumpTableComment(Archive *fout, TableInfo *tbinfo,
 		if (objsubid == 0)
 		{
 			resetPQExpBuffer(target);
+			if (strcmp(reltypename, "EXTERNAL TABLE") == 0)
+				reltypename = "TABLE";
 			appendPQExpBuffer(target, "%s %s.", reltypename,
 							  fmtId(tbinfo->dobj.namespace->dobj.name));
 			appendPQExpBuffer(target, "%s ", fmtId(tbinfo->dobj.name));
@@ -13724,7 +13726,7 @@ dumpExternal(Archive *fout, TableInfo *tbinfo, PQExpBuffer q, PQExpBuffer delq)
 		}
 		else
 		{
-			/* not SREH and encoding colums yet */
+			/* not SREH and encoding columns yet */
 			appendPQExpBuffer(query,
 					"SELECT x.location, "
 						   "CASE WHEN x.command <> '' THEN x.location "

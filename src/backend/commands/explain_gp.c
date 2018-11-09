@@ -240,6 +240,7 @@ typedef struct CdbExplain_ShowStatCtx
 	double		workmemused_max;
 	double		workmemwanted_max;
 
+	bool		stats_gathered;
 	/* Per-slice statistics are deposited in this SliceSummary array */
 	int			nslice;			/* num of slots in slices array */
 	CdbExplain_SliceSummary *slices;	/* -> array[0..nslice-1] of
@@ -772,6 +773,9 @@ cdbexplain_recvExecStats(struct PlanState *planstate,
 
 	/* Transfer worker counts to SliceSummary. */
 	showstatctx->slices[sliceIndex].dispatchSummary = ds;
+
+	/* Signal that we've gathered all the statistics */
+	showstatctx->stats_gathered = true;
 
 	/* Clean up. */
 	if (ctx.msgptrs)
@@ -1539,17 +1543,25 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 		Motion	   *pMotion = (Motion *) planstate->plan;
 		int			curSliceId = pMotion->motionID;
 
-		/*
-		 * FIXME: Only displayed in text format
-		 * [#159442827]
-		 */
 		for (int iWorker = 0; iWorker < ctx->slices[curSliceId].nworker; iWorker++)
 		{
-			appendStringInfoSpaces(es->str, es->indent * 2);
-			appendStringInfo(es->str, "slice %d, seg %d\n", curSliceId, iWorker);
+			if (es->format == EXPLAIN_FORMAT_TEXT)
+			{
+				appendStringInfoSpaces(es->str, es->indent * 2);
+				appendStringInfo(es->str, "slice %d, seg %d\n", curSliceId, iWorker);
+			}
+			else
+			{
+				ExplainOpenGroup("MemoryAccounting", NULL, false, es);
+				ExplainPropertyInteger("Slice", curSliceId, es);
+				ExplainPropertyInteger("Segment", iWorker, es);
+			}
 
-			MemoryAccounting_CombinedAccountArrayToString(ctx->slices[curSliceId].memoryAccounts[iWorker],
-														  ctx->slices[curSliceId].memoryAccountCount[iWorker], es->str, es->indent + 1);
+			MemoryAccounting_CombinedAccountArrayToExplain(ctx->slices[curSliceId].memoryAccounts[iWorker],
+														   ctx->slices[curSliceId].memoryAccountCount[iWorker],
+														   es);
+			if (es->format != EXPLAIN_FORMAT_TEXT)
+				ExplainCloseGroup("MemoryAccounting", NULL, false, es);
 		}
 	}
 
@@ -1877,6 +1889,21 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 	}
 }								/* cdbexplain_showExecStats */
 
+/*
+ *	ExplainPrintExecStatsEnd
+ *			External API wrapper for cdbexplain_showExecStatsEnd
+ *
+ * This is an externally exposed wrapper for cdbexplain_showExecStatsEnd such
+ * that extensions, such as auto_explain, can leverage the Greenplum specific
+ * parts of the EXPLAIN machinery.
+ */
+void
+ExplainPrintExecStatsEnd(ExplainState *es, QueryDesc *queryDesc)
+{
+	cdbexplain_showExecStatsEnd(queryDesc->plannedstmt,
+								queryDesc->showstatctx,
+								queryDesc->estate, es);
+}
 
 /*
  * cdbexplain_showExecStatsEnd
@@ -1996,10 +2023,10 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
         /* Worker counts */
         slice = getCurrentSlice(estate, sliceIndex);
         if (slice &&
-            slice->numGangMembersToBeActive > 0 &&
-            slice->numGangMembersToBeActive != ss->dispatchSummary.nOk)
+            slice->gangSize > 0 &&
+            slice->gangSize != ss->dispatchSummary.nOk)
         {
-            int nNotDispatched = slice->numGangMembersToBeActive - ds->nResult + ds->nNotDispatched;
+            int nNotDispatched = slice->gangSize - ds->nResult + ds->nNotDispatched;
 
             es->str->data[flag] = (ss->dispatchSummary.nError > 0) ? 'X' : '_';
             StringInfoData workersInformationText;

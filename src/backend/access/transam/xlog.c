@@ -812,9 +812,7 @@ static XLogRecPtr XLogInsert_Internal(RmgrId rmid, uint8 info, XLogRecData *rdat
 static void CheckRecoveryConsistency(void);
 static XLogRecord *ReadCheckpointRecord(XLogReaderState *xlogreader,
 					 XLogRecPtr RecPtr, int whichChkpti, bool report);
-#if 0
 static bool rescanLatestTimeLine(void);
-#endif
 static void WriteControlFile(void);
 static void ReadControlFile(void);
 static char *str_time(pg_time_t tnow);
@@ -5164,7 +5162,7 @@ str_time(pg_time_t tnow)
  * The file is parsed using the main configuration parser.
  */
 void
-XLogReadRecoveryCommandFile(int emode)
+readRecoveryCommandFile(void)
 {
 	FILE	   *fd;
 	TimeLineID	rtli = 0;
@@ -5183,10 +5181,6 @@ XLogReadRecoveryCommandFile(int emode)
 				 errmsg("could not open recovery command file \"%s\": %m",
 						RECOVERY_COMMAND_FILE)));
 	}
-
-	ereport(emode,
-			(errmsg("Found recovery.conf file, checking appropriate parameters "
-					" for recovery in standby mode")));
 
 	/*
 	 * Since we're asking ParseConfigFp() to report errors as FATAL, there's
@@ -5394,6 +5388,33 @@ XLogReadRecoveryCommandFile(int emode)
 
 	/* Enable fetching from archive recovery area */
 	ArchiveRecoveryRequested = true;
+
+	/*
+	 * If user specified recovery_target_timeline, validate it or compute the
+	 * "latest" value.  We can't do this until after we've gotten the restore
+	 * command and set InArchiveRecovery, because we need to fetch timeline
+	 * history files from the archive.
+	 */
+	if (rtliGiven)
+	{
+		if (rtli)
+		{
+			/* Timeline 1 does not have a history file, all else should */
+			if (rtli != 1 && !existsTimeLineHistory(rtli))
+				ereport(FATAL,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("recovery target timeline %u does not exist",
+								rtli)));
+			recoveryTargetTLI = rtli;
+			recoveryTargetIsLatest = false;
+		}
+		else
+		{
+			/* We start the "latest" search from pg_control's timeline */
+			recoveryTargetTLI = findNewestTimeLine(recoveryTargetTLI);
+			recoveryTargetIsLatest = true;
+		}
+	}
 
 	FreeConfigVariables(head);
 }
@@ -6303,7 +6324,7 @@ StartupXLOG(void)
 	 * Check for recovery control file, and if so set up state for offline
 	 * recovery
 	 */
-	XLogReadRecoveryCommandFile(LOG);
+	readRecoveryCommandFile();
 
 	if (StandbyModeRequested)
 	{
@@ -6390,8 +6411,6 @@ StartupXLOG(void)
 
 		/* Activate recovery in standby mode */
 		StandbyMode = true;
-
-		Assert(backupEndRequired);
 
 		/*
 		 * When a backup_label file is present, we want to roll forward from
@@ -6675,12 +6694,6 @@ StartupXLOG(void)
 	}
 	else if (ControlFile->state != DB_SHUTDOWNED)
 		InRecovery = true;
-
-	if (InRecovery && !IsUnderPostmaster)
-	{
-		ereport(FATAL,
-				(errmsg("Database must be shutdown cleanly when using single backend start")));
-	}
 
 	/* Recovery from xlog */
 	if (InRecovery)
@@ -11107,20 +11120,12 @@ read_backup_label(XLogRecPtr *checkPointLoc, bool *backupEndRequired,
 		/* Streaming backup method is only supported */
 		if (strcmp(backuptype, "streamed") == 0)
 			*backupEndRequired = true;
-		else
-			ereport(FATAL,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("invalid data in file \"%s\"", BACKUP_LABEL_FILE)));
-
 	}
 
 	if (fscanf(lfp, "BACKUP FROM: %19s\n", backupfrom) == 1)
 	{
-		/* Backup from standby is not supported */
-		if (strcmp(backupfrom, "master") != 0)
-			ereport(FATAL,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("invalid data in file \"%s\"", BACKUP_LABEL_FILE)));
+		if (strcmp(backupfrom, "standby") == 0)
+			*backupFromStandby = true;
 	}
 
 	if (ferror(lfp) || FreeFile(lfp))

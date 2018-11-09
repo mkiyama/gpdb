@@ -3731,9 +3731,6 @@ ClosePortalStmt:
  *				where 'file' can be one of:
  *				{ PROGRAM 'command' | STDIN | STDOUT | 'filename' }
  *
- *				where 'file' can be one of:
- *				{ PROGRAM 'command' | STDIN | STDOUT | 'filename' }
- *
  *				In the preferred syntax the options are comma-separated
  *				and use generic identifiers instead of keywords.  The pre-9.0
  *				syntax had a hard-wired, space-separated set of options.
@@ -4559,7 +4556,7 @@ columnList:
 
 columnListUnique:
 			columnElem								{ $$ = list_make1($1); }
-			| columnList ',' columnElem
+			| columnListUnique ',' columnElem
 				{
 					if (list_member($1, $3))
 						ereport(ERROR,
@@ -9907,11 +9904,11 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
-			| ALTER PROTOCOL name RENAME TO name
+			| ALTER PROTOCOL any_name RENAME TO name
 				{
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_EXTPROTOCOL;
-					n->subname = $3;
+					n->object = $3;
 					n->newname = $6;
 					$$ = (Node *)n;
 				}

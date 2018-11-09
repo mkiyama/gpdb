@@ -123,10 +123,6 @@ static void ExplainProperty(const char *qlabel, const char *value,
 static void ExplainPropertyStringInfo(const char *qlabel, ExplainState *es,
 									  const char *fmt,...)
 									  __attribute__((format(PG_PRINTF_ATTRIBUTE, 3, 4)));
-static void ExplainOpenGroup(const char *objtype, const char *labelname,
-				 bool labeled, ExplainState *es);
-static void ExplainCloseGroup(const char *objtype, const char *labelname,
-				  bool labeled, ExplainState *es);
 static void ExplainDummyGroup(const char *objtype, const char *labelname,
 				  ExplainState *es);
 static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
@@ -711,8 +707,12 @@ ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 	/* CDB: Find slice table entry for the root slice. */
 	es->currentSlice = getCurrentSlice(estate, LocallyExecutingSliceIndex(estate));
 
-	/* Get local stats if root slice was executed here in the qDisp. */
-	if (es->analyze)
+	/*
+	 * Get local stats if root slice was executed here in the qDisp, as long
+	 * as we haven't already gathered the statistics. This can happen when an
+	 * executor hook generates EXPLAIN output.
+	 */
+	if (es->analyze && !es->showstatctx->stats_gathered)
 	{
 		if (!es->currentSlice || sliceRunsOnQD(es->currentSlice))
 			cdbexplain_localExecStats(queryDesc->planstate, es->showstatctx);
@@ -927,7 +927,7 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 			}
 			else
 			{
-				segments = slice->numGangMembersToBeActive;
+				segments = slice->gangSize;
 			}
 			break;
 		}
@@ -1134,6 +1134,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	int			motion_snd;
 	float		scaleFactor = 1.0; /* we will divide planner estimates by this factor to produce
 									  per-segment estimates */
+	Slice		*parentSlice = NULL;
 
 	/* Remember who called us. */
 	parentplanstate = es->parentPlanState;
@@ -1177,8 +1178,13 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		SliceTable *sliceTable = planstate->state->es_sliceTable;
 
 		if (sliceTable)
+		{
 			es->currentSlice = (Slice *) list_nth(sliceTable->slices,
 												  pMotion->motionID);
+			parentSlice = es->currentSlice->parentIndex == -1 ? NULL :
+						  (Slice *) list_nth(sliceTable->slices,
+											 es->currentSlice->parentIndex);
+		}
 	}
 
 	switch (nodeTag(plan))
@@ -1390,13 +1396,13 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 		case T_Motion:
 			{
-				Motion	   *pMotion = (Motion *) plan;
+				Motion		*pMotion = (Motion *) plan;
 
 				Assert(plan->lefttree);
 				Assert(plan->lefttree->flow);
 
-				motion_snd = es->currentSlice->numGangMembersToBeActive;
-				motion_recv = 0;
+				motion_snd = es->currentSlice->gangSize;
+				motion_recv = (parentSlice == NULL ? 1 : parentSlice->gangSize);
 
 				/* scale the number of rows by the number of segments sending data */
 				scaleFactor = motion_snd;
@@ -1405,24 +1411,23 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				{
 					case MOTIONTYPE_HASH:
 						sname = "Redistribute Motion";
-						motion_recv = pMotion->numOutputSegs;
 						break;
 					case MOTIONTYPE_FIXED:
-						motion_recv = pMotion->numOutputSegs;
-						if (motion_recv == 0)
+						if (pMotion->isBroadcast)
 						{
 							sname = "Broadcast Motion";
-							motion_recv = getgpsegmentCount();
 						}
 						else if (plan->lefttree->flow->locustype == CdbLocusType_Replicated)
 						{
 							sname = "Explicit Gather Motion";
 							scaleFactor = 1;
+							motion_recv = 1;
 						}
 						else
 						{
 							sname = "Gather Motion";
 							scaleFactor = 1;
+							motion_recv = 1;
 						}
 						break;
 					case MOTIONTYPE_EXPLICIT:
@@ -1455,7 +1460,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 					}
 
 					if (pMotion->motionType == MOTIONTYPE_FIXED &&
-						pMotion->numOutputSegs != 0)
+						!pMotion->isBroadcast)
 					{
 						/* In Gather Motion always display receiver size as 1 */
 						motion_recv = 1;
@@ -3297,7 +3302,7 @@ ExplainPropertyFloat(const char *qlabel, double value, int ndigits,
  * If labeled is true, the group members will be labeled properties,
  * while if it's false, they'll be unlabeled objects.
  */
-static void
+void
 ExplainOpenGroup(const char *objtype, const char *labelname,
 				 bool labeled, ExplainState *es)
 {
@@ -3360,7 +3365,7 @@ ExplainOpenGroup(const char *objtype, const char *labelname,
  * Close a group of related objects.
  * Parameters must match the corresponding ExplainOpenGroup call.
  */
-static void
+void
 ExplainCloseGroup(const char *objtype, const char *labelname,
 				  bool labeled, ExplainState *es)
 {

@@ -52,10 +52,6 @@ extract_INT2OID_array(Datum array_datum, int *lenp, int16 **vecp);
 static GpPolicy *
 set_distribution_policy (Datum array_distribution, Datum numsegments);
 
-/* Get base type OID */
-static Oid
-get_base_dataType(Oid att_datatype);
-
 
 /*
  * Extract len and pointer to buffer from an int16[] (vector) Datum
@@ -118,37 +114,6 @@ set_distribution_policy (Datum array_distribution, Datum numsegments)
 }
 
 /* 
- * Get base data type from complex data types (e.g. Arrays) 
- */
-static Oid
-get_base_dataType(Oid att_datatype)
-{
-	Oid att_type = att_datatype;
-	
-	if (get_typtype(att_type) == 'd')
-	{
-		att_type = getBaseType(att_type);
-	}
-	
-	switch (att_type)
-	{
-		case INT2ARRAYOID:
-		case INT4ARRAYOID:
-		case INT8ARRAYOID:
-		case FLOAT4ARRAYOID:
-		case FLOAT8ARRAYOID:
-		case REGTYPEARRAYOID:
-			att_type = ANYARRAYOID;
-			/* Fall through */
-			break;
-		default:
-			break;
-	}
-	
-	return att_type;
-}
-
-/* 
  * Verifies the correct data distribution (given a GpPolicy) 
  * of a heap table in a segment. 
  */
@@ -162,6 +127,7 @@ gp_distribution_policy_heap_table_check(PG_FUNCTION_ARGS)
 	Oid relOid = PG_GETARG_OID(0);
 	Datum  array_distribution = PG_GETARG_DATUM(1);
 	Datum  numsegments = PG_GETARG_DATUM(2);
+	Oid		   *typeoids;
 
 	Assert(array_distribution);
 
@@ -182,38 +148,46 @@ gp_distribution_policy_heap_table_check(PG_FUNCTION_ARGS)
 
 	HeapScanDesc scandesc = heap_beginscan(rel, GetActiveSnapshot(), 0, NULL);
 	HeapTuple    tuple = heap_getnext(scandesc, ForwardScanDirection);
+	TupleDesc	desc = RelationGetDescr(rel);
+
+	/* Initialize hash function and structure */
+	CdbHash *hash;
+
+	typeoids = palloc(policy->nattrs * sizeof(Oid));
+	for(int i = 0; i < policy->nattrs; i++)
+	{
+		AttrNumber	attnum = policy->attrs[i];
+		Oid			att_type = desc->attrs[attnum]->atttypid;
+
+		typeoids[i] = att_type;
+	}
+	hash = makeCdbHash(policy->numsegments, policy->nattrs, typeoids);
 
 	while (HeapTupleIsValid(tuple))
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		/* Initialize hash function and structure */
-		CdbHash *hash = makeCdbHash(policy->numsegments);
 		cdbhashinit(hash);
-		
-		for(int i = 0; i < policy->nattrs; i++)
+
+		/* Add every attribute in the distribution policy to the hash */
+		for (int i = 0; i < policy->nattrs; i++)
 		{
-			bool            isNull;
-			Datum           attr;
-			TupleDesc desc = RelationGetDescr(rel);
-			
-			attr = heap_getattr(tuple, policy->attrs[i],
-							desc, &isNull);
-			
-			Oid att_type = get_base_dataType(desc->attrs[i]->atttypid);
-			/* Consider every attribute in the distribution policy
-			* as part of the hash computation */
-			cdbhash(hash, attr, att_type);
-			
+			int			attnum = policy->attrs[i];
+			bool		isNull;
+			Datum		attr;
+
+			attr = heap_getattr(tuple, attnum, desc, &isNull);
+
+			cdbhash(hash, i + 1, attr, isNull);
 		}
-		
+
 		/* End check if one tuple is in the wrong segment */
 		if (cdbhashreduce(hash) != GpIdentity.segindex)
 		{
 			result = false;
 			break;
 		}
-		
+
 		tuple = heap_getnext(scandesc, ForwardScanDirection);
 	}
 

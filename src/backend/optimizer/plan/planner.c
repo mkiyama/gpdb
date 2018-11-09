@@ -582,13 +582,6 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	Assert(config);
 	root->config = config;
 
-	if (Gp_role == GP_ROLE_DISPATCH && gp_session_id > -1)
-	{
-		/* Choose a segdb to which our singleton gangs should be dispatched. */
-		/* FIXME: do not hard code to 0 */
-		gp_singleton_segindex = 0;
-	}
-
 	root->hasRecursion = hasRecursion;
 	if (hasRecursion)
 		root->wt_param_id = SS_assign_special_param(root);
@@ -600,7 +593,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	 * If there is a WITH list, process each WITH query and build an initplan
 	 * SubPlan structure for it.
 	 *
-	 * Unlike upstrem, we do not use initplan + CteScan, so SS_process_ctes
+	 * Unlike upstream, we do not use initplan + CteScan, so SS_process_ctes
 	 * will generate unused initplans. Commenting out the following two
 	 * lines.
 	 */
@@ -2051,7 +2044,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		/*
 		 * CDB:  For now, we either - construct a general parallel plan, - let
 		 * the sequential planner handle the situation, or - construct a
-		 * sequential plan using the mix-max index optimization.
+		 * sequential plan using the min-max index optimization.
 		 *
 		 * Eventually we should add a parallel version of the min-max
 		 * optimization.  For now, it's either-or.
@@ -2846,7 +2839,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				}
 				else
 				{
-					result_plan = (Plan *) make_motion_gather(root, result_plan, -1, current_pathkeys);
+					result_plan = (Plan *) make_motion_gather(root, result_plan, current_pathkeys);
 				}
 				result_plan->total_cost += motion_cost_per_row * result_plan->plan_rows;
 			}
@@ -2936,8 +2929,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				result_plan = (Plan *) make_unique(result_plan, parse->distinctClause);
 				result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
 
-				result_plan = (Plan *) make_motion_gather(root, result_plan, -1,
-														  current_pathkeys);
+				result_plan = (Plan *) make_motion_gather(root, result_plan, current_pathkeys);
 			}
 
 			result_plan = (Plan *) make_unique(result_plan,
@@ -2976,8 +2968,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			 * handling below.
 			 */
 			current_pathkeys = root->sort_pathkeys;
-			result_plan = (Plan *) make_motion_gather(root, result_plan, -1,
-													  current_pathkeys);
+			result_plan = (Plan *) make_motion_gather(root, result_plan, current_pathkeys);
 		}
 	}
 

@@ -31,6 +31,7 @@
 #include "catalog/gp_id.h"
 #include "catalog/gp_segment_config.h"
 #include "catalog/indexing.h"
+#include "cdb/cdbhash.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbmotion.h"
 #include "cdb/cdbvars.h"
@@ -323,7 +324,7 @@ getCdbComponentInfo(bool DNSLookupAsError)
 	}
 
 	/*
-	 * We're done with the catalog entries, cleanup them up, closing all the
+	 * We're done with the catalog entries, clean them up, closing all the
 	 * relations we opened.
 	 */
 	heap_endscan(gp_seg_config_scan);
@@ -585,7 +586,7 @@ cdbcomponent_updateCdbComponents(void)
  *
  *
  * Storage for the SegmentInstances block and all subsidiary
- * strucures are allocated from the caller's context.
+ * structures are allocated from the caller's context.
  */
 CdbComponentDatabases *
 cdbcomponent_getCdbComponents(bool DNSLookupAsError)
@@ -1219,14 +1220,8 @@ makeRandomSegMap(int total_primaries, int total_to_skip)
 	{
 		/*
 		 * create a random int between 0 and (total_primaries - 1).
-		 *
-		 * NOTE that the lower and upper limits in cdb_randint() are inclusive
-		 * so we take them into account. In reality the chance of those limits
-		 * to get selected by the random generator is extremely small, so we
-		 * may want to find a better random generator some time (not critical
-		 * though).
 		 */
-		randint = cdb_randint(0, total_primaries - 1);
+		randint = cdbhashrandomseg(total_primaries);
 
 		/*
 		 * mark this random index 'true' in the skip map (marked to be

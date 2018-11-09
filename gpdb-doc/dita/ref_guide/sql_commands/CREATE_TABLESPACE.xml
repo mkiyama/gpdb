@@ -4,17 +4,6 @@
 <topic id="topic1">
   <title id="cf20941">CREATE TABLESPACE</title>
   <body>
-    <draft-comment author="msk">6.0.0 no filespace, per segment
-        overrides<p>gp_tablespace_location(tablespace_oid) gives location of tablespace . select
-        oid, * from pg_tablespace</p><p>TO DO - CHECK postgres CREATE TABLESPACE</p><p>DONE change
-        keyword OPTIONS to WITH - see <xref href="https://github.com/greenplum-db/gpdb/pull/5877"
-          format="html" scope="external">gpdb/pull/5877</xref></p><p>DROPPED GUCs <ul
-          id="ul_dfy_bqg_3fb">
-          <li><systemoutput>gp_max_tablespaces</systemoutput></li>
-          <li><systemoutput>gp_max_filespaces</systemoutput></li>
-          <li><systemoutput>gp_max_databases</systemoutput></li>
-        </ul></p><p>DROPPED TABLE pg_filespace_entry,
-      gp_persistent_tablespace_node</p></draft-comment>
     <p id="sql_command_desc">Defines a new tablespace.</p>
     <section id="section2">
       <title>Synopsis</title>
@@ -25,7 +14,9 @@
       <title>Description</title>
       <p><codeph>CREATE TABLESPACE</codeph> registers and configures a new tablespace for your
         Greenplum Database system. The tablespace name must be distinct from the name of any
-        existing tablespace in the system. </p>
+        existing tablespace in the system. A tablespace is a Greemplum Database system object (a
+        global object), you can use a tablespace from any database if you have appropriate
+        privileges.</p>
       <p>A tablespace allows superusers to define an alternative host file system location where the
         data files containing database objects (such as tables and indexes) reside.</p>
       <p>A user with appropriate privileges can pass a tablespace name to <codeph><xref
@@ -63,14 +54,14 @@
         <plentry>
           <pt>content<varname>ID_i</varname>='<varname>/path/to/dir_i</varname>'</pt>
           <pd>The value <varname>ID_i</varname> is the content ID for the segment instance.
-              <varname>/path/to/dir_i</varname> is absolute path to the host system file location
+              <varname>/path/to/dir_i</varname> is the absolute path to the host system file location
             that the segment instance uses as the root directory for the tablespace. You cannot
             specify the content ID of the master instance (<codeph>-1</codeph>). You can specify the
             same directory for multiple segments. </pd>
           <pd>If a segment instance is not listed in the <codeph>WITH</codeph> clause, Greenplum
             Database uses the directory specified in the <codeph>LOCATION</codeph> clause.</pd>
           <pd>When registering a tablepace, the directories should be empty and must be owned by the
-            PostgreSQL system user.</pd>
+            Greenplum Database system user.</pd>
         </plentry>
       </parml>
     </section>
@@ -78,7 +69,7 @@
       <title>Notes</title>
       <p>Tablespaces are only supported on systems that support symbolic links. </p>
       <p><codeph>CREATE TABLESPACE</codeph> cannot be executed inside a transaction block.</p>
-      <p>When creating tablespaces, ensure that file system location have sufficient I/O speed and
+      <p>When creating tablespaces, ensure that file system locations have sufficient I/O speed and
         available disk space.</p>
       <p>
         <codeph>CREATE TABLESPACE</codeph> creates symbolic links from the
@@ -87,12 +78,11 @@
       <p>The system catalog table <codeph>pg_tablespace</codeph> stores tablespace information. This
         command displays the tablespace OID values, names, and
         owner.<codeblock>SELECT oid, spcname, spcowner FROM pg_tablespace ;</codeblock></p>
-      <p>The Greenplum Database build-in function
+      <p>The Greenplum Database built-in function
             <codeph>gp_tablespace_location(<varname>tablespace_oid</varname>)</codeph> displays the
-        tablespace host system file locations for all segment instances. </p>
-      <p>This command lists the segment database IDs and host system file locations for the
-        tablespace with OID
-        <codeph>16385</codeph>.<codeblock>SELECT * FROM gp_tablespace_location(16385) </codeblock></p>
+        tablespace host system file locations for all segment instances. This command lists the
+        segment database IDs and host system file locations for the tablespace with OID
+          <codeph>16385</codeph>.<codeblock>SELECT * FROM gp_tablespace_location(16385) </codeblock></p>
     </section>
     <section id="section6">
       <title>Examples</title>
@@ -104,7 +94,7 @@
         file system location for the tablespace is specified in the <codeph>LOCATION</codeph>
         clause. </p>
       <codeblock>CREATE TABLESPACE mytblspace LOCATION '/gpdbtspc/mytestspace' WITH (content0='/temp/mytest', content1='/temp/mytest');</codeblock>
-      <p>The example specifies the same location for the two segment instances. You can specify
+      <p>The example specifies the same location for the two segment instances. You can a specify
         different location for each segment.</p>
     </section>
     <section id="section7">

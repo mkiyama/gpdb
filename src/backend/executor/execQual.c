@@ -5195,7 +5195,7 @@ ExecEvalCurrentOfExpr(ExprState *exprstate, ExprContext *econtext,
 	return BoolGetDatum(result);
 }
  
-/*
+/* ----------------------------------------------------------------
  *		ExecEvalReshuffleExpr
  *
  *		Evaluate an Reshuffle expression node.
@@ -5208,11 +5208,8 @@ ExecEvalReshuffleExpr(ReshuffleExprState *astate,
 					  ExprDoneCond *isDone)
 {
 	ReshuffleExpr *sr = (ReshuffleExpr *) astate->xprstate.expr;
-	ListCell *k;
-	ListCell *t;
-	CdbHash *hnew = NULL;
-	uint32 newSeg;
-	bool result;
+	uint32		newSeg;
+	bool		result;
 
 	Assert(!IS_QUERY_DISPATCHER());
 
@@ -5221,24 +5218,24 @@ ExecEvalReshuffleExpr(ReshuffleExprState *astate,
 		if (NULL != sr->hashKeys)
 		{
 			/* For hash distributed tables */
-			hnew = makeCdbHash(sr->newSegs);
-			cdbhashinit(hnew);
-			forboth(k, astate->hashKeys, t, astate->hashTypes)
+			ListCell   *k;
+			int			i;
+
+			cdbhashinit(astate->cdbhash);
+			i = 0;
+			foreach(k, astate->hashKeys)
 			{
-				if (*isNull)
-				{
-					cdbhashnull(hnew);
-				}
-				else
-				{
-					ExprState *vstate = (ExprState *) lfirst(k);
-					Oid tp = lfirst_oid(t);
-					Datum val = ExecEvalExpr(vstate, econtext, isNull, isDone);
-					cdbhash(hnew, val, tp);
-				}
+				ExprState *vstate = (ExprState *) lfirst(k);
+				Datum		val;
+				bool		valnull;
+
+				val = ExecEvalExpr(vstate, econtext, &valnull, isDone);
+
+				cdbhash(astate->cdbhash, i + 1, val, valnull);
+				i++;
 			}
 
-			newSeg = cdbhashreduce(hnew);
+			newSeg = cdbhashreduce(astate->cdbhash);
 			result = (GpIdentity.segindex != newSeg);
 		}
 		else
@@ -5246,12 +5243,13 @@ ExecEvalReshuffleExpr(ReshuffleExprState *astate,
 			/*
 			 * For random distributed tables
 			 *
-			 * We generate an random values [0, newSegs), when this
-			 * value is greater than oldSegs, it indicate that the
-			 * tuple need to reshuffle.
+			 * We generate a random value between[0, newSegs). When this
+			 * value is greater than oldSegs, it indicates that the tuple
+			 * needs to be reshuffled.
 			 */
-			int newSegs = getgpsegmentCount();
-			result = (cdb_randint((newSegs - 1), 0) >= sr->oldSegs);
+			int			newSegs = getgpsegmentCount();
+
+			result = (cdbhashrandomseg(newSegs) >= sr->oldSegs);
 		}
 	}
 	else if(sr->ptype == POLICYTYPE_REPLICATED)
@@ -5277,6 +5275,7 @@ ExecEvalReshuffleExpr(ReshuffleExprState *astate,
 	else
 		result = false;
 
+	*isNull = false;
 	return BoolGetDatum(result);
 
 }
@@ -6145,10 +6144,24 @@ ExecInitExpr(Expr *node, PlanState *parent)
 			{
 				ReshuffleExpr *sr = (ReshuffleExpr *) node;
 				ReshuffleExprState *exprstate = makeNode(ReshuffleExprState);
-				exprstate->hashKeys = (List*) ExecInitExpr((Expr *) sr->hashKeys, parent);
-				exprstate->hashTypes = sr->hashTypes;
+				Oid		   *typeoids;
+				int			i;
+				ListCell   *lc;
+
+				exprstate->hashKeys = (List *) ExecInitExpr((Expr *) sr->hashKeys, parent);
 				exprstate->xprstate.evalfunc = (ExprStateEvalFunc) ExecEvalReshuffleExpr;
-				state = (ExprState*)exprstate;
+
+				typeoids = (Oid *) palloc(list_length(sr->hashKeys) * sizeof(Oid));
+
+				i = 0;
+				foreach(lc, sr->hashTypes)
+				{
+					typeoids[i++] = lfirst_oid(lc);
+				}
+
+				exprstate->cdbhash = makeCdbHash(sr->newSegs, list_length(sr->hashTypes), typeoids);
+
+				state = (ExprState *) exprstate;
 			}
 		    break;
 

@@ -253,7 +253,7 @@ cdbpath_create_motion_path(PlannerInfo *root,
 		if (CdbPathLocus_IsPartitioned(locus))
 		{
 			/* No motion if subpath partitioning matches caller's request. */
-			if (cdbpathlocus_compare(CdbPathLocus_Comparison_Equal, subpath->locus, locus))
+			if (cdbpathlocus_equal(subpath->locus, locus))
 				return subpath;
 		}
 
@@ -1360,6 +1360,11 @@ cdbpath_motion_for_join(PlannerInfo *root,
 		/* Which rel is bigger? */
 		if (large_rel->bytes < small_rel->bytes)
 			CdbSwap(CdbpathMfjRel *, large_rel, small_rel);
+
+		/* Both side are distribued in 1 segment, it can join without motion. */
+		if (CdbPathLocus_NumSegments(large_rel->locus) == 1 &&
+			CdbPathLocus_NumSegments(small_rel->locus) == 1)
+			return large_rel->locus;
 
 		/* If joining on larger rel's partitioning key, redistribute smaller. */
 		if (!small_rel->require_existing_order &&

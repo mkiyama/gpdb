@@ -138,37 +138,28 @@
  * 	compute the Hash keys
  */
 static int
-EvalHashSegID(Datum *values, bool *nulls, List *policyAttrs,
-			  List *targetlist, int nsegs)
+EvalHashSegID(Datum *values, bool *nulls, List *policyAttrs, CdbHash *h)
 {
-	CdbHash *hnew = makeCdbHash(nsegs);
-	uint32 newSeg;
-	ListCell *lc;
+	uint32		newSeg;
+	ListCell   *lc;
+	int			i;
 
 	Assert(policyAttrs);
-	Assert(targetlist);
 
-	cdbhashinit(hnew);
+	cdbhashinit(h);
 
+	i = 0;
 	foreach(lc, policyAttrs)
 	{
 		AttrNumber attidx = lfirst_int(lc);
 
-		if (nulls[attidx - 1])
-		{
-			cdbhashnull(hnew);
-		}
-		else
-		{
-			TargetEntry *entry = list_nth(targetlist, attidx - 1);
-			cdbhash(hnew, values[attidx - 1], exprType((Node *) entry->expr));
-		}
+		cdbhash(h, i + 1, values[attidx - 1], nulls[attidx - 1]);
+		i++;
 	}
 
-	newSeg = cdbhashreduce(hnew);
+	newSeg = cdbhashreduce(h);
 
 	return newSeg;
-
 }
 
 /* ----------------------------------------------------------------
@@ -244,14 +235,15 @@ ExecReshuffle(ReshuffleState *node)
 						Int32GetDatum(EvalHashSegID(values,
 													nulls,
 													reshuffle->policyAttrs,
-													reshuffle->plan.targetlist,
-													getgpsegmentCount()));
+													node->cdbhash));
 			}
 			else
 			{
-				/* For random distributed tables*/
+				/* For random distributed tables */
 				int newSegs = getgpsegmentCount();
 				int oldSegs = reshuffle->oldSegs;
+
+				Assert(newSegs > oldSegs);
 
 				/*
 				 * Tuple with inserting action must be sent to other segments.
@@ -260,7 +252,7 @@ ExecReshuffle(ReshuffleState *node)
 				 * probability.
 				 */
 				values[reshuffle->tupleSegIdx - 1] =
-						Int32GetDatum(cdb_randint((newSegs - oldSegs - 1), 0) + oldSegs);
+					Int32GetDatum(oldSegs + random() % (newSegs - oldSegs));
 			}
 		}
 #ifdef USE_ASSERT_CHECKING
@@ -273,8 +265,7 @@ ExecReshuffle(ReshuffleState *node)
 						EvalHashSegID(values,
 									  nulls,
 									  reshuffle->policyAttrs,
-									  reshuffle->plan.targetlist,
-									  reshuffle->oldSegs));
+									  node->oldcdbhash));
 
 				Assert(oldSegID == newSegID);
 			}
@@ -289,16 +280,16 @@ ExecReshuffle(ReshuffleState *node)
 	}
 	else if (reshuffle->ptype == POLICYTYPE_REPLICATED)
 	{
-		int segIdx;
+		int			segIdx;
 
-		/* For replicated tables*/
+		/* For replicated tables */
 		if (GpIdentity.segindex + reshuffle->oldSegs >=
 			getgpsegmentCount())
 			return NULL;
 
 		/*
-		 * Each old semgent cound be responsible to copy data to
-		 * more than one new segments
+		 * Each old segment can be responsible for copying data to
+		 * more than one new segment.
 		 */
 		while(1)
 		{
@@ -347,7 +338,7 @@ ExecReshuffle(ReshuffleState *node)
 	}
 	else
 	{
-		/* Impossible case*/
+		/* Impossible case */
 		Assert(false);
 	}
 
@@ -360,8 +351,12 @@ ExecReshuffle(ReshuffleState *node)
  * ----------------------------------------------------------------
  */
 ReshuffleState *
-ExecInitReshuffle(Reshuffle *node, EState *estate, int eflags) {
+ExecInitReshuffle(Reshuffle *node, EState *estate, int eflags)
+{
 	ReshuffleState *reshufflestate;
+	Oid		   *typeoids;
+	int			i;
+	ListCell   *lc;
 
 	/* check for unsupported flags */
 	Assert(!(eflags & (EXEC_FLAG_REWIND | EXEC_FLAG_MARK | EXEC_FLAG_BACKWARD)) ||
@@ -425,6 +420,22 @@ ExecInitReshuffle(Reshuffle *node, EState *estate, int eflags) {
 			}
 		}
 	}
+
+	/* Initialize cdbhash objects */
+	typeoids = palloc(list_length(node->policyAttrs) * sizeof(Oid));
+	i = 0;
+	foreach(lc, node->policyAttrs)
+	{
+		AttrNumber attidx = lfirst_int(lc);
+		TargetEntry *entry = list_nth(node->plan.targetlist, attidx - 1);
+
+		typeoids[i] = exprType((Node *) entry->expr);
+		i++;
+	}
+	reshufflestate->cdbhash = makeCdbHash(getgpsegmentCount(), list_length(node->policyAttrs), typeoids);
+#ifdef USE_ASSERT_CHECKING
+	reshufflestate->oldcdbhash = makeCdbHash(node->oldSegs, list_length(node->policyAttrs), typeoids);
+#endif
 
 	reshufflestate->newTargetIdx = INIT_IDX;
 	reshufflestate->savedSlot = NULL;
