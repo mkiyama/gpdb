@@ -15,6 +15,7 @@
 #   hitting max_connections limit on segments.
 #
 # test reshuffle
+test: reshuffle_helper
 test: reshuffle reshuffle_ao reshuffle_aoco
 
 # enable query metrics cluster GUC
@@ -100,6 +101,8 @@ test: sreh
 # might not happen if other backends are holding transactions open, preventing
 # vacuum from removing dead tuples.
 test: gp_toolkit
+
+test: db_size_functions
 
 # FIXME: These tests no longer work, because they try to set
 # gp_interconnect_type, which doesn't work:

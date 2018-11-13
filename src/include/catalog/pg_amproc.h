@@ -187,6 +187,7 @@ DATA(insert (	3254   3220 3220 1 3252 ));
 DATA(insert (	3523   3500 3500 1 3515 ));
 DATA(insert (	3903   3831 3831 1 3902 ));
 DATA(insert (	4034   3802 3802 1 4045 ));
+DATA(insert (	6224   7198 7198 1 6559 ));
 
 
 /* gist */
@@ -493,5 +494,11 @@ DATA(insert (	7046	790  790 1  377 ));	/* money */
 DATA(insert (	7047	703  703 1 380 ));		/* reltime */
 DATA(insert (	7048	704  704 1 381 ));		/* tinterval */
 
+/*
+ * hash support for a few built-in datatypes that are missing it in upstream.
+ */
+DATA(insert (	7077   27 27 1 6114 ));
+DATA(insert (	7078   1560 1560 1 6117 ));
+DATA(insert (	7079   1562 1562 1 6118 ));
 
 #endif   /* PG_AMPROC_H */
