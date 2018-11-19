@@ -224,7 +224,7 @@ BLD_CURL_CONFIG=CURL_CONFIG=$(BLD_THIRDPARTY_BIN_DIR)/curl-config
 endif
 # ...and do not include the authlibs on Windows or AIX
 ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 aix5_ppc_64 win32 win64)" ""
-CONFIGFLAGS+= --with-openssl --with-pam --with-krb5 --with-ldap $(BLD_CURL_CONFIG) $(APR_CONFIG)
+CONFIGFLAGS+= --with-openssl --with-pam --with-ldap $(BLD_CURL_CONFIG) $(APR_CONFIG)
 endif
 
 # ...but do include some of the authlibs on AIX
@@ -276,7 +276,6 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
                      CFLAGS=$(INSTCFLAGS) $(BLD_CONFIG_SHELL) \
                      ./configure $(CONFIGFLAGS)               \
                          --prefix=$(INSTLOC)                  \
-                         --with-docdir=$(INSTLOC)/doc         \
                          --mandir=$(INSTLOC)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
@@ -286,7 +285,6 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
                 CFLAGS=$(INSTCFLAGS) $(BLD_CONFIG_SHELL)     \
                 ./configure $(CONFIGFLAGS)                   \
                     --prefix=$(INSTLOC)                      \
-                    --with-docdir=$(INSTLOC)/doc             \
                     --mandir=$(INSTLOC)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
@@ -296,7 +294,6 @@ Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
                   CFLAGS=$(INSTCFLAGS) $(BLD_CONFIG_SHELL)  \
                   ./configure $(CONFIGFLAGS)                \
                       --prefix=$(INSTLOC)                   \
-                      --with-docdir=$(INSTLOC)/doc          \
                       --mandir=$(INSTLOC)/man
 
 #---------------------------------------------------------------------
@@ -450,7 +447,7 @@ devel : INSTLOC=$(DEVPATH)
 devel : CLIENTINSTLOC=$(CLIENTDEVPATH)
 devel : LOADERSINSTLOC=$(LOADERSDEVPATH)
 devel : GPPKGINSTLOC=$(GPPKGDEVPATH)
-devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-testutils --enable-depend
+devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-depend
 ifdef ENABLE_VPATH_BUILD
 devel : BUILDDIR=Debug
 devel : ISCONFIG=$(BUILDDIR)/GNUmakefile
@@ -485,7 +482,6 @@ dist_prof : INSTCFLAGS=$(PROFFLAGS)
 dist_prof : INSTLOC=$(DISTPATH)
 dist_prof : CLIENTINSTLOC=$(CLIENTDISTPATH)
 dist_prof : LOADERSINSTLOC=$(LOADERSDISTPATH)
-dist_prof : CONFIGFLAGS+= --enable-testutils
 ifdef ENABLE_VPATH_BUILD
 dist_prof : BUILDDIR=Release
 dist_prof : ISCONFIG=$(BUILDDIR)/GNUmakefile
@@ -498,7 +494,6 @@ endif
 
 dist_faultinj : CLIENTINSTLOC=$(CLIENTDISTPATH)
 dist_faultinj : LOADERSINSTLOC=$(LOADERSDISTPATH)
-dist_faultinj : CONFIGFLAGS+= --enable-testutils
 ifdef ENABLE_VPATH_BUILD
 dist_faultinj : BUILDDIR=Release
 dist_faultinj : ISCONFIG=$(BUILDDIR)/GNUmakefile
