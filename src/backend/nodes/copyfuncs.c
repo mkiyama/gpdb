@@ -2378,6 +2378,20 @@ _copyPathKey(const PathKey *from)
 }
 
 /*
+ * _copyDistributionKey
+ */
+static DistributionKey *
+_copyDistributionKey(const DistributionKey *from)
+{
+	DistributionKey    *newnode = makeNode(DistributionKey);
+
+	/* EquivalenceClasses are never moved, so just shallow-copy the pointer */
+	newnode->dk_eclasses = list_copy(from->dk_eclasses);
+
+	return newnode;
+}
+
+/*
  * _copyRestrictInfo
  */
 static RestrictInfo *
@@ -3318,7 +3332,6 @@ _copySetDistributionCmd(const SetDistributionCmd *from)
 
 	COPY_SCALAR_FIELD(backendId);
 	COPY_NODE_FIELD(relids);
-	COPY_NODE_FIELD(indexOidMap);
 	COPY_NODE_FIELD(hiddenTypes);
 
 	return newnode;
@@ -3608,6 +3621,21 @@ _copyPartitionValuesSpec(const PartitionValuesSpec *from)
 
 	COPY_NODE_FIELD(partValues);
 	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static ExpandStmtSpec *
+_copyExpandStmtSpec(const ExpandStmtSpec *from)
+{
+	ExpandStmtSpec *newnode = makeNode(ExpandStmtSpec);
+
+	COPY_SCALAR_FIELD(method);
+	COPY_BITMAPSET_FIELD(ps_none);
+	COPY_BITMAPSET_FIELD(ps_root);
+	COPY_BITMAPSET_FIELD(ps_interior);
+	COPY_BITMAPSET_FIELD(ps_leaf);
+	COPY_SCALAR_FIELD(backendId);
 
 	return newnode;
 }
@@ -5454,6 +5482,9 @@ copyObject(const void *from)
 		case T_PathKey:
 			retval = _copyPathKey(from);
 			break;
+		case T_DistributionKey:
+			retval = _copyDistributionKey(from);
+			break;
 		case T_RestrictInfo:
 			retval = _copyRestrictInfo(from);
 			break;
@@ -5577,6 +5608,9 @@ copyObject(const void *from)
 			break;
 		case T_PartitionValuesSpec:
 			retval = _copyPartitionValuesSpec(from);
+			break;
+		case T_ExpandStmtSpec:
+			retval = _copyExpandStmtSpec(from);
 			break;
 		case T_PartitionElem:
 			retval = _copyPartitionElem(from);

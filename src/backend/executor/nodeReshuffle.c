@@ -97,7 +97,8 @@
  * 		For replicated table, the table data is same in the all old
  * 		segments, so there do not need to delete any tuples, it only
  * 		need copy the tuple which is in the old segments to the new
- * 		segments, so the ReshuffleExpr do not filte any tuples, In
+ * 		segments, the ReshuffleExpr do not filte any tuples, and
+ * 		we make it NULL pointer in the Parse Tree as an optimization,
  * 		the Reshuffle node, we neglect the tuple which is generated
  * 		for deleting, only return the inserting tuple to motion. Let
  * 		me illustrate this with an example:
@@ -205,9 +206,11 @@ ExecReshuffle(ReshuffleState *node)
 
 	Assert(splitUpdate->actionColIdx > 0);
 
-	/* New added segments have no data */
-	if (GpIdentity.segindex >= reshuffle->oldSegs)
-		return NULL;
+	/*
+	 * New segments contain no data, we do not
+	 * dispatch the reshuffle-slice to them.
+	 */
+	Assert(GpIdentity.segindex < reshuffle->oldSegs);
 
 	if (reshuffle->ptype == POLICYTYPE_PARTITIONED)
 	{
@@ -282,9 +285,10 @@ ExecReshuffle(ReshuffleState *node)
 	{
 		int			segIdx;
 
-		/* For replicated tables */
-		if (GpIdentity.segindex + reshuffle->oldSegs >=
-			getgpsegmentCount())
+		/*
+		 * This is an optimization for replicated tables.
+		 */
+		if (list_length(node->destList) == 0)
 			return NULL;
 
 		/*
@@ -405,11 +409,10 @@ ExecInitReshuffle(Reshuffle *node, EState *estate, int eflags)
 	}
 #endif
 
-	/* Setup the destination segment ID list */
-	if (!IS_QUERY_DISPATCHER())
+	/* Setup the destination segment ID list only for replicated table */
+	if (!IS_QUERY_DISPATCHER() && node->ptype == POLICYTYPE_REPLICATED)
 	{
-		if (GpIdentity.segindex < node->oldSegs &&
-			GpIdentity.segindex + node->oldSegs < getgpsegmentCount())
+		if (GpIdentity.segindex + node->oldSegs < getgpsegmentCount())
 		{
 			int segIdx = GpIdentity.segindex + node->oldSegs;
 			while (segIdx < getgpsegmentCount())

@@ -28,6 +28,7 @@
 #include "optimizer/var.h"
 #include "parser/parse_relation.h"
 #include "utils/fmgroids.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/datum.h"
 #include "utils/syscache.h"
@@ -40,7 +41,6 @@
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
 #include "commands/trigger.h"
-#include "catalog/catalog.h"
 #include "catalog/gp_policy.h"
 #include "catalog/pg_type.h"
 
@@ -58,8 +58,6 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbtargeteddispatch.h"
-
-#include "nodes/print.h"
 
 #include "executor/executor.h"
 
@@ -218,6 +216,125 @@ directDispatchCalculateHash(Plan *plan, GpPolicy *targetPolicy)
 	pfree(nulls);
 }
 
+/*
+ * Create a GpPolicy that matches the Flow of the given plan.
+ *
+ * This is used with CREATE TABLE AS, to derive the distribution
+ * key for the table from the query plan.
+ */
+static GpPolicy *
+get_partitioned_policy_from_flow(Plan *plan)
+{
+	/* Find out what the flow is partitioned on */
+	List	   *policykeys;
+	ListCell   *exp1;
+
+	/*
+	 * Is it a Hashed distribution?
+	 *
+	 * NOTE: HashedOJ is not OK, because we cannot let the NULLs be stored
+	 * multiple segments.
+	 */
+	if (plan->flow->locustype != CdbLocusType_Hashed)
+	{
+		return NULL;
+	}
+
+	/*
+	 * Sometimes the planner produces a Flow with CdbLocusType_Hashed,
+	 * but hashExpr are not set because we have lost track of the
+	 * expressions it's hashed on.
+	 */
+	if (!plan->flow->hashExpr)
+		return NULL;
+
+	policykeys = NIL;
+	foreach(exp1, plan->flow->hashExpr)
+	{
+		Expr	   *var1 = (Expr *) lfirst(exp1);
+		AttrNumber	n;
+		bool		found_expr = false;
+
+		/* See if this Expr is a column of the result table */
+
+		for (n = 1; n <= list_length(plan->targetlist); n++)
+		{
+			TargetEntry *target = get_tle_by_resno(plan->targetlist, n);
+			Var		   *new_var;
+
+			if (target->resjunk)
+				continue;
+
+			/*
+			 * Right side variable may be encapsulated by a relabel node.
+			 * Motion, however, does not care about relabel nodes.
+			 */
+			if (IsA(var1, RelabelType))
+				var1 = ((RelabelType *) var1)->arg;
+
+			/*
+			 * If subplan expr is a Var, copy to preserve its EXPLAIN info.
+			 */
+			if (IsA(target->expr, Var))
+			{
+				new_var = copyObject(target->expr);
+				new_var->varno = OUTER_VAR;
+				new_var->varattno = n;
+			}
+
+			/*
+			 * Make a Var that references the target list entry at this
+			 * offset, using OUTER_VAR as the varno
+			 */
+			else
+				new_var = makeVar(OUTER_VAR,
+								  n,
+								  exprType((Node *) target->expr),
+								  exprTypmod((Node *) target->expr),
+								  exprCollation((Node *) target->expr),
+								  0);
+
+			if (equal(var1, new_var))
+			{
+				/*
+				 * If it is, use it to partition the result table, to avoid
+				 * unnecessary redistribution of data
+				 */
+				Assert(list_length(policykeys) < MaxPolicyAttributeNumber);
+
+				if (list_member_int(policykeys, n))
+					ereport(ERROR,
+							(errcode(ERRCODE_DUPLICATE_COLUMN),
+							 errmsg("duplicate DISTRIBUTED BY column '%s'",
+									target->resname ? target->resname : "???")));
+
+				policykeys = lappend_int(policykeys, n);
+				found_expr = true;
+				break;
+			}
+		}
+
+		if (!found_expr)
+		{
+			/*
+			 * This distribution key is not present in the target list. Give
+			 * up.
+			 */
+			return NULL;
+		}
+	}
+
+	/*
+	 * We use the default number of segments, even if the flow was partially
+	 * distributed. That defeats the performance benefit of using the same
+	 * distribution key columns, because we'll need a Restribute Motion
+	 * anyway. But presumably if the user had expanded the cluster, they want
+	 * to use all the segments for new tables.
+	 */
+	return createHashPartitionedPolicy(policykeys, GP_POLICY_DEFAULT_NUMSEGMENTS);
+}
+
+
 /* -------------------------------------------------------------------------
  * Function apply_motion() and apply_motion_mutator() add motion nodes to a
  * top-level Plan tree as directed by the Flow nodes in the plan.
@@ -277,19 +394,9 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 	switch (query->commandType)
 	{
 		case CMD_SELECT:
-			/* If the query comes from 'CREAT TABLE AS' or 'SELECT INTO' */
+			/* If the query comes from 'CREATE TABLE AS' or 'SELECT INTO' */
 			if (query->parentStmtType != PARENTSTMTTYPE_NONE)
 			{
-				List	   *hashExpr;
-				ListCell   *exp1;
-
-				/*
-				 * In CTAS the source distribution policy is not inherited,
-				 * always set numsegments to ALL unless a DISTRIBUTED BY clause
-				 * is specified.
-				 */
-				numsegments = GP_POLICY_ALL_NUMSEGMENTS;
-
 				if (query->intoPolicy != NULL)
 				{
 					targetPolicy = query->intoPolicy;
@@ -300,7 +407,7 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 				}
 				else if (gp_create_table_random_default_distribution)
 				{
-					targetPolicy = createRandomPartitionedPolicy(numsegments);
+					targetPolicy = createRandomPartitionedPolicy(GP_POLICY_DEFAULT_NUMSEGMENTS);
 					ereport(NOTICE,
 							(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 							 errmsg("Using default RANDOM distribution since no distribution was specified."),
@@ -308,100 +415,17 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 				}
 				else
 				{
-					/* Find out what the flow is partitioned on */
-					List	*policykeys = NIL;
-					hashExpr = plan->flow->hashExpr;
+					/* First try to deduce the distribution from the query */
+					targetPolicy = get_partitioned_policy_from_flow(plan);
 
-					if (hashExpr)
-						foreach(exp1, hashExpr)
+					/*
+					 * If that fails, hash on the first hashable column we can
+					 * find.
+					 */
+					if (!targetPolicy)
 					{
-						AttrNumber	n;
-						bool		found_expr = false;
-
-
-						/* See if this Expr is a column of the result table */
-
-						for (n = 1; n <= list_length(plan->targetlist); n++)
-						{
-							Var		   *new_var = NULL;
-
-							TargetEntry *target = get_tle_by_resno(plan->targetlist, n);
-
-							if (!target->resjunk)
-							{
-								Expr	   *var1 = (Expr *) lfirst(exp1);
-
-								/*
-								 * right side variable may be encapsulated by
-								 * a relabel node. motion, however, does not
-								 * care about relabel nodes.
-								 */
-								if (IsA(var1, RelabelType))
-									var1 = ((RelabelType *) var1)->arg;
-
-								/*
-								 * If subplan expr is a Var, copy to preserve
-								 * its EXPLAIN info.
-								 */
-								if (IsA(target->expr, Var))
-								{
-									new_var = copyObject(target->expr);
-									new_var->varno = OUTER_VAR;
-									new_var->varattno = n;
-								}
-
-								/*
-								 * Make a Var that references the target list
-								 * entry at this offset, using OUTER_VAR as the
-								 * varno
-								 */
-								else
-									new_var = makeVar(OUTER_VAR,
-													  n,
-													  exprType((Node *) target->expr),
-													  exprTypmod((Node *) target->expr),
-													  exprCollation((Node *) target->expr),
-													  0);
-
-								if (equal(var1, new_var))
-								{
-									/*
-									 * If it is, use it to partition the
-									 * result table, to avoid unnecessary
-									 * redistibution of data
-									 */
-									Assert(list_length(policykeys) < MaxPolicyAttributeNumber);
-
-									if (list_member_int(policykeys, n))
-									{
-										TargetEntry *target = get_tle_by_resno(plan->targetlist, n);
-
-										ereport(ERROR,
-												(errcode(ERRCODE_DUPLICATE_COLUMN),
-												 errmsg("duplicate DISTRIBUTED BY column '%s'",
-														target->resname ? target->resname : "???")));
-									}
-
-									policykeys = lappend_int(policykeys, n);
-									found_expr = true;
-									break;
-
-								}
-
-							}
-						}
-
-						if (!found_expr)
-							break;
-					}
-
-					/* do we know how to partition? */
-					if (policykeys == NIL)
-					{
-						/*
-						 * hash on the first hashable column we can find.
-						 */
 						int			i;
+						List	   *policykeys = NIL;
 
 						for (i = 0; i < list_length(plan->targetlist); i++)
 						{
@@ -419,38 +443,36 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 								}
 							}
 						}
+						targetPolicy = createHashPartitionedPolicy(policykeys,
+																   GP_POLICY_DEFAULT_NUMSEGMENTS);
 					}
 
-					targetPolicy = createHashPartitionedPolicy(policykeys,
-															   numsegments);
-
-					if (query->intoPolicy == NULL)
+					/* If we deduced the policy from the query, give a NOTICE */
+					if (query->parentStmtType == PARENTSTMTTYPE_CTAS)
 					{
-						char	   *columns;
+						StringInfoData columnsbuf;
 						int			i;
 
-						columns = palloc((NAMEDATALEN + 3) * targetPolicy->nattrs + 1);
-						columns[0] = '\0';
+						initStringInfo(&columnsbuf);
 						for (i = 0; i < targetPolicy->nattrs; i++)
 						{
 							TargetEntry *target = get_tle_by_resno(plan->targetlist, targetPolicy->attrs[i]);
 
 							if (i > 0)
-								strcat(columns, ", ");
+								appendStringInfoString(&columnsbuf, ", ");
 							if (target->resname)
-								strcat(columns, target->resname);
+								appendStringInfoString(&columnsbuf, target->resname);
 							else
-								strcat(columns, "???");
+								appendStringInfoString(&columnsbuf, "???");
 
 						}
-						if (query->parentStmtType == PARENTSTMTTYPE_CTAS)
-							ereport(NOTICE,
-									(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
-									 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) "
-											"named '%s' as the Greenplum Database data distribution key for this "
-											"table. ", columns),
-									 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
-											 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
+						ereport(NOTICE,
+								(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
+								 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) "
+										"named '%s' as the Greenplum Database data distribution key for this "
+										"table. ", columnsbuf.data),
+								 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
+										 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
 					}
 				}
 
@@ -467,45 +489,50 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 				if (GpPolicyIsReplicated(query->intoPolicy))
 				{
 					/*
-					 * CdbLocusType_SegmentGeneral is only used by replicated table right now,
-					 * so if both input and target are replicated table, no need to add a motion
+					 * CdbLocusType_SegmentGeneral is only used by replicated
+					 * table right now, so if both input and target are
+					 * replicated table, no need to add a motion
 					 */
 					if (plan->flow->flotype == FLOW_SINGLETON &&
-							plan->flow->locustype == CdbLocusType_SegmentGeneral)
+						plan->flow->locustype == CdbLocusType_SegmentGeneral)
 					{
 						/* do nothing */
 					}
 
-					/* plan's data are available on all segment, no motion needed */
+					/*
+					 * plan's data are available on all segment, no motion
+					 * needed
+					 */
 					if (plan->flow->flotype == FLOW_SINGLETON &&
-							plan->flow->locustype == CdbLocusType_General)
+						plan->flow->locustype == CdbLocusType_General)
 					{
 						/* do nothing */
 					}
 
 					if (!broadcastPlan(plan, false, false, numsegments))
 						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
-									errmsg("Cannot parallelize that SELECT INTO yet")));
+										errmsg("Cannot parallelize that SELECT INTO yet")));
 
 				}
 				else
 				{
 					/*
 					 * Make sure the top level flow is partitioned on the
-					 * partitioning key of the target relation.	Since this is a
-					 * SELECT INTO (basically same as an INSERT) command, the
-					 * target list will correspond to the attributes of the target
-					 * relation in order.
+					 * partitioning key of the target relation.	Since this is
+					 * a SELECT INTO (basically same as an INSERT) command,
+					 * the target list will correspond to the attributes of
+					 * the target relation in order.
 					 */
+					List	   *hashExpr;
+
 					hashExpr = getExprListFromTargetList(plan->targetlist,
-							targetPolicy->nattrs,
-							targetPolicy->attrs,
-							true);
+														 targetPolicy->nattrs,
+														 targetPolicy->attrs,
+														 true);
 
 					if (!repartitionPlan(plan, false, false, hashExpr, numsegments))
 						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
-									errmsg("Cannot parallelize that SELECT INTO yet")
-							       ));
+										errmsg("Cannot parallelize that SELECT INTO yet")));
 				}
 
 				Assert(query->intoPolicy->ptype != POLICYTYPE_ENTRY);
@@ -514,8 +541,8 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 			{
 				if (plan->flow->flotype == FLOW_PARTITIONED ||
 					(plan->flow->flotype == FLOW_SINGLETON &&
-					plan->flow->locustype == CdbLocusType_SegmentGeneral))
-				bringResultToDispatcher = true;
+					 plan->flow->locustype == CdbLocusType_SegmentGeneral))
+					bringResultToDispatcher = true;
 
 				needToAssignDirectDispatchContentIds = root->config->gp_enable_direct_dispatch;
 			}
@@ -645,10 +672,14 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 		if (IsA(node, SubPlan) &&((SubPlan *) node)->is_initplan)
 		{
 			bool		saveContainMotionNodes = context->containMotionNodes;
+			int			saveSliceDepth = context->sliceDepth;
 
+			/* reset sliceDepth for each init plan */
+			context->sliceDepth = 0;
 			node = plan_tree_mutator(node, apply_motion_mutator, context);
 
 			context->containMotionNodes = saveContainMotionNodes;
+			context->sliceDepth = saveSliceDepth;
 
 			return node;
 		}
@@ -1507,10 +1538,10 @@ make_reshuffle(PlannerInfo *root,
 			   RangeTblEntry *rte,
 			   Index resultRelationsIdx)
 {
+	int 		 i;
 	Reshuffle 	*reshufflePlan = makeNode(Reshuffle);
 	Relation 	rel = relation_open(rte->relid, NoLock);
 	GpPolicy 	*policy = rel->rd_cdbpolicy;
-	int 		i;
 
 	reshufflePlan->plan.targetlist = list_copy(subplan->targetlist);
 	reshufflePlan->plan.lefttree = subplan;
@@ -1532,8 +1563,7 @@ make_reshuffle(PlannerInfo *root,
 
 	reshufflePlan->ptype = policy->ptype;
 
-	/* FIXME: pass old or new cluster size to numsegments? */
-	mark_plan_strewn((Plan *) reshufflePlan, GP_POLICY_ALL_NUMSEGMENTS);
+	mark_plan_strewn((Plan *) reshufflePlan, subplan->flow->numsegments);
 
 	heap_close(rel, NoLock);
 
@@ -2692,21 +2722,6 @@ assign_plannode_id(PlannedStmt *stmt)
 
 		assign_plannode_id_walker((Node *) subplan, &ctxt);
 	}
-}
-
-/*
- * Hash a const value with GPDB's hash function
- */
-int32
-cdbhash_const(Const *pconst, int iSegments)
-{
-	CdbHash    *pcdbhash = makeCdbHash(iSegments, 1, &pconst->consttype);
-
-	cdbhashinit(pcdbhash);
-
-	cdbhash(pcdbhash, 1, pconst->constvalue, pconst->constisnull);
-
-	return cdbhashreduce(pcdbhash);
 }
 
 /*

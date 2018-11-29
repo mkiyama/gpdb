@@ -11,24 +11,6 @@ STOP_MASTER_BEFORE_PROMOTE=true
 
 . sql/config_test.sh
 
-# Nothing to do here
-function before_master
-{
-:
-}
-
-# Nothing to do here
-function before_standby
-{
-:
-}
-
-# Nothing to do here
-function standby_following_master
-{
-:
-}
-
 # Run checkpoint to update Control File with new timeline ID
 function after_promotion
 {
@@ -41,8 +23,6 @@ PGOPTIONS=${PGOPTIONS_UTILITY} $STANDBY_PSQL -c "SELECT state FROM pg_stat_repli
 function after_rewind
 {
 grep "no rewind required" $log_path
-wait_until_standby_streaming_state
-PGOPTIONS=${PGOPTIONS_UTILITY} $STANDBY_PSQL -c "SELECT state FROM pg_stat_replication;"
 }
 
 # Run the test

@@ -247,7 +247,6 @@ typedef struct CopyStateData
 	bool		is_copy_in;		/* copy in or out? */
 	bool		escape_off;		/* treat backslashes as non-special? */
 	bool		delimiter_off;  /* no delimiter. 1-column external tabs only */
-	int			last_hash_field;
 	bool		end_marker;
 	char	   *begloc;
 	char	   *endloc;
@@ -339,43 +338,27 @@ extern void truncateEolStr(char *str, EolType eol_type);
 extern void setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable);
 extern void CopyEolStrToType(CopyState cstate);
 
+/*
+ * This is used to hold information about the target's distribution policy,
+ * during COPY FROM.
+ *
+ * For a regular, non-partitioned table, 'policy' and 'cdbHash' are filled in,
+ * and 'relid' and 'hashmap' are unused.
+ *
+ * For a partitioned table, there is one "main" GpDistributionData for the
+ * whole operation, and a separate GpDistributionData object for each
+ * partition. The per-table objects are stored in the 'hashmap' of the main
+ * GpDistributionData object, keyed by the partition's OID. 'policy' and
+ * 'cdbHash' in the main GpDistributionData are unused.
+ */
 typedef struct GpDistributionData
 {
-	GpPolicy *policy;	/* the partitioning policy for this table */
-	AttrNumber p_nattrs; /* num of attributes in the distribution policy */
-	Oid *p_attr_types;   /* types for each policy attribute */
-	CdbHash *cdbHash;
-	HTAB *hashmap;
+	Oid			relid;		/* hash key, must be first */
+
+	GpPolicy   *policy;		/* partitioning policy for this table */
+	CdbHash	   *cdbHash;	/* corresponding CdbHash object */
+
+	HTAB	   *hashmap;
 } GpDistributionData;
-
-typedef struct PartitionData
-{
-	/* variables for partitioning */
-	Datum *part_values ;
-	Oid *part_attr_types; /* types for partitioning */
-	Oid *part_typio ;
-	FmgrInfo *part_infuncs ;
-	AttrNumber *part_attnum ;
-	int part_attnums ;
-} PartitionData;
-
-typedef struct GetAttrContext
-{
-	TupleDesc tupDesc;
-	Form_pg_attribute *attr;
-	AttrNumber num_phys_attrs;
-	int *attr_offsets;
-	bool *nulls;
-	Datum *values;
-	CdbCopy *cdbCopy;
-	int original_lineno_for_qe;
-} GetAttrContext;
-
-typedef struct  cdbhashdata
-{
-	Oid relid;
-	CdbHash *cdbHash; /* a CdbHash API object */
-	GpPolicy *policy; /* policy for this cdb hash */
-} cdbhashdata;
 
 #endif /* COPY_H */

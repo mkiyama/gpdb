@@ -188,6 +188,7 @@ static int acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 										  HeapTuple *rows, int targrows,
 										  double *totalrows, double *totaldeadrows);
 static BlockNumber acquire_number_of_blocks(Relation onerel);
+static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
 
 static int	compare_rows(const void *a, const void *b);
 static void update_attstats(Oid relid, bool inh,
@@ -904,7 +905,7 @@ do_analyze_rel(Relation onerel, VacuumStmt *vacstmt,
 				 * This does not hold for partial indexes. The number of tuples matching will be
 				 * derived in selfuncs.c using the base table statistics.
 				 */
-				estimatedIndexPages = acquire_number_of_blocks(Irel[ind]);
+				estimatedIndexPages = acquire_index_number_of_blocks(Irel[ind], onerel);
 				elog(elevel, "ANALYZE estimated relpages=%u for index %s",
 					 estimatedIndexPages, RelationGetRelationName(Irel[ind]));
 			}
@@ -1745,19 +1746,34 @@ acquire_sample_rows_ao(Relation onerel, int elevel,
 		samplerows += 1;
 	}
 
+	/* Get the total tuple count in the table */
+	FileSegTotals *fstotal;
+	int64		hidden_tupcount = 0;
+
+	if (aoScanDesc)
+	{
+		fstotal = GetSegFilesTotals(onerel, SnapshotSelf);
+		hidden_tupcount = AppendOnlyVisimap_GetRelationHiddenTupleCount(&aoScanDesc->visibilityMap);
+	}
+	else
+	{
+		fstotal = GetAOCSSSegFilesTotals(onerel, SnapshotSelf);
+		hidden_tupcount = AppendOnlyVisimap_GetRelationHiddenTupleCount(&aocsScanDesc->visibilityMap);
+	}
+	*totalrows = (double) fstotal->totaltuples - hidden_tupcount;
+	/*
+	 * Currently, we always report 0 dead rows on an AO table. We could
+	 * perhaps get a better estimate using the AO visibility map. But this
+	 * will do for now.
+	 */
+	*totaldeadrows = 0;
+
 	ExecDropSingleTupleTableSlot(slot);
 	if (aoScanDesc)
 		appendonly_endscan(aoScanDesc);
 	if (aocsScanDesc)
 		aocs_endscan(aocsScanDesc);
 
-	/*
-	 * Currently, we always report 0 dead rows on an AO table. We could
-	 * perhaps get a better estimate using the AO visibility map. But this
-	 * will do for now.
-	 */
-	*totalrows = (double) numrows;
-	*totaldeadrows = 0;
 	return numrows;
 }
 
@@ -2237,6 +2253,49 @@ acquire_number_of_blocks(Relation onerel)
 	}
 	else
 		elog(ERROR, "unsupported table type");
+}
+
+/*
+ * Compute index relation's size.
+ *
+ * Like acquire_number_of_blocks(), but for indexes. Indexes don't
+ * have a distribution policy, so we use the parent table's policy
+ * to determine whether we need to get the size on segments or
+ * locally.
+ */
+static BlockNumber
+acquire_index_number_of_blocks(Relation indexrel, Relation tablerel)
+{
+	int64		totalbytes;
+
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		tablerel->rd_cdbpolicy && !GpPolicyIsEntry(tablerel->rd_cdbpolicy))
+	{
+		/* Query the segments using pg_relation_size(<rel>). */
+		char		relsize_sql[100];
+
+		snprintf(relsize_sql, sizeof(relsize_sql),
+				 "select pg_catalog.pg_relation_size(%u, 'main')", RelationGetRelid(indexrel));
+		totalbytes = get_size_from_segDBs(relsize_sql);
+		if (GpPolicyIsReplicated(tablerel->rd_cdbpolicy))
+		{
+			/*
+			 * pg_relation_size sums up the table size on each segment. That's
+			 * correct for hash and randomly distributed tables. But for a
+			 * replicated table, we want pg_class.relpages to count the data
+			 * only once.
+			 */
+			totalbytes = totalbytes / tablerel->rd_cdbpolicy->numsegments;
+		}
+
+		return RelationGuessNumberOfBlocks(totalbytes);
+	}
+	/* Check size on this server. */
+	else
+	{
+		Assert(RelationIsHeap(indexrel));
+		return RelationGetNumberOfBlocks(indexrel);
+	}
 }
 
 /*
@@ -3803,10 +3862,16 @@ compute_scalar_stats(VacAttrStatsP stats,
 	}
 	else
 	{
-		/* ORCA complains if a column has no statistics whatsoever,
-		 * so store something */
+		/*
+		 * ORCA complains if a column has no statistics whatsoever, so store
+		 * either the best we can figure out given what we have, or zero in
+		 * case we don't have enough.
+		 */
 		stats->stats_valid = true;
-		stats->stanullfrac = (double) null_cnt / (double) samplerows;
+		if (samplerows)
+			stats->stanullfrac = (double) null_cnt / (double) samplerows;
+		else
+			stats->stanullfrac = 0.0;
 		if (is_varwidth)
 			stats->stawidth = 0;	/* "unknown" */
 		else
@@ -3854,7 +3919,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 	float nmultiple = 0; // number of values that appeared more than once
 	bool allDistinct = false;
 	int slot_idx = 0;
-	samplerows = 0;
+	int sampleCount = 0;
 	Oid ltopr = mystats->ltopr;
 	Oid eqopr = mystats->eqopr;
 
@@ -3866,9 +3931,8 @@ merge_leaf_stats(VacAttrStatsP stats,
 		totalTuples = totalTuples + relTuples[relNum];
 		relNum++;
 	}
-	totalrows = totalTuples;
 
-	if (totalrows == 0.0)
+	if (totalTuples == 0.0)
 		return;
 
 	MemoryContext old_context;
@@ -3933,7 +3997,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 			hllcounters[i] = (HLLCounter) DatumGetByteaP(hllSlot.values[0]);
 			nDistincts[i] = (float) hllcounters[i]->ndistinct;
 			nMultiples[i] = (float) hllcounters[i]->nmultiples;
-			samplerows += hllcounters[i]->samplerows;
+			sampleCount += hllcounters[i]->samplerows;
 			hllcounters_copy[i] = hll_copy(hllcounters[i]);
 			finalHLL = hyperloglog_merge_counters(finalHLL, hllcounters[i]);
 			free_attstatsslot(&hllSlot);
@@ -3967,7 +4031,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 			 * else the ndistinct value will provide the actual value and we do not ,
 			 * need to do any additional calculation for the nmultiple
 			 */
-			if ((fabs(totalrows - ndistinct) / (float) totalrows) < HLL_ERROR_MARGIN)
+			if ((fabs(totalTuples - ndistinct) / (float) totalTuples) < HLL_ERROR_MARGIN)
 			{
 				allDistinct = true;
 			}
@@ -3988,7 +4052,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 			 * the number of distinct values for the table based on the estimator
 			 * proposed by Haas and Stokes, used later in the code.
 			 */
-			if ((fabs(samplerows - ndistinct) / (float) samplerows) < HLL_ERROR_MARGIN)
+			if ((fabs(sampleCount - ndistinct) / (float) sampleCount) < HLL_ERROR_MARGIN)
 			{
 				allDistinct = true;
 			}
@@ -4107,17 +4171,17 @@ merge_leaf_stats(VacAttrStatsP stats,
 		int d = f1 + nmultiple;
 		double numer, denom, stadistinct;
 
-		numer = (double) samplerows * (double) d;
+		numer = (double) sampleCount * (double) d;
 
-		denom = (double) (samplerows - f1) +
-				(double) f1 * (double) samplerows / totalrows;
+		denom = (double) (sampleCount - f1) +
+				(double) f1 * (double) sampleCount / totalTuples;
 
 		stadistinct = numer / denom;
 		/* Clamp to sane range in case of roundoff error */
 		if (stadistinct < (double) d)
 			stadistinct = (double) d;
-		if (stadistinct > totalrows)
-			stadistinct = totalrows;
+		if (stadistinct > totalTuples)
+			stadistinct = totalTuples;
 		ndistinct = floor(stadistinct + 0.5);
 	}
 

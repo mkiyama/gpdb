@@ -591,7 +591,6 @@ _readSetDistributionCmd(void)
 
 	READ_INT_FIELD(backendId);
 	READ_NODE_FIELD(relids);
-	READ_NODE_FIELD(indexOidMap);
 	READ_NODE_FIELD(hiddenTypes);
 
 	READ_DONE();
@@ -1219,6 +1218,21 @@ _readPartitionValuesSpec(void)
 
 	READ_NODE_FIELD(partValues);
 	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static ExpandStmtSpec *
+_readExpandStmtSpec(void)
+{
+	READ_LOCALS(ExpandStmtSpec);
+
+	READ_ENUM_FIELD(method, ExpandMethod);
+	READ_BITMAPSET_FIELD(ps_none);
+	READ_BITMAPSET_FIELD(ps_root);
+	READ_BITMAPSET_FIELD(ps_interior);
+	READ_BITMAPSET_FIELD(ps_leaf);
+	READ_OID_FIELD(backendId);
 
 	READ_DONE();
 }
@@ -3423,6 +3437,9 @@ readNodeBinary(void)
 				break;
 			case T_PartitionValuesSpec:
 				return_value = _readPartitionValuesSpec();
+				break;
+			case T_ExpandStmtSpec:
+				return_value = _readExpandStmtSpec();
 				break;
 			case T_Partition:
 				return_value = _readPartition();

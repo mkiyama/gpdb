@@ -1951,9 +1951,9 @@ _outFlow(StringInfo str, const Flow *node)
 static void
 _outCdbPathLocus(StringInfo str, const CdbPathLocus *node)
 {
-    WRITE_ENUM_FIELD(locustype, CdbLocusType);
-    WRITE_NODE_FIELD(partkey_h);
-    WRITE_NODE_FIELD(partkey_oj);
+	WRITE_ENUM_FIELD(locustype, CdbLocusType);
+	WRITE_NODE_FIELD(distkey);
+	WRITE_INT_FIELD(numsegments);
 }                               /* _outCdbPathLocus */
 
 
@@ -2399,6 +2399,16 @@ _outPathKey(StringInfo str, const PathKey *node)
 	WRITE_BOOL_FIELD(pk_nulls_first);
 }
 
+#ifndef COMPILING_BINARY_FUNCS
+static void
+_outDistributionKey(StringInfo str, const DistributionKey *node)
+{
+	WRITE_NODE_TYPE("DISTRIBUTIONKEY");
+
+	WRITE_NODE_FIELD(dk_eclasses);
+}
+#endif /* COMPILING_BINARY_FUNCS */
+
 static void
 _outParamPathInfo(StringInfo str, const ParamPathInfo *node)
 {
@@ -2779,13 +2789,12 @@ _outAlterTableCmd(StringInfo str, const AlterTableCmd *node)
 }
 
 static void
-_outSetDistributionCmd(StringInfo str, const SetDistributionCmd*node)
+_outSetDistributionCmd(StringInfo str, const SetDistributionCmd *node)
 {
 	WRITE_NODE_TYPE("SETDISTRIBUTIONCMD");
 
 	WRITE_INT_FIELD(backendId);
 	WRITE_NODE_FIELD(relids);
-	WRITE_NODE_FIELD(indexOidMap);
 	WRITE_NODE_FIELD(hiddenTypes);
 }
 
@@ -3087,6 +3096,19 @@ _outPartitionValuesSpec(StringInfo str, const PartitionValuesSpec *node)
 	WRITE_NODE_FIELD(partValues);
 	WRITE_LOCATION_FIELD(location);
 }
+
+static void
+_outExpandStmtSpec(StringInfo str, const ExpandStmtSpec *node)
+{
+	WRITE_NODE_TYPE("EXPANDSTMTSPEC");
+	WRITE_ENUM_FIELD(method, ExpandMethod);
+	WRITE_BITMAPSET_FIELD(ps_none);
+	WRITE_BITMAPSET_FIELD(ps_root);
+	WRITE_BITMAPSET_FIELD(ps_interior);
+	WRITE_BITMAPSET_FIELD(ps_leaf);
+	WRITE_OID_FIELD(backendId);
+}
+
 
 #ifndef COMPILING_BINARY_FUNCS
 static void
@@ -5065,6 +5087,9 @@ _outNode(StringInfo str, const void *obj)
 			case T_PathKey:
 				_outPathKey(str, obj);
 				break;
+			case T_DistributionKey:
+				_outDistributionKey(str, obj);
+				break;
 			case T_ParamPathInfo:
 				_outParamPathInfo(str, obj);
 				break;
@@ -5145,6 +5170,9 @@ _outNode(StringInfo str, const void *obj)
 				break;
 			case T_PartitionValuesSpec:
 				_outPartitionValuesSpec(str, obj);
+				break;
+			case T_ExpandStmtSpec:
+				_outExpandStmtSpec(str, obj);
 				break;
 			case T_SegfileMapNode:
 				_outSegfileMapNode(str, obj);

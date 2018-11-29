@@ -1694,6 +1694,10 @@ lazy_truncate_heap(Relation onerel, LVRelStats *vacrelstats)
  *	in pg_class. reltuples is the same as "pg_aoseg_<oid>:tupcount"
  *	column and we simulate relpages by subdividing the eof value
  *	("pg_aoseg_<oid>:eof") over the defined page size.
+ *
+ * Note: In QD, we don't track the file size across segments, so even
+ * though the tuple count is returned correctly, the number of pages is
+ * always 0.
  */
 void
 vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot,
