@@ -42,6 +42,7 @@
 #include "commands/tablespace.h"
 #include "commands/trigger.h"
 #include "catalog/gp_policy.h"
+#include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
 
 #include "catalog/pg_proc.h"
@@ -2768,6 +2769,35 @@ cdbhash_const_list(List *plConsts, int iSegments)
 	return cdbhashreduce(pcdbhash);
 }
 
+/*
+ * Construct an expression that checks whether the current segment is
+ * 'segid'.
+ */
+Node *
+makeSegmentFilterExpr(int segid)
+{
+	/* Build an expression: gp_execution_segment() = <segid> */
+	return (Node *)
+		make_opclause(Int4EqualOperator,
+					  BOOLOID,
+					  false,	/* opretset */
+					  (Expr *) makeFuncExpr(F_MPP_EXECUTION_SEGMENT,
+											INT4OID,
+											NIL,	/* args */
+											InvalidOid,
+											InvalidOid,
+											COERCE_EXPLICIT_CALL),
+					  (Expr *) makeConst(INT4OID,
+										 -1,		/* consttypmod */
+										 InvalidOid, /* constcollid */
+										 sizeof(int32),
+										 Int32GetDatum(segid),
+										 false,		/* constisnull */
+										 true),		/* constbyval */
+					  InvalidOid,	/* opcollid */
+					  InvalidOid	/* inputcollid */
+			);
+}
 
 typedef struct ParamWalkerContext
 {
@@ -3598,7 +3628,6 @@ sri_optimize_for_result(PlannerInfo *root, Plan *plan, RangeTblEntry *rte,
 	if (typesOK && allConstantValuesClause(plan))
 	{
 		Result	   *rNode = (Result *) plan;
-		List	   *hList = NIL;
 		int			i;
 
 		/*
@@ -3607,14 +3636,6 @@ sri_optimize_for_result(PlannerInfo *root, Plan *plan, RangeTblEntry *rte,
 		 *
 		 * See partition check above.
 		 */
-
-		/* build our list */
-		for (i = 0; i < (*targetPolicy)->nattrs; i++)
-		{
-			Assert((*targetPolicy)->attrs[i] > 0);
-
-			hList = lappend_int(hList, (*targetPolicy)->attrs[i]);
-		}
 
 		if (root->config->gp_enable_direct_dispatch)
 		{
@@ -3626,8 +3647,15 @@ sri_optimize_for_result(PlannerInfo *root, Plan *plan, RangeTblEntry *rte,
 			 */
 		}
 
-		rNode->hashFilter = true;
-		rNode->hashList = hList;
+		/* Set a hash filter in the Result plan node */
+		rNode->numHashFilterCols = (*targetPolicy)->nattrs;
+		rNode->hashFilterColIdx = palloc((*targetPolicy)->nattrs * sizeof(AttrNumber));
+		for (i = 0; i < (*targetPolicy)->nattrs; i++)
+		{
+			Assert((*targetPolicy)->attrs[i] > 0);
+
+			rNode->hashFilterColIdx[i] = (*targetPolicy)->attrs[i];
+		}
 
 		/* Build a partitioned flow */
 		plan->flow->flotype = FLOW_PARTITIONED;

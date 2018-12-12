@@ -89,11 +89,10 @@ Perform the following steps to configure PXF for a secure HDFS. You will perform
 
 **Perform the following steps on each Greenplum Database segment host**:
 
-1. Login to the segment host and set up the Greenplum Database environment. For example:
+1. Log in to the segment host. For example:
 
     ``` shell
     $ ssh gpadmin@<seghost>
-    gpadmin@seghost$ . /usr/local/greenplum-db/greenplum_path.sh
     ```
     
 2. Install the Kerberos client packages on **each** Greenplum Database segment host if they are not already installed. You must have superuser permissions to install operating system packages. For example:
@@ -101,12 +100,6 @@ Perform the following steps to configure PXF for a secure HDFS. You will perform
     ``` shell
     root@seghost$ rpm -qa | grep krb
     root@seghost$ yum install krb5-libs krb5-workstation
-    ```
-
-3. Copy the configuration files from your Hadoop cluster to the PXF Hadoop configuration directory on the Greenplum Database segment host. The configuration file directory is specific to your Hadoop distribution. For example:
-
-    ``` shell
-    gpadmin@seghost$ scp hadoop_host:/etc/hadoop/conf/* /etc/hadoop/conf/
     ```
 
 4. Open the PXF `pxf-env.sh` user configuration file in the editor of your choice. For example, to open the file with `vi` when `PXF_CONF=/etc/pxf/usercfg`:

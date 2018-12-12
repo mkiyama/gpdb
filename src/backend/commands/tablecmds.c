@@ -72,6 +72,7 @@
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "executor/executor.h"
+#include "executor/instrument.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -110,6 +111,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/metrics_utils.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -11691,15 +11693,13 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode)
 	forboth(oid_item, tab->changedIndexOids,
 			def_item, tab->changedIndexDefs)
 	{
-		/*
-		 * Temporary workaround for MPP-1318. INDEX CREATE is dispatched
-		 * immediately, which unfortunately breaks the ALTER work queue.
-		 */
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot alter indexed column"),
-						errhint("DROP the index first, and recreate it after the ALTER")));
-		/*ATPostAlterTypeParse((char *) lfirst(l), wqueue, lockmode);*/
+		Oid			oldId = lfirst_oid(oid_item);
+		Oid			relid;
+
+		relid = IndexGetRelation(oldId, false);
+		ATPostAlterTypeParse(oldId, relid, InvalidOid,
+							 (char *) lfirst(def_item),
+							 wqueue, lockmode, tab->rewrite);
 	}
 
 	/*
@@ -14123,10 +14123,9 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 	dest = CreateDestReceiver(DestIntoRel);
 
 	/* Create a QueryDesc requesting no output */
-	queryDesc = CreateQueryDesc(stmt, pstrdup("(internal SELECT INTO query)"),
+	queryDesc = CreateQueryDesc(stmt, debug_query_string,
 								GetActiveSnapshot(), InvalidSnapshot,
-								dest, NULL, INSTRUMENT_NONE);
-
+								dest, NULL, GP_INSTRUMENT_OPTS);
 	PopActiveSnapshot();
 
 	return queryDesc;
@@ -15346,6 +15345,10 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		/* Step (c) - run on all nodes */
 		queryDesc->ddesc = makeNode(QueryDispatchDesc);
 		queryDesc->ddesc->useChangedAOOpts = false;
+		
+		/* GPDB hook for collecting query info */
+		if (query_info_collect_hook)
+			(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
 
 		queryDesc->plannedstmt->query_mem =
 				ResourceManagerGetQueryMemoryLimit(queryDesc->plannedstmt);
