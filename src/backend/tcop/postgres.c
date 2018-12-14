@@ -39,7 +39,6 @@
 
 #include <pthread.h>
 
-#include "access/distributedlog.h"
 #include "access/printtup.h"
 #include "access/xact.h"
 #include "catalog/oid_dispatch.h"
@@ -79,7 +78,6 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
-#include "utils/datum.h"
 #include "utils/snapmgr.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
@@ -97,8 +95,6 @@
 #include "access/twophase.h"
 #include "postmaster/backoff.h"
 #include "utils/resource_manager.h"
-#include "pgstat.h"
-#include "executor/nodeFunctionscan.h"
 
 #include "utils/session_state.h"
 #include "utils/vmem_tracker.h"
@@ -501,7 +497,7 @@ SocketBackend(StringInfo inBuf)
 			if( PG_PROTOCOL_MAJOR(FrontendProtocol) < 3 )
 					ereport(COMMERROR,
 							(errcode(ERRCODE_PROTOCOL_VIOLATION),
-							 errmsg("Greenplum Database dispatch unsupported for old FrontendProtocols.")));
+							 errmsg("dispatch unsupported for old FrontendProtocols")));
 
 
 			break;
@@ -514,7 +510,7 @@ SocketBackend(StringInfo inBuf)
 			if( PG_PROTOCOL_MAJOR(FrontendProtocol) < 3 )
 					ereport(COMMERROR,
 							(errcode(ERRCODE_PROTOCOL_VIOLATION),
-							 errmsg("Greenplum Database dispatch unsupported for old FrontendProtocols.")));
+							 errmsg("dispatch unsupported for old FrontendProtocols")));
 
 
 			break;
@@ -5204,13 +5200,10 @@ PostgresMain(int argc, char *argv[],
 					int serializedParamslen = 0;
 					int serializedQueryDispatchDesclen = 0;
 					int resgroupInfoLen = 0;
-					int rootIdx;
 					TimestampTz statementStart;
 					Oid suid;
 					Oid ouid;
 					Oid cuid;
-
-					int unusedFlags;
 
 					if (Gp_role != GP_ROLE_EXECUTE)
 						ereport(ERROR,
@@ -5230,8 +5223,6 @@ PostgresMain(int argc, char *argv[],
 					ouid = pq_getmsgint(&input_message, 4);
 					cuid = pq_getmsgint(&input_message, 4);
 
-					rootIdx = pq_getmsgint(&input_message, 4);
-
 					statementStart = pq_getmsgint64(&input_message);
 					query_string_len = pq_getmsgint(&input_message, 4);
 					serializedQuerytreelen = pq_getmsgint(&input_message, 4);
@@ -5247,9 +5238,6 @@ PostgresMain(int argc, char *argv[],
 						serializedDtxContextInfo = pq_getmsgbytes(&input_message,serializedDtxContextInfolen);
 
 					DtxContextInfo_Deserialize(serializedDtxContextInfo, serializedDtxContextInfolen, &TempDtxContextInfo);
-
-					/* get the transaction options */
-					unusedFlags = pq_getmsgint(&input_message, 4);
 
 					/* get the query string and kick off processing. */
 					if (query_string_len > 0)

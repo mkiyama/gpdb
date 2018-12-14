@@ -1037,9 +1037,6 @@ gp_adjust_priority_value(PG_FUNCTION_ARGS)
 
 	priorityVal = TextDatumGetCString(dVal);
 
-	if (!priorityVal)
-		elog(ERROR, "Invalid priority value specified.");
-
 	wt = BackoffPriorityValueToInt(priorityVal);
 
 	Assert(wt > 0);
@@ -1075,7 +1072,7 @@ gp_adjust_priority_int(PG_FUNCTION_ARGS)
 	if (!superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("Only superuser can re-prioritize a query after it has begun execution."))));
+				 (errmsg("only superuser can re-prioritize a query after it has begun execution"))));
 
 	if (Gp_role == GP_ROLE_UTILITY)
 		elog(ERROR, "Query prioritization does not work in utility mode.");

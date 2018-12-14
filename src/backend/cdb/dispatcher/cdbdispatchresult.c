@@ -19,7 +19,6 @@
 #include "libpq-fe.h"		/* prerequisite for libpq-int.h */
 #include "libpq-int.h"		/* PQExpBufferData */
 
-#include "lib/stringinfo.h"		/* StringInfoData */
 #include "utils/guc.h"			/* log_min_messages */
 
 #include "cdb/cdbconn.h"		/* SegmentDatabaseDescriptor */
@@ -27,7 +26,6 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbsreh.h"
 #include "cdb/cdbdispatchresult.h"
-#include "commands/tablecmds.h"
 
 static int cdbdisp_snatchPGresults(CdbDispatchResult *dispatchResult,
 						struct pg_result **pgresultptrs, int maxresults);
@@ -175,7 +173,6 @@ cdbdisp_resetResult(CdbDispatchResult *dispatchResult)
 	 * Reset summary indicators.
 	 */
 	dispatchResult->errcode = 0;
-	dispatchResult->errindex = -1;
 	dispatchResult->okindex = -1;
 
 	/*
@@ -225,8 +222,6 @@ cdbdisp_seterrcode(int errcode, /* ERRCODE_xxx or 0 */
 	if (!dispatchResult->errcode)
 	{
 		dispatchResult->errcode = errcode;
-		if (resultIndex >= 0)
-			dispatchResult->errindex = resultIndex;
 	}
 
 	if (!meleeResults)
@@ -589,7 +584,6 @@ cdbdisp_get_PQerror(PGresult *pgresult)
 
 /*
  * Format a CdbDispatchResults object.
- * Appends error messages to caller's StringInfo buffer.
  * Returns an ErrorData object in *qeError if some error was found, or NIL if no errors.
  * Before calling this function, you must call CdbCheckDispatchResult().
  */
@@ -939,7 +933,6 @@ cdbdisp_snatchPGresults(CdbDispatchResult *dispatchResult,
 	 * Empty our PGresult array.
 	 */
 	resetPQExpBuffer(buf);
-	dispatchResult->errindex = -1;
 	dispatchResult->okindex = -1;
 
 	return nresults;

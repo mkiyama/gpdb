@@ -59,11 +59,6 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 
-#define SCANNED_SEGNO  \
-	(&scan->aos_segfile_arr[ \
-		(scan->aos_segfiles_processed == 0 ? 0 : scan->aos_segfiles_processed - 1) \
-		])->segno
-
 /*
  * AppendOnlyDeleteDescData is used for delete data from append-only
  * relations. It serves an equivalent purpose as AppendOnlyScanDescData
@@ -699,8 +694,7 @@ AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorRea
 			if (varBlockCheckError != VarBlockCheckOk)
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("VarBlock  is not valid. "
-								"Valid block check error %d, detail '%s'",
+						 errmsg("VarBlock is not valid, valid block check error %d, detail '%s'",
 								varBlockCheckError,
 								VarBlockGetCheckErrorStr()),
 						 errdetail_appendonly_read_storage_content_header(executorReadBlock->storageRead),
@@ -721,7 +715,7 @@ AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorRea
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Row count %d in append-only storage header does not match VarBlock item count %d",
+						 errmsg("row count %d in append-only storage header does not match VarBlock item count %d",
 								executorReadBlock->rowCount,
 								executorReadBlock->readerItemCount),
 						 errdetail_appendonly_read_storage_content_header(executorReadBlock->storageRead),
@@ -729,7 +723,7 @@ AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorRea
 			}
 
 			elogif(Debug_appendonly_print_scan, LOG,
-				   "Append-only scan read VarBlock for table '%s' with %d items (block offset in file = " INT64_FORMAT ")",
+				   "append-only scan read VarBlock for table '%s' with %d items (block offset in file = " INT64_FORMAT ")",
 				   AppendOnlyStorageRead_RelationName(executorReadBlock->storageRead),
 				   executorReadBlock->readerItemCount,
 				   executorReadBlock->headerOffsetInFile);
@@ -740,7 +734,7 @@ AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorRea
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Row count %d in append-only storage header is not 1 for single row",
+						 errmsg("row count %d in append-only storage header is not 1 for single row",
 								executorReadBlock->rowCount),
 						 errdetail_appendonly_read_storage_content_header(executorReadBlock->storageRead),
 						 errcontext_appendonly_read_storage_block(executorReadBlock->storageRead)));
@@ -1512,8 +1506,7 @@ finishWriteBlock(AppendOnlyInsertDesc aoInsertDesc)
 				if (varBlockCheckError != VarBlockCheckOk)
 					ereport(ERROR,
 							(errcode(ERRCODE_INTERNAL_ERROR),
-							 errmsg("Verify block during write found VarBlock is not valid. "
-									"Valid block check error %d, detail '%s'",
+							 errmsg("verify block during write found VarBlock is not valid, valid block check error %d, detail '%s'",
 									varBlockCheckError,
 									VarBlockGetCheckErrorStr()),
 							 errdetail_appendonly_insert_block_header(aoInsertDesc),
@@ -2341,10 +2334,9 @@ appendonly_fetch(AppendOnlyFetchDesc aoFetchDesc,
 #ifdef USE_ASSERT_CHECKING
 		if (segmentFileNum < aoFetchDesc->currentSegmentFile.num)
 			ereport(WARNING,
-					(errmsg("Append-only fetch requires scan prior segment file: "
-							"segmentFileNum %d, rowNum " INT64_FORMAT
-							", currentSegmentFileNum %d",
-							segmentFileNum, rowNum, aoFetchDesc->currentSegmentFile.num)));
+					(errmsg("append-only fetch requires scan prior segment file: segmentFileNum %d, rowNum " INT64_FORMAT ", currentSegmentFileNum %d",
+							segmentFileNum, rowNum,
+							aoFetchDesc->currentSegmentFile.num)));
 #endif
 		closeFetchSegmentFile(aoFetchDesc);
 
@@ -2933,7 +2925,7 @@ appendonly_insert(AppendOnlyInsertDesc aoInsertDesc,
 				 */
 				ereport(ERROR,
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						 errmsg("Item too long (check #1): length %d, maxBufferLen %d",
+						 errmsg("item too long (check #1): length %d, maxBufferLen %d",
 								itemLen, aoInsertDesc->varBlockMaker.maxBufferLen),
 						 errcontext_appendonly_insert_block_user_limit(aoInsertDesc)));
 			}
@@ -2976,7 +2968,7 @@ appendonly_insert(AppendOnlyInsertDesc aoInsertDesc,
 					 */
 					ereport(ERROR,
 							(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-							 errmsg("Item too long (check #2): length %d, maxBufferLen %d",
+							 errmsg("item too long (check #2): length %d, maxBufferLen %d",
 									itemLen, aoInsertDesc->varBlockMaker.maxBufferLen),
 							 errcontext_appendonly_insert_block_user_limit(aoInsertDesc)));
 				}
