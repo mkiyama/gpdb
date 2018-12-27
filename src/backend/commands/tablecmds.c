@@ -29,6 +29,7 @@
 #include "access/relscan.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
+#include "catalog/aocatalog.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
@@ -1948,9 +1949,7 @@ truncate_check_rel(Relation rel)
 	 * tables so that they can be wiped and recreated by the upgrade machinery.
 	 */
 	if (rel->rd_rel->relkind != RELKIND_RELATION &&
-		!(IsBinaryUpgrade && (rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-							  rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
-							  rel->rd_rel->relkind == RELKIND_AOVISIMAP)))
+		!(IsBinaryUpgrade && IsAppendonlyMetadataRelkind(rel->rd_rel->relkind)))
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("\"%s\" is not a table",
@@ -6587,8 +6586,10 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 			 */
 			oldCxt = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
-			while ((mtuple = appendonly_getnext(aoscan, ForwardScanDirection, oldslot)) != NULL)
+			while (appendonly_getnext(aoscan, ForwardScanDirection, oldslot))
 			{
+				mtuple = TupGetMemTuple(oldslot);
+
 				if (newrel)
 				{
 					Oid			tupOid = InvalidOid;
@@ -6717,9 +6718,7 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 
 			sdesc = aocs_beginscan(oldrel, snapshot, snapshot, oldTupDesc, proj);
 
-			aocs_getnext(sdesc, ForwardScanDirection, oldslot);
-
-			while(!TupIsNull(oldslot))
+			while (aocs_getnext(sdesc, ForwardScanDirection, oldslot))
 			{
 				oldCxt = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 				econtext->ecxt_scantuple = oldslot;
@@ -6808,7 +6807,6 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 				CHECK_FOR_INTERRUPTS();
 
 				MemoryContextSwitchTo(oldCxt);
-				aocs_getnext(sdesc, ForwardScanDirection, oldslot);
 			}
 
 			aocs_endscan(sdesc);
@@ -12108,9 +12106,7 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 		if (tuple_class->relkind == RELKIND_RELATION ||
 			tuple_class->relkind == RELKIND_MATVIEW ||
 			tuple_class->relkind == RELKIND_TOASTVALUE ||
-			tuple_class->relkind == RELKIND_AOSEGMENTS ||
-			tuple_class->relkind == RELKIND_AOBLOCKDIR ||
-			tuple_class->relkind == RELKIND_AOVISIMAP)
+			IsAppendonlyMetadataRelkind(tuple_class->relkind))
 		{
 			List	   *index_oid_list;
 			ListCell   *i;
@@ -12890,25 +12886,30 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 		/* copy main fork */
 		copy_relation_data(rel->rd_smgr, dstrel, MAIN_FORKNUM,
 						   rel->rd_rel->relpersistence);
+	}
 
-		/* copy those extra forks that exist */
-		for (forkNum = MAIN_FORKNUM + 1; forkNum <= MAX_FORKNUM; forkNum++)
+	/*
+	 * Append-only tables now include init forks for unlogged tables, so we copy
+	 * over all forks. AO tables, so far, do not have visimap or fsm forks.
+	 */
+	
+	/* copy those extra forks that exist */
+	for (forkNum = MAIN_FORKNUM + 1; forkNum <= MAX_FORKNUM; forkNum++)
+	{
+		if (smgrexists(rel->rd_smgr, forkNum))
 		{
-			if (smgrexists(rel->rd_smgr, forkNum))
-			{
-				smgrcreate(dstrel, forkNum, false);
+			smgrcreate(dstrel, forkNum, false);
 
-				/*
-				 * WAL log creation if the relation is persistent, or this is the
-				 * init fork of an unlogged relation.
-				 */
-				if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
-					(rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED &&
-					 forkNum == INIT_FORKNUM))
-					log_smgrcreate(&newrnode, forkNum);
-				copy_relation_data(rel->rd_smgr, dstrel, forkNum,
-								   rel->rd_rel->relpersistence);
-			}
+			/*
+			 * WAL log creation if the relation is persistent, or this is the
+			 * init fork of an unlogged relation.
+			 */
+			if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
+				(rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED &&
+				 forkNum == INIT_FORKNUM))
+				log_smgrcreate(&newrnode, forkNum);
+			copy_relation_data(rel->rd_smgr, dstrel, forkNum,
+							   rel->rd_rel->relpersistence);
 		}
 	}
 
@@ -15118,6 +15119,33 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 				lprime = lappend(lprime, policy);
 				goto l_distro_fini;
 			}
+
+			/*
+			 * system columns is not visiable to users for replicated table,
+			 * so if table is convertint to replicated table, check if there
+			 * are dependencies on the system columns.
+			 */
+			AttrNumber	attr;
+			ObjectAddresses *checkObjects = new_object_addresses();
+
+			for (attr = FirstLowInvalidHeapAttributeNumber + 1;
+				 attr != InvalidAttrNumber; attr++)
+			{
+				ObjectAddress obj;
+				obj.classId = RelationRelationId;
+				obj.objectId = RelationGetRelid(rel);
+				obj.objectSubId = attr;
+
+				add_exact_object_address(&obj, checkObjects);
+			}
+
+			checkDependencies(checkObjects,
+							  "cannot set distributed replicated because "
+							  "other object depend on its system columns",
+							  "system columns of replicated table will be exposed "
+							  "to users after altering, resolve dependencies first");
+
+			free_object_addresses(checkObjects);
 		}
 	}
 
@@ -15603,9 +15631,7 @@ rel_get_table_oid(Relation rel)
 
 		return toid;
 	}
-	else if (rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-			 rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
-			 rel->rd_rel->relkind == RELKIND_AOVISIMAP ||
+	else if (IsAppendonlyMetadataRelkind(rel->rd_rel->relkind) ||
 			 rel->rd_rel->relkind == RELKIND_TOASTVALUE)
 	{
 		/* use pg_depend to find parent */
@@ -17185,10 +17211,8 @@ split_rows(Relation intoa, Relation intob, Relation temprel)
 		}
 		else if (RelationIsAoRows(temprel))
 		{
-			MemTuple mtuple;
-
-			mtuple = appendonly_getnext(aoscan, ForwardScanDirection, slotT);
-			if (!PointerIsValid(mtuple))
+			appendonly_getnext(aoscan, ForwardScanDirection, slotT);
+			if (TupIsNull(slotT))
 				break;
 
 			TupClearShouldFree(slotT);
@@ -17260,7 +17284,7 @@ split_rows(Relation intoa, Relation intob, Relation temprel)
 				MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 			}
 
-			mtuple = ExecFetchSlotMemTuple(targetSlot, false);
+			mtuple = ExecFetchSlotMemTuple(targetSlot);
 			appendonly_insert(*targetAODescPtr, mtuple, InvalidOid, &aoTupleId);
 
 			/* cache TID for later updating of indexes */

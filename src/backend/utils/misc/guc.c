@@ -57,6 +57,7 @@
 #include "postmaster/autovacuum.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/bgwriter.h"
+#include "postmaster/fts.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/syslogger.h"
 #include "postmaster/walwriter.h"
@@ -1122,15 +1123,6 @@ static struct config_bool ConfigureNamesBool[] =
 		&track_io_timing,
 		false,
 		NULL, NULL, NULL
-	},
-
-	{
-		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
-			gettext_noop("Collects resource queue-level statistics on database activity."),
-			NULL
-		},
-		&pgstat_collect_queuelevel,
-		false, NULL, NULL
 	},
 
 	{
@@ -7007,7 +6999,7 @@ AlterSystemSetConfigFile(AlterSystemStmt *altersysstmt)
 	struct stat st;
 	void	   *newextra = NULL;
 
-	if (!superuser())
+	if (!am_ftshandler && !superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			 (errmsg("must be superuser to execute ALTER SYSTEM command"))));

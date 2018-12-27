@@ -2969,24 +2969,32 @@ CopyTo(CopyState cstate)
 			}
 			else if (RelationIsAoRows(rel))
 			{
-				MemTuple		tuple;
 				TupleTableSlot	*slot = MakeSingleTupleTableSlot(tupDesc);
 				MemTupleBinding *mt_bind = create_memtuple_binding(tupDesc);
 
 				aoscandesc = appendonly_beginscan(rel, GetActiveSnapshot(),
 												  GetActiveSnapshot(), 0, NULL);
 
-				while ((tuple = appendonly_getnext(aoscandesc, ForwardScanDirection, slot)) != NULL)
+				while (appendonly_getnext(aoscandesc, ForwardScanDirection, slot))
 				{
+					MemTuple	tuple;
+					Oid			tupleOid = InvalidOid;
+
 					CHECK_FOR_INTERRUPTS();
 
-					/* Extract all the values of the  tuple */
+					/* Extract all the values of the tuple */
 					slot_getallattrs(slot);
 					values = slot_get_values(slot);
 					nulls = slot_get_isnull(slot);
 
+					if (mtbind_has_oid(mt_bind))
+					{
+						tuple = TupGetMemTuple(slot);
+						tupleOid = MemTupleGetOid(tuple, mt_bind);
+					}
+
 					/* Format and send the data */
-					CopyOneRowTo(cstate, MemTupleGetOid(tuple, mt_bind), values, nulls);
+					CopyOneRowTo(cstate, tupleOid, values, nulls);
 					processed++;
 				}
 
@@ -3016,13 +3024,9 @@ CopyTo(CopyState cstate)
 									  GetActiveSnapshot(),
 									  NULL /* relationTupleDesc */, proj);
 
-				for(;;)
+				while (aocs_getnext(scan, ForwardScanDirection, slot))
 				{
 				    CHECK_FOR_INTERRUPTS();
-
-				    aocs_getnext(scan, ForwardScanDirection, slot);
-				    if (TupIsNull(slot))
-				        break;
 
 				    slot_getallattrs(slot);
 				    values = slot_get_values(slot);
@@ -3609,6 +3613,10 @@ CopyFrom(CopyState cstate)
 	{
 		useHeapMultiInsert = false;
 	}
+	else
+	{
+		useHeapMultiInsert = true;
+	}
 
 	/* Prepare to catch AFTER triggers. */
 	AfterTriggerBeginQuery();
@@ -3988,11 +3996,9 @@ CopyFrom(CopyState cstate)
 			if (useHeapMultiInsert)
 			{
 				char relstorage = RelinfoGetStorage(resultRelInfo);
-				if (relstorage != RELSTORAGE_AOROWS &&
-					relstorage != RELSTORAGE_AOCOLS &&
-					relstorage != RELSTORAGE_EXTERNAL)
-					useHeapMultiInsert = true;
-				else
+				if (relstorage == RELSTORAGE_AOROWS ||
+					relstorage == RELSTORAGE_AOCOLS ||
+					relstorage == RELSTORAGE_EXTERNAL)
 					useHeapMultiInsert = false;
 			}
 
@@ -4044,7 +4050,7 @@ CopyFrom(CopyState cstate)
 				{
 					MemTuple	mtuple;
 
-					mtuple = ExecFetchSlotMemTuple(slot, false);
+					mtuple = ExecFetchSlotMemTuple(slot);
 
 					/* inserting into an append only relation */
 					appendonly_insert(resultRelInfo->ri_aoInsertDesc, mtuple, loaded_oid,

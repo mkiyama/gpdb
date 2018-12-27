@@ -7228,8 +7228,8 @@ StartupXLOG(void)
 	EndOfLog = EndRecPtr;
 	XLByteToPrevSeg(EndOfLog, endLogSegNo);
 
-	elog(LOG,"end of transaction log location is %s",
-		 XLogLocationToString(EndOfLog));
+	elog(LOG,"end of transaction log location is %X/%X",
+		 (uint32) (EndOfLog >> 32), (uint32) EndOfLog);
 
 	/*
 	 * Complain if we did not roll forward far enough to render the backup
@@ -7924,18 +7924,18 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		{
 			case 1:
 				ereport(LOG,
-						(errmsg("invalid primary checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid primary checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			case 2:
 				ereport(LOG,
-						(errmsg("invalid secondary checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid secondary checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			default:
 				ereport(LOG,
-						(errmsg("invalid checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 		}
 		return NULL;
@@ -7946,18 +7946,18 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		{
 			case 1:
 				ereport(LOG,
-						(errmsg("invalid resource manager ID in primary checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid resource manager ID in primary checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			case 2:
 				ereport(LOG,
-						(errmsg("invalid resource manager ID in secondary checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid resource manager ID in secondary checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			default:
 				ereport(LOG,
-				(errmsg("invalid resource manager ID in checkpoint record at location %s",
-				        XLogLocationToString_Long(RecPtr))));
+				(errmsg("invalid resource manager ID in checkpoint record at location %X/%X",
+						(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 		}
 		return NULL;
@@ -7969,18 +7969,18 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		{
 			case 1:
 				ereport(LOG,
-				   (errmsg("invalid xl_info in primary checkpoint record at location %s",
-				           XLogLocationToString_Long(RecPtr))));
+				   (errmsg("invalid xl_info in primary checkpoint record at location %X/%X",
+						   (uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			case 2:
 				ereport(LOG,
-				 (errmsg("invalid xl_info in secondary checkpoint record at location %s",
-				         XLogLocationToString_Long(RecPtr))));
+				 (errmsg("invalid xl_info in secondary checkpoint record at location %X/%X",
+						 (uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			default:
 				ereport(LOG,
-						(errmsg("invalid xl_info in checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid xl_info in checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 		}
 		return NULL;
@@ -8010,18 +8010,18 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		{
 			case 1:
 				ereport(LOG,
-					(errmsg("invalid length of primary checkpoint at location %s",
-					        XLogLocationToString_Long(RecPtr))));
+					(errmsg("invalid length of primary checkpoint at location %X/%X",
+							(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			case 2:
 				ereport(LOG,
-				  (errmsg("invalid length of secondary checkpoint record at location %s",
-				          XLogLocationToString_Long(RecPtr))));
+				  (errmsg("invalid length of secondary checkpoint record at location %X/%X",
+						  (uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 			default:
 				ereport(LOG,
-						(errmsg("invalid length of checkpoint record at location %s",
-						        XLogLocationToString_Long(RecPtr))));
+						(errmsg("invalid length of checkpoint record at location %X/%X",
+								(uint32) (RecPtr >> 32), (uint32) RecPtr)));
 				break;
 		}
 		return NULL;
@@ -9171,10 +9171,6 @@ CreateRestartPoint(int flags)
 		UpdateControlFile();
 	}
 	LWLockRelease(ControlFileLock);
-
-	elog((Debug_print_qd_mirroring ? LOG : DEBUG1), "RecoveryRestartPoint: checkpoint copy redo location %s, previous checkpoint location %s",
-		 XLogLocationToString(ControlFile->checkPointCopy.redo),
-		 XLogLocationToString(ControlFile->prevCheckPoint));
 
 	/*
 	 * Due to an historical accident multixact truncations are not WAL-logged,
@@ -11165,93 +11161,6 @@ CancelBackup(void)
 	}
 }
 
-static char *
-XLogLocationToBuffer(char *buffer, XLogRecPtr loc, bool longFormat)
-{
-
-	if (longFormat)
-	{
-		uint64 seg = loc / XLogSegSize;
-		uint32 offset = loc % XLogSegSize;
-		sprintf(buffer,
-			    "%X/%X (==> seg " UINT64_FORMAT ", offset 0x%X)",
-			    (uint32) (loc >> 32), (uint32) loc,
-			    seg, offset);
-	}
-	else
-		sprintf(buffer,
-			    "%X/%X",
-			    (uint32) (loc >> 32), (uint32) loc);
-
-	return buffer;
-}
-
-static char xlogLocationBuffer[50];
-static char xlogLocationBuffer2[50];
-static char xlogLocationBuffer3[50];
-static char xlogLocationBuffer4[50];
-static char xlogLocationBuffer5[50];
-
-char *
-XLogLocationToString(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer, loc, Debug_print_qd_mirroring);
-}
-
-char *
-XLogLocationToString2(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer2, loc, Debug_print_qd_mirroring);
-}
-
-char *
-XLogLocationToString3(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer3, loc, Debug_print_qd_mirroring);
-}
-
-char *
-XLogLocationToString4(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer4, loc, Debug_print_qd_mirroring);
-}
-
-char *
-XLogLocationToString5(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer5, loc, Debug_print_qd_mirroring);
-}
-
-char *
-XLogLocationToString_Long(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer, loc, true);
-}
-
-char *
-XLogLocationToString2_Long(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer2, loc, true);
-}
-
-char *
-XLogLocationToString3_Long(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer3, loc, true);
-}
-
-char *
-XLogLocationToString4_Long(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer4, loc, true);
-}
-
-char *
-XLogLocationToString5_Long(XLogRecPtr loc)
-{
-	return XLogLocationToBuffer(xlogLocationBuffer5, loc, true);
-}
-
 /*
  * Read the XLOG page containing RecPtr into readBuf (if not read already).
  * Returns number of bytes read, if the page is read successfully, or -1
@@ -11400,6 +11309,40 @@ retry:
 	Assert(reqLen <= readLen);
 
 	*readTLI = curFileTLI;
+
+	/*
+	 * Check the page header immediately, so that we can retry immediately if
+	 * it's not valid. This may seem unnecessary, because XLogReadRecord()
+	 * validates the page header anyway, and would propagate the failure up to
+	 * ReadRecord(), which would retry. However, there's a corner case with
+	 * continuation records, if a record is split across two pages such that
+	 * we would need to read the two pages from different sources. For
+	 * example, imagine a scenario where a streaming replica is started up,
+	 * and replay reaches a record that's split across two WAL segments. The
+	 * first page is only available locally, in pg_wal, because it's already
+	 * been recycled in the master. The second page, however, is not present
+	 * in pg_wal, and we should stream it from the master. There is a recycled
+	 * WAL segment present in pg_wal, with garbage contents, however. We would
+	 * read the first page from the local WAL segment, but when reading the
+	 * second page, we would read the bogus, recycled, WAL segment. If we
+	 * didn't catch that case here, we would never recover, because
+	 * ReadRecord() would retry reading the whole record from the beginning.
+	 *
+	 * Of course, this only catches errors in the page header, which is what
+	 * happens in the case of a recycled WAL segment. Other kinds of errors or
+	 * corruption still has the same problem. But this at least fixes the
+	 * common case, which can happen as part of normal operation.
+	 *
+	 * Validating the page header is cheap enough that doing it twice
+	 * shouldn't be a big deal from a performance point of view.
+	 */
+	if (!XLogReaderValidatePageHeader(xlogreader, targetPagePtr, readBuf))
+	{
+		/* reset any error XLogReaderValidatePageHeader() might have set */
+		xlogreader->errormsg_buf[0] = '\0';
+		goto next_record_is_invalid;
+	}
+
 	return readLen;
 
 next_record_is_invalid:
@@ -11533,12 +11476,18 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 						}
 						else
 						{
-							ptr = tliRecPtr;
+							ptr = RecPtr;
+
+							/*
+							 * Use the record begin position to determine the
+							 * TLI, rather than the position we're reading.
+							 */
 							tli = tliOfPointInHistory(tliRecPtr, expectedTLEs);
 
 							if (curFileTLI > 0 && tli < curFileTLI)
 								elog(ERROR, "according to history file, WAL location %X/%X belongs to timeline %u, but previous recovered WAL file came from timeline %u",
-									 (uint32) (ptr >> 32), (uint32) ptr,
+									 (uint32) (tliRecPtr >> 32),
+									 (uint32) tliRecPtr,
 									 tli, curFileTLI);
 						}
 						curFileTLI = tli;

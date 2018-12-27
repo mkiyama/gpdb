@@ -34,6 +34,7 @@
 #include "nodes/plannodes.h"
 #include "nodes/readfuncs.h"
 #include "nodes/relation.h"
+#include "catalog/aocatalog.h"
 #include "catalog/pg_class.h"
 #include "catalog/heap.h"
 #include "cdb/cdbgang.h"
@@ -1083,9 +1084,7 @@ _readCreateStmt_common(CreateStmt *local_node)
 		   local_node->relKind == RELKIND_COMPOSITE_TYPE ||
 		   local_node->relKind == RELKIND_FOREIGN_TABLE ||
 		   local_node->relKind == RELKIND_UNCATALOGED ||
-		   local_node->relKind == RELKIND_AOSEGMENTS ||
-		   local_node->relKind == RELKIND_AOBLOCKDIR ||
-		   local_node->relKind == RELKIND_AOVISIMAP);
+		   IsAppendonlyMetadataRelkind(local_node->relKind));
 	Assert(local_node->oncommit <= ONCOMMIT_DROP);
 }
 
@@ -1626,13 +1625,15 @@ _readSeqScan(void)
 	READ_DONE();
 }
 
-static DynamicTableScan *
-_readDynamicTableScan(void)
+static DynamicSeqScan *
+_readDynamicSeqScan(void)
 {
-	READ_LOCALS(DynamicTableScan);
+	READ_LOCALS(DynamicSeqScan);
+
 	readScanInfo((Scan *)local_node);
 	READ_INT_FIELD(partIndex);
 	READ_INT_FIELD(partIndexPrintable);
+
 	READ_DONE();
 }
 
@@ -1748,6 +1749,8 @@ _readDynamicIndexScan(void)
 
 	/* DynamicIndexScan has some content from IndexScan. */
 	readIndexScanFields(&local_node->indexscan);
+	READ_INT_FIELD(partIndex);
+	READ_INT_FIELD(partIndexPrintable);
 	local_node->logicalIndexInfo = readLogicalIndexInfo();
 
 	READ_DONE();
@@ -1780,9 +1783,19 @@ _readDynamicBitmapIndexScan(void)
 
 	/* DynamicBitmapIndexScan has some content from BitmapIndexScan. */
 	readBitmapIndexScanFields(&local_node->biscan);
+	READ_INT_FIELD(partIndex);
+	READ_INT_FIELD(partIndexPrintable);
 	local_node->logicalIndexInfo = readLogicalIndexInfo();
 
 	READ_DONE();
+}
+
+static void
+readBitmapHeapScanFields(BitmapHeapScan *local_node)
+{
+	readScanInfo((Scan *) local_node);
+
+	READ_NODE_FIELD(bitmapqualorig);
 }
 
 static BitmapHeapScan *
@@ -1790,34 +1803,20 @@ _readBitmapHeapScan(void)
 {
 	READ_LOCALS(BitmapHeapScan);
 
-	readScanInfo((Scan *)local_node);
-
-	READ_NODE_FIELD(bitmapqualorig);
+	readBitmapHeapScanFields(local_node);
 
 	READ_DONE();
 }
 
-static BitmapAppendOnlyScan *
-_readBitmapAppendOnlyScan(void)
+static DynamicBitmapHeapScan *
+_readDynamicBitmapHeapScan(void)
 {
-	READ_LOCALS(BitmapAppendOnlyScan);
+	READ_LOCALS(DynamicBitmapHeapScan);
 
-	readScanInfo((Scan *)local_node);
-
-	READ_NODE_FIELD(bitmapqualorig);
-	READ_BOOL_FIELD(isAORow);
-
-	READ_DONE();
-}
-
-static BitmapTableScan *
-_readBitmapTableScan(void)
-{
-	READ_LOCALS(BitmapTableScan);
-
-	readScanInfo((Scan *)local_node);
-
-	READ_NODE_FIELD(bitmapqualorig);
+	/* DynamicBitmapHeapScan has some content from BitmapHeapScan. */
+	readBitmapHeapScanFields(&local_node->bitmapheapscan);
+	READ_INT_FIELD(partIndex);
+	READ_INT_FIELD(partIndexPrintable);
 
 	READ_DONE();
 }
@@ -2405,9 +2404,6 @@ void readScanInfo(Scan *local_node)
 	readPlanInfo((Plan *)local_node);
 
 	READ_UINT_FIELD(scanrelid);
-
-	READ_INT_FIELD(partIndex);
-	READ_INT_FIELD(partIndexPrintable);
 }
 
 void readPlanInfo(Plan *local_node)
@@ -3127,8 +3123,8 @@ readNodeBinary(void)
 			case T_SeqScan:
 				return_value = _readSeqScan();
 				break;
-			case T_DynamicTableScan:
-				return_value = _readDynamicTableScan();
+			case T_DynamicSeqScan:
+				return_value = _readDynamicSeqScan();
 				break;
 			case T_ExternalScan:
 				return_value = _readExternalScan();
@@ -3151,11 +3147,8 @@ readNodeBinary(void)
 			case T_BitmapHeapScan:
 				return_value = _readBitmapHeapScan();
 				break;
-			case T_BitmapAppendOnlyScan:
-				return_value = _readBitmapAppendOnlyScan();
-				break;
-			case T_BitmapTableScan:
-				return_value = _readBitmapTableScan();
+			case T_DynamicBitmapHeapScan:
+				return_value = _readDynamicBitmapHeapScan();
 				break;
 			case T_WorkTableScan:
 				return_value = _readWorkTableScan();

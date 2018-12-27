@@ -102,6 +102,7 @@
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 
+#include "executor/execDynamicScan.h"
 #include "cdb/cdbvars.h"                    /* GpIdentity.segindex */
 
 static TupleDesc ExecTypeFromTLInternal(List *targetList,
@@ -728,50 +729,21 @@ ExecFetchSlotHeapTuple(TupleTableSlot *slot)
  * --------------------------------
  */
 MemTuple
-ExecFetchSlotMemTuple(TupleTableSlot *slot, bool inline_toast)
+ExecFetchSlotMemTuple(TupleTableSlot *slot)
 {
-	MemTuple newTuple;
-	MemTuple oldTuple = NULL;
-	uint32 tuplen;
+	MemoryContext oldContext;
 
 	Assert(!TupIsNull(slot));
 	Assert(slot->tts_mt_bind);
 
 	if(slot->PRIVATE_tts_memtuple)
-	{
-		if(!inline_toast || !memtuple_get_hasext(slot->PRIVATE_tts_memtuple))
-			return slot->PRIVATE_tts_memtuple;
+		return slot->PRIVATE_tts_memtuple;
 
-		oldTuple = slot->PRIVATE_tts_mtup_buf;
-		slot->PRIVATE_tts_mtup_buf = NULL;
-		slot->PRIVATE_tts_mtup_buf_len = 0;
-	}
+	oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+	slot->PRIVATE_tts_memtuple = ExecCopySlotMemTuple(slot);
+	MemoryContextSwitchTo(oldContext);
 
-	slot_getallattrs(slot);
-
-	tuplen = slot->PRIVATE_tts_mtup_buf_len;
-	newTuple = memtuple_form_to(slot->tts_mt_bind, slot_get_values(slot), slot_get_isnull(slot),
-			(MemTuple) slot->PRIVATE_tts_mtup_buf, &tuplen, inline_toast);
-
-	if(!newTuple)
-	{
-		if(slot->PRIVATE_tts_mtup_buf)
-			pfree(slot->PRIVATE_tts_mtup_buf);
-
-		slot->PRIVATE_tts_mtup_buf = MemoryContextAlloc(slot->tts_mcxt, tuplen);
-		slot->PRIVATE_tts_mtup_buf_len = tuplen;
-
-		newTuple = memtuple_form_to(slot->tts_mt_bind, slot_get_values(slot), slot_get_isnull(slot),
-			(MemTuple) slot->PRIVATE_tts_mtup_buf, &tuplen, inline_toast);
-	}
-
-	Assert(newTuple);
-	slot->PRIVATE_tts_memtuple = newTuple;
-
-	if(oldTuple)
-		pfree(oldTuple);
-
-	return newTuple;
+	return slot->PRIVATE_tts_memtuple;
 }
 
 /* --------------------------------
@@ -1027,7 +999,10 @@ ExecInitScanTupleSlot(EState *estate, ScanState *scanstate)
     {
         case RTE_RELATION:
             /* Set 'tableoid' sysattr to the Oid of baserel's pg_class row. */
-            slot->tts_tableOid = rtentry->relid;
+			if (isDynamicScan(&scan->plan))
+				slot->tts_tableOid = DynamicScan_GetTableOid(scanstate);
+			else
+				slot->tts_tableOid = rtentry->relid;
             break;
 
         default:

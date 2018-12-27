@@ -177,7 +177,7 @@ typedef struct CdbExplain_NodeSummary
 	CdbExplain_Agg workmemwanted;
 	CdbExplain_Agg totalWorkfileCreated;
 	CdbExplain_Agg peakMemBalance;
-	/* Used for DynamicTableScan, DynamicIndexScan and DynamicBitmapTableScan */
+	/* Used for DynamicSeqScan, DynamicIndexScan and DynamicBitmapHeapScan */
 	CdbExplain_Agg totalPartTableScanned;
 	/* Summary of space used by sort */
 	CdbExplain_Agg sortSpaceUsed[NUM_SORT_SPACE_TYPE][NUM_SORT_METHOD];
@@ -1311,7 +1311,7 @@ cdbexplain_collectExtraText(PlanState *planstate, StringInfo notebuf)
 		appendBinaryStringInfo(notebuf, planstate->cdbexplainbuf->data,
 							   planstate->cdbexplainbuf->len);
 
-		truncateStringInfo(planstate->cdbexplainbuf, 0);
+		resetStringInfo(planstate->cdbexplainbuf);
 	}
 
 	return bnotes;
@@ -1694,8 +1694,7 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 	/*
 	 * Print number of partitioned tables scanned for dynamic scans.
 	 */
-	if (0 <= ns->totalPartTableScanned.vcnt && (T_BitmapTableScanState == planstate->type
-												|| T_DynamicTableScanState == planstate->type
+	if (0 <= ns->totalPartTableScanned.vcnt && (T_DynamicSeqScanState == planstate->type
 												|| T_DynamicIndexScanState == planstate->type))
 	{
 		/*
@@ -1708,19 +1707,7 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 
 			if (0 == nPartTableScanned_avg)
 			{
-				bool		displayPartitionScanned = true;
-
-				if (T_BitmapTableScanState == planstate->type)
-				{
-					ScanState  *scanState = (ScanState *) planstate;
-
-					if (!isDynamicScan(scanState->ps.plan))
-					{
-						displayPartitionScanned = false;
-					}
-				}
-
-				if (displayPartitionScanned)
+				if (T_DynamicBitmapHeapScanState == planstate->type)
 				{
 					int			numTotalLeafParts = cdbexplain_countLeafPartTables(planstate);
 
@@ -2355,8 +2342,8 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
 static int
 cdbexplain_countLeafPartTables(PlanState *planstate)
 {
-	Assert(IsA(planstate, DynamicTableScanState) ||IsA(planstate, DynamicIndexScanState)
-		   ||IsA(planstate, BitmapTableScanState));
+	Assert(IsA(planstate, DynamicSeqScanState) ||
+		   IsA(planstate, DynamicIndexScanState));
 	Scan	   *scan = (Scan *) planstate->plan;
 
 	Oid			root_oid = getrelid(scan->scanrelid, planstate->state->es_range_table);

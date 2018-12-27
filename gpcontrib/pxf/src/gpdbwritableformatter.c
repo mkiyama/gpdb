@@ -89,9 +89,9 @@ typedef struct
  * 4 byte		| 2 byte	1 byte	| 2 byte	   2 byte     2 byte	      ceil(#col/8) byte	 fixed length or var len
  *
  * For fixed length type, we know the length.
- * In the col val, we align pad according to the alignemnt requirement of the type.
+ * In the col val, we align pad according to the alignment requirement of the type.
  * For var length type, the alignment is always 4 byte.
- * For var legnth type, col val is <4 byte length><payload val>
+ * For var length type, col val is <4 byte length><payload val>
  */
 #define GPDBWRITABLE_VERSION 2
 /* for backward compatibility */
@@ -348,7 +348,7 @@ verifyExternalTableDefinition(int16 ncolumns_remote, AttrNumber ncolumns, TupleD
 {
 	StringInfoData errMsg;
 
-	memset(&errMsg, 0, sizeof(errMsg));
+	initStringInfo(&errMsg);
 
 	if (ncolumns_remote != ncolumns)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -367,14 +367,14 @@ verifyExternalTableDefinition(int16 ncolumns_remote, AttrNumber ncolumns, TupleD
 		if ((isBinaryFormatType(defined_type) || isBinaryFormatType(input_type)) &&
 			input_type != defined_type)
 		{
-			if (errMsg.len == 0)
-				initStringInfo(&errMsg);
-
 			char	   *intype = format_type_be(input_type);
 			char	   *deftype = format_type_be(defined_type);
 			char	   *attname = NameStr(tupdesc->attrs[i]->attname);
 
-			appendStringInfo(&errMsg, "column \"%s\" (type \"%s\", input data type \"%s\"), ",
+			if (errMsg.len > 0)
+				appendStringInfoString(&errMsg, ", ");
+
+			appendStringInfo(&errMsg, "column \"%s\" (type \"%s\", input data type \"%s\")",
 							 attname, deftype, intype);
 			pfree(intype);
 			pfree(deftype);
@@ -382,8 +382,6 @@ verifyExternalTableDefinition(int16 ncolumns_remote, AttrNumber ncolumns, TupleD
 	}
 	if (errMsg.len > 0)
 	{
-		/* omit trailing ', ' */
-		truncateStringInfo(&errMsg, errMsg.len - strlen(", "));
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("external table definition did not match input data: %s",
@@ -698,7 +696,7 @@ gpdbwritableformatter_import(PG_FUNCTION_ARGS)
 	 * forward and then raise the error. But then, the framework will still
 	 * call the formatter the function again. Now, the formatter function will
 	 * be provided with a zero length data buffer. In this case, we should not
-	 * raise an error again, but simply retruns "NEED MORE DATA". This is how
+	 * raise an error again, but simply return "NEED MORE DATA". This is how
 	 * the formatter framework works.
 	 */
 	if (remaining == 0 && FORMATTER_GET_SAW_EOF(fcinfo))

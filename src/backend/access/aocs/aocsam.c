@@ -162,7 +162,8 @@ open_ds_write(Relation rel, DatumStreamWrite **ds, TupleDesc relationTupleDesc,
 										blksz,
 										attr,
 										RelationGetRelationName(rel),
-										/* title */ titleBuf.data);
+										/* title */ titleBuf.data,
+										RelationNeedsWAL(rel));
 
 	}
 }
@@ -612,7 +613,7 @@ static void upgrade_datum_fetch(AOCSFetchDesc fetch, int attno, Datum values[],
 					   values, isnull, formatversion);
 }
 
-void
+bool
 aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
 	int			ncol;
@@ -643,7 +644,7 @@ ReadNext:
 				/* No more seg, we are at the end */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
-				return;
+				return false;
 			}
 			scan->cur_seg_row = 0;
 		}
@@ -720,11 +721,11 @@ ReadNext:
 
 		TupSetVirtualTupleNValid(slot, ncol);
 		slot_set_ctid(slot, &(scan->cdb_fake_ctid));
-		return;
+		return true;
 	}
 
 	Assert(!"Never here");
-	return;
+	return false;
 }
 
 
@@ -1828,7 +1829,8 @@ aocs_addcol_init(Relation rel,
 		blksz = opts[iattr]->blocksize;
 		desc->dsw[i] = create_datumstreamwrite(ct, clvl, rel->rd_appendonly->checksum, 0, blksz /* safeFSWriteSize */ ,
 											   attr, RelationGetRelationName(rel),
-											   titleBuf.data);
+											   titleBuf.data,
+											   RelationNeedsWAL(rel));
 	}
 	return desc;
 }

@@ -105,7 +105,6 @@ char	   *Debug_dtm_action_sql_command_tag;
 
 bool		Debug_print_full_dtm = false;
 bool		Debug_print_snapshot_dtm = false;
-bool		Debug_print_qd_mirroring = false;
 bool		Debug_disable_distributed_snapshot = false;
 bool		Debug_abort_after_distributed_prepared = false;
 bool		Debug_abort_after_segment_prepared = false;
@@ -414,6 +413,7 @@ int			optimizer_cte_inlining_bound;
 bool		optimizer_force_multistage_agg;
 bool		optimizer_force_three_stage_scalar_dqa;
 bool		optimizer_force_expanded_distinct_aggs;
+bool		optimizer_force_agg_skew_avoidance;
 bool		optimizer_prune_computed_columns;
 bool		optimizer_push_requirements_from_consumer_to_producer;
 bool		optimizer_enforce_subplans;
@@ -580,6 +580,16 @@ static const struct config_enum_entry gp_gpperfmon_log_alert_level[] = {
 	{NULL, 0}
 };
 
+static const struct config_enum_entry test_time_slice_report_level_options[] = {
+	{"notice", NOTICE},
+	{"warning", WARNING},
+	{"error", ERROR},
+	{"log", LOG},
+	{"fatal", FATAL},
+	{"panic", PANIC},
+	{NULL, 0}
+};
+
 static const struct config_enum_entry password_hash_algorithm_options[] = {
 	/* {"none", PASSWORD_HASH_NONE}, * this option is not exposed */
 	{"MD5", PASSWORD_HASH_MD5},
@@ -694,16 +704,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_workfile_checksumming,
 		true,
-		NULL, NULL, NULL
-	},
-	{
-		{"force_bitmap_table_scan", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Forces bitmap table scan instead of bitmap heap/ao/aoco scan."),
-			NULL,
-			GUC_GPDB_ADDOPT | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&force_bitmap_table_scan,
-		false,
 		NULL, NULL, NULL
 	},
 	{
@@ -1275,17 +1275,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&Debug_print_snapshot_dtm,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"debug_print_qd_mirroring", PGC_SUSET, LOGGING_WHAT,
-			gettext_noop("Prints QD mirroring information to server log."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_print_qd_mirroring,
 		false,
 		NULL, NULL, NULL
 	},
@@ -2520,6 +2509,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_force_agg_skew_avoidance", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Always pick a plan for aggregate distinct that minimizes skew."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_force_agg_skew_avoidance,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_multilevel_partitioning", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable optimization of queries on multilevel partitioned tables."),
 			NULL,
@@ -3000,6 +3000,15 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&gp_resource_group_bypass,
 		false,
 		check_gp_resource_group_bypass, NULL, NULL
+	},
+
+	{
+		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
+			gettext_noop("Collects resource queue-level statistics on database activity."),
+			NULL
+		},
+		&pgstat_collect_queuelevel,
+		false, NULL, NULL
 	},
 
 	/* End-of-list marker */
@@ -4690,7 +4699,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 			GUC_GPDB_ADDOPT | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_test_time_slice_report_level,
-		ERROR, server_message_level_options,
+		ERROR, test_time_slice_report_level_options,
 		NULL, NULL, NULL
 	},
 
