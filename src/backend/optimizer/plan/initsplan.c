@@ -83,7 +83,6 @@ static bool check_redundant_nullability_qual(PlannerInfo *root, Node *clause);
  *
  *****************************************************************************/
 
-
 /*
  * add_base_rels_to_query
  *
@@ -157,46 +156,6 @@ build_base_rel_tlists(PlannerInfo *root, List *final_tlist)
 	{
 		add_vars_to_targetlist(root, tlist_vars, bms_make_singleton(0), true);
 		list_free(tlist_vars);
-	}
-
-
-	/*
-	 * Also add any Vars to final tlist that might be needed for split-updates
-	 */
-	if (root->parse->resultRelation && false)
-	{
-		int			result_relation = root->parse->resultRelation;
-		RangeTblEntry *rte;
-		Relation	relation;
-		int			numattrs;
-		int			attrno;
-		List	   *vars = NIL;
-
-		rte = planner_rt_fetch(result_relation, root);
-
-		/* Assume we already have adequate lock */
-		relation = heap_open(rte->relid, NoLock);
-
-		numattrs = RelationGetNumberOfAttributes(relation);
-		for (attrno = 1; attrno <= numattrs; attrno++)
-		{
-			Form_pg_attribute att_tup = relation->rd_att->attrs[attrno - 1];
-			Var		   *var;
-
-			if (att_tup->attisdropped)
-				continue;
-
-			var = makeVar(result_relation,
-						  attrno,
-						  att_tup->atttypid,
-						  att_tup->atttypmod,
-						  att_tup->attcollation,
-						  0);
-			vars = lappend(vars, var);
-		}
-		heap_close(relation, NoLock);
-
-		add_vars_to_targetlist(root, vars, bms_make_singleton(0), true);
 	}
 }
 
@@ -1483,7 +1442,6 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 	bool		pseudoconstant = false;
 	bool		maybe_equivalence;
 	bool		maybe_outer_join;
-	bool        maybe_local_equijoin;
 	Relids		nullable_relids;
 	RestrictInfo *restrictinfo;
 
@@ -1625,7 +1583,6 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 		nullable_relids = deduced_nullable_relids;
 		/* Don't feed it back for more deductions */
 		maybe_equivalence = false;
-		maybe_local_equijoin = false;
 		maybe_outer_join = false;
 	}
 	else if (bms_overlap(relids, outerjoin_nonnullable))
@@ -1708,7 +1665,6 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 			 * it appeared below that outer join (note that we can only get
 			 * here when the clause references only nullable-side rels).
 			 */
-			maybe_local_equijoin = true;
 			maybe_equivalence = true;
 			if (outerjoin_nonnullable != NULL)
 				below_outer_join = true;
@@ -1719,10 +1675,6 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 		 * set-aside OJ clause, even if it's in an OJ.
 		 */
 		maybe_outer_join = false;
-
-        /* the clause should always be considered a part of the set of
-           local equijoins managed by its closest RHS parent */
-		maybe_local_equijoin = true;
 	}
 
 	/*

@@ -332,6 +332,8 @@
                 >optimizer_enable_associativity</xref></p>
             <p><xref href="guc-list.xml#optimizer_enable_master_only_queries" type="section"
                 >optimizer_enable_master_only_queries</xref></p>
+            <p><xref href="guc-list.xml#optimizer_force_agg_skew_avoidance" type="section"
+                >optimizer_force_agg_skew_avoidance</xref></p>
             <p><xref href="guc-list.xml#optimizer_force_multistage_agg" type="section"
                 >optimizer_force_multistage_agg</xref>
             </p>
@@ -1068,6 +1070,11 @@
             <p>
               <xref href="guc-list.xml#deadlock_timeout" type="section">deadlock_timeout</xref>
             </p>
+            <p>
+              <xref href="guc-list.xml#gp_global_deadlock_detector_period" type="section">gp_global_deadlock_detector_period</xref>
+            </p>
+          </stentry>
+          <stentry>
             <p>
               <xref href="guc-list.xml#max_locks_per_transaction" type="section"
                 >max_locks_per_transaction</xref>
