@@ -7366,18 +7366,18 @@ StartupXLOG(void)
 				xlogctl->lastReplayedTLI = ThisTimeLineID;
 				SpinLockRelease(&xlogctl->info_lck);
 
-				/*
-				 * GPDB_84_MERGE_FIXME: Create restartpoints aggressively.
-				 *
-				 * In PostgreSQL, the bgwriter creates restartpoints during archive
-				 * recovery at its own leisure. In GPDB, with WAL replication based
-				 * mirroring, that was tripping the gp_replica_check checks, because
-				 * it bypasses the shared buffer cache and reads directly from disk.
-				 * For now, restore the old behavior, before the upstream change
-				 * to start bgwriter during archive recovery, and create a
-				 * restartpoint immediately after replaying a checkpoint record.
-				 */
+				if (create_restartpoint_on_ckpt_record_replay && ArchiveRecoveryRequested)
 				{
+					/*
+					 * Create restartpoint on checkpoint record if requested.
+					 *
+					 * The bgwriter creates restartpoints during archive
+					 * recovery at its own leisure. But gp_replica_check fails
+					 * with this, because it bypasses the shared buffer cache
+					 * and reads directly from disk. So, via GUC it can
+					 * request to force creating restart point mainly to flush
+					 * the shared buffers to disk.
+					 */
 					uint8 xlogRecInfo = record->xl_info & ~XLR_INFO_MASK;
 
 					if (record->xl_rmid == RM_XLOG_ID &&
@@ -7387,7 +7387,7 @@ StartupXLOG(void)
 						if (bgwriterLaunched)
 							RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_WAIT);
 						else
-							CreateRestartPoint(CHECKPOINT_IMMEDIATE);
+							elog(LOG, "Skipping CreateRestartPoint() as bgwriter is not launched.");
 					}
 				}
 
@@ -9505,14 +9505,7 @@ CreateRestartPoint(int flags)
 	 * checkpoint/restartpoint) to prevent the disk holding the xlog from
 	 * growing full.
 	 */
-	/*
-	 * In GPDB, CreateRestartPoint() gets called from startup process, unlike
-	 * upstream.  When called from startup process, we are only interested in
-	 * flushing shared buffers to disk.  So don't do anything else.
-	 * xlog_redo() depends on ThisTimeLineID to be valid, which is reset in the
-	 * if block below.
-	 */
-	if (!am_startup && IsStandbyMode() && gp_keep_all_xlog == false && _logSegNo)
+	if (!gp_keep_all_xlog && _logSegNo)
 	{
 		XLogRecPtr	receivePtr;
 		XLogRecPtr	replayPtr;
@@ -10191,14 +10184,6 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		 * users of the nextOid counter are required to avoid assignment of
 		 * duplicates, so that a somewhat out-of-date value should be safe.
 		 */
-		/*
-		 * GPDB_94_MERGE_FIXME: PG 94 STABLE removed similar code for nextOid.
-		 * Do we need to do that for gpdb specific nextRelfilenode also?
-		 */
-		LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
-		ShmemVariableCache->nextRelfilenode = checkPoint.nextRelfilenode;
-		ShmemVariableCache->relfilenodeCount = 0;
-		LWLockRelease(OidGenLock);
 
 		/* Handle multixact */
 		MultiXactAdvanceNextMXact(checkPoint.nextMulti,

@@ -1872,7 +1872,7 @@ WalSndCheckTimeOut(void)
 		 * standby.
 		 */
 		ereport(COMMERROR,
-				(errmsg("terminating walsender process due to replication timeout")));
+		(errmsg("terminating walsender process due to replication timeout")));
 
 		WalSndShutdown();
 	}
@@ -2073,6 +2073,8 @@ InitWalSenderSlot(void)
 			/* don't need the lock anymore */
 			OwnLatch((Latch *) &walsnd->latch);
 			MyWalSnd = (WalSnd *) walsnd;
+			walsnd->is_for_gp_walreceiver =
+				(strcmp(application_name, GP_WALRECEIVER_APPNAME) == 0);
 
 			break;
 		}

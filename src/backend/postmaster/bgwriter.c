@@ -61,7 +61,6 @@
 #include "utils/faultinjector.h"
 #include "utils/timestamp.h"
 
-#include "tcop/tcopprot.h" /* quickdie() */
 
 /*
  * GUC parameters
@@ -100,6 +99,7 @@ static void bg_quickdie(SIGNAL_ARGS);
 static void BgSigHupHandler(SIGNAL_ARGS);
 static void ReqShutdownHandler(SIGNAL_ARGS);
 static void bgwriter_sigusr1_handler(SIGNAL_ARGS);
+
 
 /*
  * Main entry point for bgwriter process

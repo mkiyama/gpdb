@@ -2679,6 +2679,7 @@ set_deparse_context_planstate(List *dpcontext,
 	/* Set our attention on the specific plan node passed in */
 	set_deparse_planstate(dpns, (PlanState *) planstate);
 	dpns->ancestors = ancestors;
+
 	return dpcontext;
 }
 
@@ -5345,7 +5346,6 @@ get_rule_windowspec(WindowClause *wc, List *targetList,
 	ListCell   *l;
 
 	appendStringInfoChar(buf, '(');
-
 	if (wc->refname)
 	{
 		appendStringInfoString(buf, quote_identifier(wc->refname));
@@ -5809,10 +5809,7 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 
 		tle = get_tle_by_resno(dpns->outer_tlist, var->varattno);
 		if (!tle)
-		{
 			elog(ERROR, "bogus varattno for OUTER_VAR var: %d", var->varattno);
-			return NULL;
-		}
 
 		Assert(netlevelsup == 0);
 		push_child_plan(dpns, dpns->outer_planstate, &save_dpns);

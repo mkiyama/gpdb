@@ -53,9 +53,11 @@ def configure():
                             "--with-perl",
                             "--with-libxml",
                             "--with-python",
+                            # TODO: remove this flag after zstd is vendored in the installer for ubuntu
+                            "--without-zstd",
                             "--with-libs=/usr/local/gpdb/lib",
                             "--with-includes=/usr/local/gpdb/include",
-                            "--prefix=/usr/local/gpdb"], env=p_env, shell=True, cwd="gpdb_src")
+                            "--prefix=/usr/local/gpdb"], env=p_env, cwd="gpdb_src")
 
 
 def main():

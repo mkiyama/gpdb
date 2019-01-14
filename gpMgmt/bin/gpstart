@@ -127,13 +127,6 @@ class GpStart:
                 self.master_checksum_value = HeapChecksum(gparray=self.gparray, num_workers=num_workers,
                                                           logger=logger).get_master_value()
 
-            # Do we have an even-number of recovered segments ?
-            if len(self.gparray.recoveredSegmentDbids) > 0 and len(self.gparray.recoveredSegmentDbids) % 2 == 0:
-                logger.info("Master start noticed recovered segments, updating configuration to rebalance.")
-                self.gparray.updateRoleForRecoveredSegs(self.dburl)
-                logger.info("Re-obtaining updated segment details from master...")
-                self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
-
             if not self.skip_standby_check:
                 self._check_standby_activated()
             else:
@@ -144,6 +137,7 @@ class GpStart:
                             fast=True, quiet=logging_is_quiet(),
                             verbose=logging_is_verbose(),
                             datadir=self.master_datadir,
+                            parallel=self.parallel,
                             logfileDirectory=self.logfileDirectory)
             cmd.run()
             logger.debug("results of forcing master shutdown: %s" % cmd)
@@ -264,6 +258,7 @@ class GpStart:
                 cmd = gp.GpStop("Shutting down master", masterOnly=True,
                                 fast=True, quiet=logging_is_quiet(),
                                 verbose=logging_is_verbose(),
+                                parallel=self.parallel,
                                 datadir=self.master_datadir)
                 cmd.run(validateAfter=True)
                 logger.info("Master Stopped...")
@@ -307,7 +302,7 @@ class GpStart:
         gp.GpStop.local("forcing master shutdown", masterOnly=True,
                         verbose=logging_is_verbose,
                         quiet=self.quiet, fast=False,
-                        force=True, datadir=self.master_datadir)
+                        force=True, datadir=self.master_datadir, parallel=self.parallel)
 
     ######
     def _remove_postmaster_tmpfile(self, port):

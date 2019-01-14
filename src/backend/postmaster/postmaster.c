@@ -155,6 +155,7 @@ void FtsProbeMain(int argc, char *argv[]);
  * assumption is am_ftshandler must be set if this is set.
  */
 bool am_mirror = false;
+/* GPDB specific flag to handle deadlocks during parallel segment start. */
 bool pm_launch_walreceiver = false;
 
 /*
@@ -485,7 +486,6 @@ static void ConnFree(Port *port);
 static void reset_shared(int port);
 static void SIGHUP_handler(SIGNAL_ARGS);
 static void pmdie(SIGNAL_ARGS);
-
 static void reaper(SIGNAL_ARGS);
 static bool ServiceProcessesExist(int excludeFlags);
 static bool StopServices(int excludeFlags, int signal);
@@ -4600,7 +4600,6 @@ BackendStartup(Port *port)
 	pid = backend_forkexec(port);
 #else							/* !EXEC_BACKEND */
 	pid = fork_process();
-
 	if (pid == 0)				/* child */
 	{
 		free(bn);
@@ -6169,7 +6168,7 @@ MaybeStartWalReceiver(void)
 	{
 		WalReceiverPID = StartWalReceiver();
 		WalReceiverRequested = false;
-		/* GPDB_94_MERGE_FIXME: pg94 stable does not have pm_launch_walreceiver. Do we need that? */
+
 		/* wal receiver has been launched */
 		pm_launch_walreceiver = true;
 	}
@@ -6617,7 +6616,6 @@ PostmasterMarkPIDForWorkerNotify(int pid)
  */
 extern slock_t *ShmemLock;
 extern slock_t *ProcStructLock;
-extern PROC_HDR *ProcGlobal;
 extern PGPROC *AuxiliaryProcs;
 extern PMSignalData *PMSignalState;
 extern pgsocket pgStatSock;

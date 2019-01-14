@@ -195,7 +195,7 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	Assert((vacstmt->options & VACOPT_ANALYZE) || vacstmt->va_cols == NIL);
 
 	stmttype = (vacstmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
-	
+
 	/*
 	 * We cannot run VACUUM inside a user transaction block; if we were inside
 	 * a transaction, then our commit- and start-transaction-command calls
@@ -478,8 +478,7 @@ vacuum_assign_compaction_segno(Relation onerel,
 		{
 			*insert_segno = SetSegnoForCompactionInsert(onerel,
 														new_compaction_list,
-														compactedSegmentFileList,
-														insertedSegmentFileList);
+														compactedSegmentFileList);
 		}
 		else
 		{

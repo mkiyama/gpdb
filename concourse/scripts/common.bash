@@ -18,6 +18,14 @@ function install_gpdb() {
     tar -xzf bin_gpdb/bin_gpdb.tar.gz -C /usr/local/greenplum-db-devel
 }
 
+function setup_configure_vars() {
+    # We need to add GPHOME paths for configure to check for packaged
+    # libraries (e.g. ZStandard).
+    source /usr/local/greenplum-db-devel/greenplum_path.sh
+    export LDFLAGS="-L${GPHOME}/lib"
+    export CPPFLAGS="-I${GPHOME}/include"
+}
+
 function configure() {
   source /opt/gcc_env.sh
   pushd gpdb_src
@@ -26,11 +34,19 @@ function configure() {
       # on these options for deciding what to test. Since we don't ship
       # Perl on SLES we must also skip GPMapreduce as it uses pl/perl.
       if [ "$TEST_OS" == "sles" ]; then
+        # TODO: remove this line as soon as the SLES image has zstd baked in
+        CONFIGURE_FLAGS="${CONFIGURE_FLAGS} --without-zstd"
         ./configure --prefix=/usr/local/greenplum-db-devel --with-python --with-libxml --enable-orafce --disable-orca ${CONFIGURE_FLAGS}
       else
         ./configure --prefix=/usr/local/greenplum-db-devel --with-perl --with-python --with-libxml --enable-mapreduce --enable-orafce --disable-orca ${CONFIGURE_FLAGS}
       fi
   popd
+}
+
+function install_and_configure_gpdb() {
+  install_gpdb
+  setup_configure_vars
+  configure
 }
 
 function gen_gpexpand_input() {

@@ -17,11 +17,9 @@
 #include "postgres.h"
 
 #include "access/xact.h"
-#include "catalog/gp_policy.h"
 #include "catalog/pg_type.h"
 #include "commands/createas.h"
 #include "commands/prepare.h"
-#include "funcapi.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/analyze.h"
@@ -35,6 +33,7 @@
 #include "utils/builtins.h"
 #include "utils/snapmgr.h"
 #include "utils/timestamp.h"
+
 
 /*
  * The hash table in which prepared queries are stored. This is

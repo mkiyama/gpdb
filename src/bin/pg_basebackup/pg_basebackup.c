@@ -242,7 +242,8 @@ usage(void)
 	printf(_("  -r, --max-rate=RATE    maximum transfer rate to transfer data directory\n"
 			 "                         (in kB/s, or use suffix \"k\" or \"M\")\n"));
 	printf(_("  -R, --write-recovery-conf\n"
-			 "                         write recovery.conf for replication\n"));
+			 "                         write recovery.conf after backup\n"));
+	printf(_("  -S, --slot=SLOTNAME    replication slot to use\n"));
 	printf(_("  -T, --tablespace-mapping=OLDDIR=NEWDIR\n"
 	  "                         relocate tablespace in OLDDIR to NEWDIR\n"));
 	printf(_("  -x, --xlog             include required WAL files in backup (fetch mode)\n"));
@@ -1535,6 +1536,8 @@ escape_quotes(const char *src)
 	return result;
 }
 
+#define GP_WALRECEIVER_APPNAME "gp_walreceiver"
+
 /*
  * Create a recovery.conf file in memory using a PQExpBuffer
  */
@@ -1591,6 +1594,7 @@ GenerateRecoveryConf(PGconn *conn)
 		free(escaped);
 	}
 
+	appendPQExpBuffer(&conninfo_buf, " application_name=%s", GP_WALRECEIVER_APPNAME);
 	/*
 	 * Escape the connection string, so that it can be put in the config file.
 	 * Note that this is different from the escaping of individual connection
@@ -1599,6 +1603,13 @@ GenerateRecoveryConf(PGconn *conn)
 	escaped = escape_quotes(conninfo_buf.data);
 	appendPQExpBuffer(recoveryconfcontents, "primary_conninfo = '%s'\n", escaped);
 	free(escaped);
+
+	if (replication_slot)
+	{
+		escaped = escape_quotes(replication_slot);
+		appendPQExpBuffer(recoveryconfcontents, "primary_slot_name = '%s'\n", replication_slot);
+		free(escaped);
+	}
 
 	if (PQExpBufferBroken(recoveryconfcontents) ||
 		PQExpBufferDataBroken(conninfo_buf))
@@ -1677,6 +1688,51 @@ build_exclude_list(char **exclude_list, int num)
 	}
 
 	return buf.data;
+}
+
+static void
+create_replication_slot(const char *slot_name)
+{
+	PGresult   *res;
+	char *create_slot_command;
+	bool is_result_an_error;
+	bool is_unexpected_number_of_tuples;
+	bool is_unexpected_number_of_fields;
+
+	const int expected_number_of_tuples = 1;
+	const int expected_number_of_fields = 4;
+
+	create_slot_command = psprintf("CREATE_REPLICATION_SLOT \"%s\" PHYSICAL",
+	                               slot_name);
+
+	res = PQexec(conn, create_slot_command);
+
+	is_result_an_error = PQresultStatus(res) != PGRES_TUPLES_OK;
+
+	if (is_result_an_error)
+	{
+		fprintf(stderr, _("%s: could not send replication command \"%s\": %s"),
+		        progname, create_slot_command, PQerrorMessage(conn));
+		disconnect_and_exit(1);
+	}
+
+	is_unexpected_number_of_tuples = PQntuples(res) !=
+			expected_number_of_tuples;
+
+	is_unexpected_number_of_fields = PQnfields(res) !=
+			expected_number_of_fields;
+	
+	if (is_unexpected_number_of_tuples || is_unexpected_number_of_fields)
+	{
+		fprintf(stderr,
+		        _("%s: could not create replication slot \"%s\": got %d rows and %d fields, expected %d rows and %d fields\n"),
+		        progname, slot_name, PQntuples(res), PQnfields(res),
+		        expected_number_of_tuples, expected_number_of_fields);
+		disconnect_and_exit(1);
+	}
+
+	Assert(strncmp(slot_name, PQgetvalue(res, 0, 0), strlen(slot_name)) == 0);
+	PQclear(res);
 }
 
 static void
@@ -1759,6 +1815,15 @@ BaseBackup(void)
 	PQclear(res);
 
 	/*
+	 * Greenplum only: create replication slot.  This replication slot is used
+	 * for primary/mirror and master/standby WAL replication.
+	 */
+	if (replication_slot)
+	{
+		create_replication_slot(replication_slot);
+	}
+
+	/*
 	 * Start the actual backup
 	 */
 	PQescapeStringConn(conn, escaped_label, label, sizeof(escaped_label), &i);
@@ -1788,7 +1853,7 @@ BaseBackup(void)
 
 	if (num_exclude != 0)
 		free(exclude_list);
-	
+
 	if (PQsendQuery(conn, basebkp) == 0)
 	{
 		fprintf(stderr, _("%s: could not send replication command \"%s\": %s"),
@@ -2073,6 +2138,7 @@ main(int argc, char **argv)
 		{"checkpoint", required_argument, NULL, 'c'},
 		{"max-rate", required_argument, NULL, 'r'},
 		{"write-recovery-conf", no_argument, NULL, 'R'},
+		{"slot", required_argument, NULL, 'S'},
 		{"tablespace-mapping", required_argument, NULL, 'T'},
 		{"xlog", no_argument, NULL, 'x'},
 		{"xlog-method", required_argument, NULL, 'X'},
@@ -2117,7 +2183,7 @@ main(int argc, char **argv)
 	}
 
 	num_exclude = 0;
-	while ((c = getopt_long(argc, argv, "D:F:r:RT:xX:l:zZ:d:c:h:p:U:s:wWvPE:",
+	while ((c = getopt_long(argc, argv, "D:F:r:RT:xX:l:zZ:d:c:h:p:U:s:S:wWvPE:",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -2143,6 +2209,9 @@ main(int argc, char **argv)
 				break;
 			case 'R':
 				writerecoveryconf = true;
+				break;
+			case 'S':
+				replication_slot = pg_strdup(optarg);
 				break;
 			case 'T':
 				tablespace_list_append(optarg);
@@ -2318,6 +2387,16 @@ main(int argc, char **argv)
 	{
 		fprintf(stderr,
 				_("%s: WAL streaming can only be used in plain mode\n"),
+				progname);
+		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
+				progname);
+		exit(1);
+	}
+
+	if (replication_slot && !streamwal)
+	{
+		fprintf(stderr,
+				_("%s: replication slots can only be used with WAL streaming\n"),
 				progname);
 		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
 				progname);

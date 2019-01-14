@@ -1593,7 +1593,7 @@ Optional Packages:
                           use system time zone data in DIR
   --without-zlib          do not use Zlib
   --without-libbz2        do not use bzip2
-  --with-zstd             build with Zstandard support (requires zstd library)
+  --without-zstd          do not build with Zstandard
   --without-rt            do not use Realtime Library
   --without-libcurl       do not use libcurl
   --with-apr-config=PATH  path to apr-1-config utility
@@ -8133,7 +8133,7 @@ if test "${with_zstd+set}" = set; then :
   esac
 
 else
-  with_zstd=no
+  with_zstd=yes
 
 fi
 
@@ -13927,7 +13927,7 @@ int
 main ()
 {
 
-return strncmp("3.18.", GPORCA_VERSION_STRING, 5);
+return strncmp("3.19.", GPORCA_VERSION_STRING, 5);
 
   ;
   return 0;
@@ -13937,7 +13937,7 @@ if ac_fn_cxx_try_run "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
 $as_echo "ok" >&6; }
 else
-  as_fn_error $? "Your ORCA version is expected to be 3.18.XXX" "$LINENO" 5
+  as_fn_error $? "Your ORCA version is expected to be 3.19.XXX" "$LINENO" 5
 
 fi
 rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
