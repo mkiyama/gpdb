@@ -6,7 +6,8 @@
                       'gpactivatestandby'] %}
 {% set CLI_2_suites = ['analyzedb',
                       'gpperfmon',
-                      'gpinitsystem'] %}
+                      'gpinitsystem',
+                      'replication_slots'] %}
 ## ======================================================================
 ##   __ _ _ __ ___  _   _ _ __  ___
 ##  / _` | '__/ _ \| | | | '_ \/ __|
@@ -2338,7 +2339,6 @@ jobs:
       - icw_planner_ictcp_centos6
       - icw_extensions_gpcloud_centos6
       - icw_extensions_gpcloud_ubuntu16
-      - client_loader_remote_test_aix
       - resource_group_centos6
       - resource_group_centos7
       - resource_group_sles12
