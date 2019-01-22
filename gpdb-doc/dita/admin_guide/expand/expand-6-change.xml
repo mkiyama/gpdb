@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+  PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
+<topic id="expand-600" xml:lang="en">
+  <title id="no163283">Online Expand for GPDB 6</title>
+  <shortdesc>Information about expanding a Greenplum Database 6.0 system.</shortdesc>
+  <body>
+    <p>See <xref href="http://docs-gpdb-6x.cfapps.io/600/admin_guide/expand/expand-main.html"
+        format="html" scope="external">Expanding a Greenplum System</xref>
+      <xref href="https://github.com/greenplum-db/gpdb/wiki/Gpexpand" format="html" scope="external"
+        >gpdb/wiki/Gpexpand</xref> doc story <xref
+        href="https://www.pivotaltracker.com/story/show/159183055" format="html" scope="external"
+        >159183055</xref></p>
+    <p>Why is GPDB 6 gpexpand does not require offline time. - GPDB 5 gpexpand requires system
+      offline for initializing new segments (restarts gpdb system).</p>
+    <p>Notes<ul id="ul_w25_y1p_3gb">
+        <li>change to pg_database - add hashmethod column 1- jump consistent hash (GPDB6), 0 modulo
+          hash (previous releases)</li>
+        <li>gpexpand uses jump consistent hash (new in 6, default hash method).<ul
+            id="ul_dh5_xbp_3gb">
+            <li>in-place upgrade 5 to 6 keeps modulo hash for database (for now)</li>
+            <li>New GUC <xref href="#gp_use_legacy_hashops" format="dita"
+                >gp_use_legacy_hashops</xref> to create database using modulo hash - Is this read
+              only? (not merged)</li>
+            <li>gpexpand changes hashmethod from 0 (modulo) to 1 (jump consistent) - What happens if
+              GUC is true?</li>
+          </ul></li>
+        <li>GUC for method of expanding a table <xref href="#gp_expand_method" format="dita"
+            >gp_expand_method</xref> PGC_USERSET, GP_ARRAY_TUNING,<p>Specify the method to expand a
+            table. Valid values are rebuild, move</p></li>
+        <li>Need to check differences between expand for 5 and 6.<p>Is expand file format is
+            different?</p><p>Are tablespaces handled yet?</p></li>
+        <li>Utilities that "do not work"</li>
+        <li>gpexpand does not work with segment down <p>checks to perform before running gpexpand?
+            See gpexpand planning topic</p></li>
+      </ul></p>
+    <p>FROM gpexpand wiki.</p>
+    <p><b>The problem in Greenplum 5 gpexpand</b></p>
+    <ul id="ul_wng_mlv_3gb">
+      <li><b>cluster restart</b> we need to restart cluster between segments expansion and table
+        redistribution. The period is short, but it is still a reboot and interrupt
+          everything.<p>The utility performs a restart when adding new segment instances. Requires
+          no user activity.</p></li>
+      <li><b>re-shuffle a lot of tuples</b> As we calculate the target segments by modulo and often
+        change almost all tuples' target segments when add new segments, e.g. add 2 new segments to
+        a 4 segments cluster. There will be tuple movements from old segments to new segments, and
+        also from some old segments to the other old segments.</li>
+      <li><b>bad query performance during table redistribution:</b> We change all tables to random
+        at the beginning of the gpexpand. Even though the cluster is up during table redistribution
+        phase, any queries involving multiple random/hash tables are bad because they need
+        motion.</li>
+      <li><b>low concurrency:</b> we use a heap table gpexpand.status_detail to track the table
+        expansion status and will update it during table redistribution. heap table update needs a
+        table lock in Greenplum 5. Multiple concurrent expansion jobs on different tables need to
+        wait for one another to get the table lock. This issue is quite heavy if you have a lot of
+        small tables.</li>
+    </ul>
+    <p><b>Key design consideration</b></p>
+    <ul id="ul_xwp_plv_3gb">
+      <li><b>Dynamically add segments:</b> By refactoring dispatch code, we are able to get the
+        latest valid segment count and dispatch the segment count at the beginning of a
+        transaction/statement, so that we don't need a static count of segments and can avoid a
+        cluster reboot. And we also put a catalog update lock to prevent any further catalog change
+        when catalog is copied from master to new segments, so that new segments can have a
+        consistent catalog with old ones without a reboot.</li>
+      <li><b>Jump consistent hash:</b> By introducing jump consistent hash, we are able to minimize
+        the tuple movements from segments to segments. No matter how many new segments are added to
+        a cluster, there is only M/N tuple movements and only from old segments to new segments. (M
+        is the count of new segments and N is the sum of old and new segments).</li>
+      <li><b>better query performance during table redistribution:</b> By enhancing query planner
+        and executor, we don't need to change all tables to random at the beginning. We are able to
+        plan and execute a query on table joins even though the tables are distributed on different
+        segment numbers. e.g. two tables are not re-distributed yet and a join query on them will
+        have the same good performance as before.<draft-comment author="msk">Need to to change heap
+          table lock for UPDATE and DELETE<p>See table in <xref
+              href="http://docs-gpdb-6x.cfapps.io/600/admin_guide/dml.html#topic2" format="html"
+              scope="external">About Concurrency Control in Greenplum Database</xref>, also LOCK and
+            Global Deadlock Detector</p></draft-comment></li>
+      <li><b>high concurrency:</b> By introducing global deadlock detector and downgrading heap
+        table lock for <codeph>UPDATE</codeph> and <codeph>DELETE</codeph> to <codeph>ROW
+          LOCK</codeph> for hash tables in Greenplum 6, we are able to support higher concurrent
+        expansion jobs to concurrently update gpexpand status table and accelerate the overall
+        expansion.</li>
+    </ul>
+  </body>
+  <topic id="gp_use_legacy_hashops">
+    <title>gp_use_legacy_hashops</title>
+    <body>
+      <draft-comment author="msk">DRAFT <xref
+          href="https://github.com/greenplum-db/gpdb/pull/6327/commits/e6ce8e2a" format="html"
+          scope="external">gpdb/pull/6327/commits/e6ce8e2a</xref><p><b>[Q:]</b> expand changes
+          hashmethod from 0 (modulo) to 1 (jump consistent) - What happens if GUC is
+        true?</p></draft-comment>
+      <p>For a table that is defined with a <codeph>DISTRIBUTED BY
+          <varname>key_column</varname></codeph> clause, this parameter controls the hash algorithm
+        that is used to distribute table data among segment instances. The default value is
+          <codeph>false</codeph>, use the jump constant hash algorithm. </p>
+      <p>Setting the value to <codeph>true</codeph> uses the modulo hash algorithm that is
+        compatible with Greenplum Database 5.x and earlier releases.</p>
+      <table id="gp_interconnect_fc_method_table">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">false</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="gp_expand_method">
+    <title>gp_expand_method</title>
+    <body>
+      <draft-comment author="msk">DRAFT <xref
+          href="https://www.pivotaltracker.com/story/show/162535111" format="html" scope="external"
+          >162535111</xref>
+        <xref href="https://github.com/greenplum-db/gpdb/pull/6630" format="html" scope="external"
+          >gpdb-feature/pull/66300</xref> merged to feature<p><b>[Q:]</b> Will both expand methods
+          work with both hashmethods?</p></draft-comment>
+      <p>This parameter controls how<codeph>gpexpand</codeph> redistributes table data during the
+        table data redistribution phase of a system expansion. There are two ways
+          <codeph>gpexpand</codeph> can perform table data redistribution.<ul id="ol_xdd_1py_jgb">
+          <li>rebuild - Create a new table, copy all the data from the old to the new table, and
+            replace the old table. This is the default. The rebuild method is similar creating a new
+            table with a <codeph>CREATE TABLE AS SELECT</codeph> command.</li>
+          <li>move - Scan the table data and perform an <codeph>UPDATE</codeph> operation to move
+            rows as needed to different segment instances. In general, this method requires less
+            disk space, however, it creates obsolete table rows and might require a
+              <codeph>VACUUM</codeph> operation on the table. Also, this method updates indexes one
+            row at a time, which can be much slower than rebuilding the index with the
+              <codeph>CREATE INDEX</codeph> command.</li>
+        </ul></p>
+      <table id="table_utp_zny_jgb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">rebuild<p>move</p></entry>
+              <entry colname="col2">rebuild</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <section>
+        <title>NOTES</title>
+        <p>The move method has the advantage that it only needs to move those tuples that are not
+          already in the correct segment. With jump consistent hashing, if you expand the cluster by
+          one segment, that is only 1/Nth of the data. However, it leaves behind dead tuples, and it
+          updates indexes one row at a time, which can be much slower than rebuilding the index from
+          scratch.</p>
+        <draft-comment author="msk">vvv What does this mean? vvvv</draft-comment>
+        <p>A mandatory data movement is applied to a randomly distributed table to avoid data skew. </p>
+        <p>Another choice is don't move any tuples, as all the tuples can legitimately still reside
+          on the old segments even after expanding. To rebalance a randomly distributed table after
+          expanding, you can use <codeph>WITH (REORGANIZE=TRUE)</codeph>, but that's a completely
+          different codepath. (<codeph>REORGANIZE</codeph> currently always uses the CTAS method.)
+        </p>
+      </section>
+    </body>
+  </topic>
+</topic>
