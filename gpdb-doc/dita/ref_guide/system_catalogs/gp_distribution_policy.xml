@@ -4,7 +4,6 @@
 <topic id="topic1" xml:lang="en">
   <title id="ey142834">gp_distribution_policy</title>
   <body>
-    <draft-comment author="msk">GPDB 6 - added numsegments</draft-comment>
     <p>The <codeph>gp_distribution_policy</codeph> table contains information about Greenplum
       Database tables and their policy for distributing table data across the segments. This table
       is populated only on the master. This table is not globally shared, meaning each database has
@@ -48,8 +47,8 @@
             <entry colname="col2">char</entry>
             <entry colname="col3"/>
             <entry colname="col4">The table distribution policy:<ul>
-                <li><codeph>p</codeph> - The table has a partitioned distribution policy.</li>
-                <li><codeph>r</codeph> - The table has a replicated distribution policy.</li>
+                <li><codeph>p</codeph> - Table data is distributed among segment instances.</li>
+                <li><codeph>r</codeph> - Table data is replicated on each segment instance.</li>
               </ul></entry>
           </row>
           <row>
