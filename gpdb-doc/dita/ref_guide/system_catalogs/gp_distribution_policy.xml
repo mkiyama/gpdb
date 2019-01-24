@@ -46,17 +46,19 @@
             </entry>
             <entry colname="col2">char</entry>
             <entry colname="col3"/>
-            <entry colname="col4">The table distribution policy:<ul>
-                <li><codeph>p</codeph> - Table data is distributed among segment instances.</li>
-                <li><codeph>r</codeph> - Table data is replicated on each segment instance.</li>
+            <entry colname="col4">The table distribution policy:<ul id="ul_a52_yj2_4gb">
+                <li><codeph>p</codeph> - Partitioned policy. Table data is distributed among segment
+                  instances. </li>
+                <li><codeph>r</codeph> - Replicated policy. Table data is replicated on each segment
+                  instance. </li>
               </ul></entry>
           </row>
           <row>
             <entry colname="col1"><codeph>numsegments</codeph></entry>
             <entry colname="col2">integer</entry>
             <entry colname="col3"/>
-            <entry colname="col4">The number of segment instances the table data is distributed
-              on.</entry>
+            <entry colname="col4">The number of segment instances on which the table data is
+              distributed.</entry>
           </row>
         </tbody>
       </tgroup>
