@@ -2,14 +2,15 @@
 <!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
 <topic id="topic_isj_khw_sbs" otherprops="pivotal">
   <title>Migrating Data with gpcopy</title>
-  <shortdesc>This topic describes how to use the <codeph>gpcopy</codeph> utility to transfer data
-    between databases in different Greenplum Database clusters.</shortdesc>
+  <shortdesc>You can use the <codeph>gpcopy</codeph> utility to transfer data between databases in
+    different Greenplum Database clusters.</shortdesc>
   <body>
-    <p><codeph>gpcopy</codeph> is a high-performance utility that can copy metadata and data from
-      one Greenplum database to another Greenplum database. You can migrate the entire contents of a
-      database, or just selected tables. The clusters can have different Greenplum Database
-      versions. For example, you can use <codeph>gpcopy</codeph> to migrate data from a version 4.x
-      Greenplum Database to version 5.x.</p>
+    <p><codeph><xref href="../../utility_guide/admin_utilities/gpcopy.xml">gpcopy</xref></codeph> is
+      a high-performance utility that can copy metadata and data from one Greenplum database to
+      another Greenplum database. You can migrate the entire contents of a database, or just
+      selected tables. The clusters can have different Greenplum Database versions. For example, you
+      can use <codeph>gpcopy</codeph> to migrate data from Greenplum Database version 5.9.0 or later
+      to version 6.0.</p>
     <p>The <codeph>gpcopy</codeph> interface includes options to transfer one or more full
       databases, or one or more database tables. A full database transfer includes the database
       schema, table data, indexes, views, roles, user-defined functions, resource queues, and
@@ -19,13 +20,13 @@
         <codeph>pg_hba.conf</codeph>, must be transferred manually by an administrator. Extensions
       installed in the database with <codeph>gppkg</codeph>, such as MADlib and programming language
       extensions, must be installed in the destination database by an administrator. </p>
-    <p><codeph>gpcopy</codeph> uses many of the same command-line options as the earlier
-        <codeph>gptransfer</codeph> utility. <codeph>gpcopy</codeph> provides several improvements
-      as compared to <codeph>gptransfer</codeph>:<ul id="ul_ibs_vsp_zdb">
-        <li><codeph>gpcopy</codeph> performs significantly faster than <codeph>gptransfer</codeph>
-          when copying large amounts of data.</li>
-        <li><codeph>gpcopy</codeph> provides more detailed reporting and summary information about
-          all aspects of the copy operation.</li>
+    <p><codeph>gpcopy</codeph> is a command-line tool that includes these features:<ul
+        id="ul_ibs_vsp_zdb">
+        <li><codeph>gpcopy</codeph> can migrate data between Greenplum Database systems where the
+          source and destination systems are configured with of a different number of segment
+          instances.</li>
+        <li><codeph>gpcopy</codeph> provides detailed reporting and summary information about all
+          aspects of the copy operation.</li>
         <li>
           <p><codeph>gpcopy</codeph> allows the source table data to change while the data is being
             copied. A lock is not acquired on the source table when data is copied. </p>
@@ -54,7 +55,7 @@
         cluster to a Greenplum Database 5.9 or later cluster. However Greenplum Database 4.3.26 and
         later do not include the actual <codeph>gpcopy</codeph> utility. You must manually copy the
           <codeph>gpcopy</codeph> utility from your version 5.9 or later cluster into the older
-        version cluster to migrate data.. For
+        version cluster to migrate data. For
         example:<codeblock>$ cp /usr/local/greenplum-db-5.8.0/bin/gpcopy /usr/local/greenplum-db-4.3.26.0/bin/</codeblock></p>
     </body>
   </topic>
