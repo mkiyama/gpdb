@@ -572,6 +572,9 @@ extern int writable_external_table_bufsize;
 /* Enable passing of query constraints to external table providers */
 extern bool gp_external_enable_filter_pushdown;
 
+/* Enable the Global Deadlock Detector */
+extern bool gp_enable_global_deadlock_detector;
+
 typedef enum
 {
 	INDEX_CHECK_NONE,
@@ -590,6 +593,8 @@ extern IndexCheckType gp_indexcheck_vacuum;
 #define SOPT_COMPLEVEL     "compresslevel"
 #define SOPT_CHECKSUM      "checksum"
 #define SOPT_ORIENTATION   "orientation"
+/* Aliases for storage option names */
+#define SOPT_ALIAS_APPENDOPTIMIZED "appendoptimized"
 /* Max number of chars needed to hold value of a storage option. */
 #define MAX_SOPT_VALUE_LEN 15
 

@@ -132,36 +132,33 @@ class PgCtlBackendOptions(CmdArgs):
     --------
 
     >>> str(PgCtlBackendOptions(5432, 1, 2))
-    '-p 5432 --gp_dbid=1 --silent-mode=true'
+    '-p 5432 --silent-mode=true'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_master(True))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -i --gp_contentid=-1'
+    '-p 5432 --silent-mode=true -i'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_master(False))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -i --gp_contentid=-1 -E'
+    '-p 5432 --silent-mode=true -i -E'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_segment(1))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -i --gp_contentid=1'
+    '-p 5432 --silent-mode=true -i'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_special('upgrade'))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -U'
+    '-p 5432 --silent-mode=true -U'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_special('maintenance'))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -m'
+    '-p 5432 --silent-mode=true -m'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_utility(True))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -c gp_role=utility'
+    '-p 5432 --silent-mode=true -c gp_role=utility'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_utility(False))
-    '-p 5432 --gp_dbid=1 --silent-mode=true'
+    '-p 5432 --silent-mode=true'
     >>> str(PgCtlBackendOptions(5432, 1, 2).set_restricted(True,1))
-    '-p 5432 --gp_dbid=1 --silent-mode=true -c superuser_reserved_connections=1'
+    '-p 5432 --silent-mode=true -c superuser_reserved_connections=1'
     >>>
 
     """
 
-    def __init__(self, port, dbid, numcids):
+    def __init__(self, port):
         """
         @param port: backend port
-        @param dbid: backed dbid
-        @param numcids: total number of content ids in cluster
         """
         CmdArgs.__init__(self, [
             "-p", str(port),
-            "--gp_dbid="+ str(dbid),
         ])
 
     #
@@ -172,15 +169,7 @@ class PgCtlBackendOptions(CmdArgs):
         """
         @param is_utility_mode: start with is_utility_mode?
         """
-        self.append("--gp_contentid=-1")
         if not is_utility_mode: self.append("-E")
-        return self
-
-    def set_segment(self, content):
-        """
-        @param content: content id
-        """
-        self.append("--gp_contentid="+str(content))
         return self
 
     #
@@ -223,7 +212,7 @@ class PgCtlStartArgs(CmdArgs):
     >>> str(a).split(' ') #doctest: +NORMALIZE_WHITESPACE
     ['env', GPERA=123', '$GPHOME/bin/pg_ctl', '-D', '/data1/master/gpseg-1', '-l',
      '/data1/master/gpseg-1/pg_log/startup.log', '-w', '-t', '600',
-     '-o', '"', '-p', '5432', '--gp_dbid=1', '--silent-mode=true', '"', 'start']
+     '-o', '"', '-p', '5432', '--silent-mode=true', '"', 'start']
     """
 
     def __init__(self, datadir, backend, era, wrapper, args, wait, timeout=None):
@@ -280,7 +269,7 @@ class PgCtlStopArgs(CmdArgs):
 
 
 class MasterStart(Command):
-    def __init__(self, name, dataDir, port, dbid, numContentsInCluster, era,
+    def __init__(self, name, dataDir, port, era,
                  wrapper, wrapper_args, specialMode=None, restrictedMode=False, timeout=SEGMENT_TIMEOUT_DEFAULT,
                  max_connections=1, utilityMode=False, ctxt=LOCAL, remoteHost=None,
                  wait=True
@@ -292,7 +281,7 @@ class MasterStart(Command):
         self.wrapper_args=wrapper_args
 
         # build backend options
-        b = PgCtlBackendOptions(port, dbid, numContentsInCluster)
+        b = PgCtlBackendOptions(port)
         b.set_master(is_utility_mode=utilityMode)
         b.set_utility(utilityMode)
         b.set_special(specialMode)
@@ -305,10 +294,10 @@ class MasterStart(Command):
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
 
     @staticmethod
-    def local(name, dataDir, port, dbid, numContentsInCluster, era,
+    def local(name, dataDir, port, era,
               wrapper, wrapper_args, specialMode=None, restrictedMode=False, timeout=SEGMENT_TIMEOUT_DEFAULT,
               max_connections=1, utilityMode=False):
-        cmd=MasterStart(name, dataDir, port, dbid, numContentsInCluster, era,
+        cmd=MasterStart(name, dataDir, port, era,
                         wrapper, wrapper_args, specialMode, restrictedMode, timeout,
                         max_connections, utilityMode)
         cmd.run(validateAfter=True)
@@ -343,14 +332,11 @@ class SegmentStart(Command):
         self.segment = gpdb
 
         # Interesting data from our input segment
-        dbid    = gpdb.getSegmentDbId()
-        content = gpdb.getSegmentContentId()
         port    = gpdb.getSegmentPort()
         datadir = gpdb.getSegmentDataDirectory()
 
         # build backend options
-        b = PgCtlBackendOptions(port, dbid, numContentsInCluster)
-        b.set_segment(content)
+        b = PgCtlBackendOptions(port)
         b.set_utility(utilityMode)
         b.set_special(specialMode)
 
@@ -543,19 +529,12 @@ class GpGetSegmentStatusValues(Command):
 
 SEGSTART_ERROR_UNKNOWN_ERROR = -1
 SEGSTART_SUCCESS = 0
-SEGSTART_ERROR_MIRRORING_FAILURE = 1
-SEGSTART_ERROR_POSTMASTER_DIED = 2
-SEGSTART_ERROR_INVALID_STATE_TRANSITION = 3
-SEGSTART_ERROR_SERVER_IS_IN_SHUTDOWN = 4
 SEGSTART_ERROR_STOP_RUNNING_SEGMENT_FAILED = 5
 SEGSTART_ERROR_DATA_DIRECTORY_DOES_NOT_EXIST = 6
-SEGSTART_ERROR_SERVER_DID_NOT_RESPOND = 7
 SEGSTART_ERROR_PG_CTL_FAILED = 8
-SEGSTART_ERROR_CHECKING_CONNECTION_AND_LOCALE_FAILED = 9
 SEGSTART_ERROR_PING_FAILED = 10 # not actually done inside GpSegStartCmd, done instead by caller
 SEGSTART_ERROR_PG_CONTROLDATA_FAILED = 11
 SEGSTART_ERROR_CHECKSUM_MISMATCH = 12
-SEGSTART_ERROR_OTHER = 1000
 
 
 class GpSegStartArgs(CmdArgs):
@@ -683,15 +662,13 @@ class GpStandbyStart(MasterStart, object):
     The standby will be up as dispatch mode, and could be in remote.
     """
 
-    def __init__(self, name, datadir, port, ncontents, ctxt=LOCAL,
-                 remoteHost=None, dbid=None, era=None,
+    def __init__(self, name, datadir, port, ctxt=LOCAL,
+                 remoteHost=None, era=None,
                  wrapper=None, wrapper_args=None):
         super(GpStandbyStart, self).__init__(
                 name=name,
                 dataDir=datadir,
                 port=port,
-                dbid=dbid,
-                numContentsInCluster=ncontents,
                 era=era,
                 wrapper=wrapper,
                 wrapper_args=wrapper_args,
@@ -701,19 +678,19 @@ class GpStandbyStart(MasterStart, object):
                 )
 
     @staticmethod
-    def local(name, datadir, port, ncontents, dbid, era=None,
+    def local(name, datadir, port, era=None,
               wrapper=None, wrapper_args=None):
-        cmd = GpStandbyStart(name, datadir, port, ncontents,
-                             dbid=dbid, era=era,
+        cmd = GpStandbyStart(name, datadir, port,
+                             era=era,
                              wrapper=wrapper, wrapper_args=wrapper_args)
         cmd.run(validateAfter=True)
         return cmd
 
     @staticmethod
-    def remote(name, host, datadir, port, ncontents, dbid, era=None,
+    def remote(name, host, datadir, port, era=None,
                wrapper=None, wrapper_args=None):
-        cmd = GpStandbyStart(name, datadir, port, ncontents, ctxt=REMOTE,
-                             remoteHost=host, dbid=dbid, era=era,
+        cmd = GpStandbyStart(name, datadir, port, ctxt=REMOTE,
+                             remoteHost=host, era=era,
                              wrapper=wrapper, wrapper_args=wrapper_args)
         cmd.run(validateAfter=True)
         return cmd
@@ -815,7 +792,7 @@ class GpStop(Command):
         return cmd
 
 #-----------------------------------------------
-class ModifyPostgresqlConfSetting(Command):
+class ModifyConfSetting(Command):
     def __init__(self, name, file, optName, optVal, optType='string', ctxt=LOCAL, remoteHost=None):
         cmdStr = None
         if optType == 'number':
@@ -823,7 +800,7 @@ class ModifyPostgresqlConfSetting(Command):
         elif optType == 'string':
             cmdStr = "perl -i -p -e \"s/^%s[ ]*=[ ]*'[^']*'/%s='%s'/\" %s" % (optName, optName, optVal, file)
         else:
-            raise Exception, "Invalid optType for ModifyPostgresqlConfSetting"
+            raise Exception, "Invalid optType for ModifyConfSetting"
         self.cmdStr = cmdStr
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
 
@@ -935,10 +912,11 @@ class ConfigureNewSegment(Command):
                 isPrimarySegment = "false"
                 isTargetReusedLocationString = "false"
 
-            result[hostname] += '%s:%d:%s:%s:%d:%s:%s' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
+            result[hostname] += '%s:%d:%s:%s:%d:%d:%s:%s' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
                                                           isPrimarySegment,
                                                           isTargetReusedLocationString,
                                                           seg.getSegmentDbId(),
+                                                          seg.getSegmentContentId(),
                                                           primaryHostname,
                                                           primarySegmentPort
             )
@@ -1127,7 +1105,7 @@ def check_permissions(username):
 
 #=-=-=-=-=-=-=-=-=-= Bash Migration Helper Functions =-=-=-=-=-=-=-=-
 
-def start_standbymaster(host, datadir, port, dbid, ncontents, era=None,
+def start_standbymaster(host, datadir, port, era=None,
                         wrapper=None, wrapper_args=None):
     logger.info("Starting standby master")
 
@@ -1145,7 +1123,7 @@ def start_standbymaster(host, datadir, port, dbid, ncontents, era=None,
         logger.warning("Unable to cleanup previously started standby: '%s'" % res)
 
     cmd = GpStandbyStart.remote('start standby master',
-                                host, datadir, port, ncontents, dbid, era=era,
+                                host, datadir, port, era=era,
                                 wrapper=wrapper, wrapper_args=wrapper_args)
     logger.debug("Starting standby: %s" % cmd )
 
@@ -1217,7 +1195,7 @@ def is_pid_postmaster(datadir, pid, remoteHost=None):
     is_postmaster = True
     if (validate_command ('pgrep', datadir, ctxt, remoteHost) and
             validate_command ('pwdx', datadir, ctxt, remoteHost)):
-        cmdStr = 'pgrep postgres | xargs -i pwdx {} | grep "%s" | grep "^%s:" | cat' % (datadir, pid)
+        cmdStr = 'pgrep postgres | xargs -I{} pwdx {} | grep "%s" | grep "^%s:" | cat' % (datadir, pid)
         cmd = Command("search for postmaster process", cmdStr, ctxt=ctxt, remoteHost=remoteHost)
         res = None
         try:
@@ -1393,36 +1371,6 @@ def createTempDirectoryName(masterDataDirectory, tempDirPrefix):
                                 tempDirPrefix,
                                 datetime.datetime.now().strftime('%m%d%Y'),
                                 os.getpid())
-
-
-#-------------------------------------------------------------------------
-# gp_dbid methods moved to gp_dbid.py, but this class was left here
-#
-
-class GpCreateDBIdFile(Command):
-    def __init__(self, name, directory, dbid, verbose=False, ctxt=LOCAL, remoteHost=None):
-        if verbose:
-            setverbose="-v"
-        else:
-            setverbose=""
-        args = [
-            "$GPHOME/sbin/gpsetdbid.py",
-            "-d %s" % directory,
-            "-i %s" % dbid,
-            setverbose,
-            ]
-        cmdStr = " ".join(args)
-        Command.__init__(self, name, cmdStr, ctxt, remoteHost)
-
-    @staticmethod
-    def local(name, directory, dbid):
-        cmd = GpCreateDBIdFile(name, directory, dbid)
-        cmd.run(validateAfter=True)
-
-    @staticmethod
-    def remote(name, remoteHost, directory, dbid):
-        cmd = GpCreateDBIdFile(name, directory, dbid, ctxt=REMOTE, remoteHost=remoteHost)
-        cmd.run(validateAfter=True)
 
 #-------------------------------------------------------------------------
 class GpRecoverSeg(Command):

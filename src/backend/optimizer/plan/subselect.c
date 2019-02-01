@@ -415,7 +415,7 @@ get_first_col_type(Plan *plan, Oid *coltype, int32 *coltypmod,
 /**
  * Returns true if query refers to a distributed table.
  */
-static bool QueryHasDistributedRelation(Query *q)
+bool QueryHasDistributedRelation(Query *q)
 {
 	ListCell   *rt = NULL;
 
@@ -583,32 +583,9 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 				 errmsg("correlated subquery with skip-level correlations is not supported")));
 	}
 
-	if ((Gp_role == GP_ROLE_DISPATCH)
-			&& IsSubqueryCorrelated(subquery)
-			&& QueryHasDistributedRelation(subquery))
-	{
-		/*
-		 * Generate the plan for the subquery with certain options disabled.
-		 */
-		config->gp_enable_direct_dispatch = false;
-		config->gp_enable_multiphase_agg = false;
+	if (Gp_role == GP_ROLE_DISPATCH)
+		config->is_under_subplan = true;
 
-		/*
-		 * The MIN/MAX optimization works by inserting a subplan with LIMIT 1.
-		 * That effectively turns a correlated subquery into a multi-level
-		 * correlated subquery, which we don't currently support. (See check
-		 * above.)
-		 */
-		config->gp_enable_minmax_optimization = false;
-
-		/*
-		 * Only create subplans with sequential scans
-		 */
-		config->enable_indexscan = false;
-		config->enable_bitmapscan = false;
-		config->enable_tidscan = false;
-		config->enable_seqscan = true;
-	}
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -618,7 +595,6 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 				 subLinkType == EXPR_SUBLINK ||
 				 subLinkType == EXISTS_SUBLINK);
 	}
-
 	/*
 	 * Strictly speaking, the order of rows in a subquery doesn't matter.
 	 * Consider e.g. "WHERE IN (SELECT ...)". But in case of
@@ -1198,6 +1174,13 @@ hash_ok_operator(OpExpr *expr)
 }
 
 
+#if 0
+/*
+ * GPDB doesn't use initplan + CteScan, so running SS_process_ctes will only
+ * generate unused initplans. Keep commented out to avoid merge conflicts with
+ * upstream.
+ */
+
 /*
  * SS_process_ctes: process a query's WITH list
  *
@@ -1314,6 +1297,7 @@ SS_process_ctes(PlannerInfo *root)
 		cost_subplan(root, splan, plan);
 	}
 }
+#endif
 
 /*
  * convert_ANY_sublink_to_join: try to convert an ANY SubLink to a join
@@ -2745,7 +2729,7 @@ finalize_plan(PlannerInfo *root, Plan *plan, Bitmapset *valid_params,
 
 		case T_Motion:
 
-			finalize_primnode((Node *) ((Motion *) plan)->hashExpr,
+			finalize_primnode((Node *) ((Motion *) plan)->hashExprs,
 							  &context);
 			break;
 

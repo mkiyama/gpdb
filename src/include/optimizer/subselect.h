@@ -17,7 +17,10 @@
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
 
+#if 0
+/* Not used in GPDB */
 extern void SS_process_ctes(PlannerInfo *root);
+#endif
 extern Node *convert_testexpr(PlannerInfo *root,
 				 Node *testexpr,
 				 List *subst_nodes);
@@ -45,5 +48,6 @@ extern bool IsSubqueryMultiLevelCorrelated(Query *sq);
 
 extern List *generate_subquery_vars(PlannerInfo *root, List *tlist,
 					   Index varno);
+extern bool QueryHasDistributedRelation(Query *q);
 
 #endif   /* SUBSELECT_H */

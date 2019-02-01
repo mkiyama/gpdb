@@ -14,6 +14,13 @@
 #   to the segments, and therefore has to run in smaller groups to avoid
 #   hitting max_connections limit on segments.
 #
+
+# gp_toolkit performs a vacuum and checks that it truncated the relation. That
+# might not happen if other backends are holding transactions open, preventing
+# vacuum from removing dead tuples. And run gp_toolkit early to make some log
+# file related tests (like gp_log_system, etc) faster.
+test: gp_toolkit
+
 # enable query metrics cluster GUC
 test: instr_in_shmem_setup
 # run separately - because slot counter may influenced by other parallel queries
@@ -28,7 +35,7 @@ test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp li
 # GPDB_94_MERGE_FIXME: explain_format test was dropped for below group. It's
 # failing without asserts but passing with asserts. Need investigation for the
 # reason, fixed and added back.
-test: filter gpctas gpdist matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var guc_gp gp_explain distributed_transactions
+test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var guc_gp gp_explain distributed_transactions
 
 # bitmap_index triggers recovery, run it seperately
 test: bitmap_index
@@ -74,11 +81,11 @@ test: dtm_retry
 
 # The appendonly test cannot be run concurrently with tests that have
 # serializable transactions (may conflict with AO vacuum operations).
-test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_group olap_window_seq sirv_functions appendonly create_table_distpol alter_distpol_dropped query_finish partial_table
+test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_group olap_window_seq sirv_functions appendonly create_table_distpol alter_distpol_dropped query_finish partial_table subselect_gp_indexes
 
 # 'partition' runs for a long time, so try to keep it together with other
 # long-running tests.
-test: partition partition1 partition_indexing parruleord partition_storage partition_ddl partition_with_user_defined_function partition_unlogged
+test: partition partition1 partition_indexing parruleord partition_storage partition_ddl partition_with_user_defined_function partition_unlogged partition_subquery
 # 'partition_locking' gets confused if other backends run concurrently and
 # hold locks.
 test: partition_locking
@@ -89,11 +96,6 @@ test: sreh
 # Disabled tests. XXX: Why are these disabled?
 #test: olap_window
 #test: tpch500GB
-
-# gp_toolkit performs a vacuum and checks that it truncated the relation. That
-# might not happen if other backends are holding transactions open, preventing
-# vacuum from removing dead tuples.
-test: gp_toolkit
 
 test: db_size_functions
 

@@ -503,19 +503,18 @@ set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			return;
 	}
 
-	/* Consider index and bitmap scans */
-	create_index_paths(root, rel);
+	/* TODO: this might have been too ambitious of a re-ordering */
+	/* If an indexscan is not allowed, don't bother making paths */
+	if(!(root->is_correlated_subplan && GpPolicyIsPartitioned(rel->cdbpolicy)))
+	{
+		/* Consider index and bitmap scans */
+		create_index_paths(root, rel);
 
+		if (rel->relstorage == RELSTORAGE_HEAP)
+			create_tidscan_paths(root, rel);
+	}
 	/* we can add the seqscan path now */
 	add_path(rel, seqpath);
-
-	/*
-	 * Consider TID scans
-	 *
-	 * Only heap tables support TidScans, currently. Not AO or CO tables.
-	 */
-	if (rel->relstorage == RELSTORAGE_HEAP)
-		create_tidscan_paths(root, rel);
 
 	/* Now find the cheapest of the paths for this rel */
 	set_cheapest(rel);
@@ -1719,10 +1718,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			 * Push down quals, like we do in set_subquery_pathlist()
 			 */
 			subquery = push_down_restrict(root, rel, rte, rel->relid, subquery);
-		}
 
-		subplan = subquery_planner(cteroot->glob, subquery, root, cte->cterecursive,
-								   tuple_fraction, &subroot, config);
+			subplan = subquery_planner(cteroot->glob, subquery, root,
+									   cte->cterecursive,
+									   tuple_fraction, &subroot, config);
+		}
+		else
+		{
+			subplan = subquery_planner(cteroot->glob, subquery, cteroot,
+									   cte->cterecursive,
+									   tuple_fraction, &subroot, config);
+		}
 
 		/*
 		 * Do not store the subplan in cteplaninfo, since we will not share

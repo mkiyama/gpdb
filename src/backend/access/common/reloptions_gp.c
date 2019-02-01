@@ -222,7 +222,13 @@ accumAOStorageOpt(char *name, char *value,
 
 	initStringInfo(&buf);
 
-	if (pg_strcasecmp(SOPT_APPENDONLY, name) == 0)
+	/*
+	 * "appendoptimized" is a recognized alias for "appendonly", but it's a
+	 * thin alias in the sense that "appendonly" will be saved as the storage
+	 * option.
+	 */
+	if ((pg_strcasecmp(SOPT_APPENDONLY, name) == 0) ||
+		(pg_strcasecmp(SOPT_ALIAS_APPENDOPTIMIZED, name) == 0))
 	{
 		if (!parse_bool(value, &boolval))
 			ereport(ERROR,
@@ -582,11 +588,10 @@ Datum
 transformAOStdRdOptions(StdRdOptions *opts, Datum withOpts)
 {
 	char	   *strval;
-	char		intval[MAX_SOPT_VALUE_LEN];
 	Datum	   *withDatums = NULL;
+	Datum		d;
 	text	   *t;
-	int			len,
-				i,
+	int			i,
 				withLen,
 				soptLen,
 				nWithOpts = 0;
@@ -636,28 +641,22 @@ transformAOStdRdOptions(StdRdOptions *opts, Datum withOpts)
 				pg_strncasecmp(strval, SOPT_APPENDONLY, soptLen) == 0)
 			{
 				foundAO = true;
-				strval = opts->appendonly ? "true" : "false";
-				len = VARHDRSZ + strlen(SOPT_APPENDONLY) + 1 + strlen(strval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_APPENDONLY, strval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%s",
+												 SOPT_APPENDONLY,
+												 (opts->appendonly ? "true" : "false"))),
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 			soptLen = strlen(SOPT_BLOCKSIZE);
 			if (withLen > soptLen &&
 				pg_strncasecmp(strval, SOPT_BLOCKSIZE, soptLen) == 0)
 			{
 				foundBlksz = true;
-				snprintf(intval, MAX_SOPT_VALUE_LEN, "%d", opts->blocksize);
-				len = VARHDRSZ + strlen(SOPT_BLOCKSIZE) + 1 + strlen(intval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_BLOCKSIZE, intval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%d",
+												 SOPT_BLOCKSIZE,
+												 opts->blocksize));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 			soptLen = strlen(SOPT_COMPTYPE);
 			if (withLen > soptLen &&
@@ -669,57 +668,44 @@ transformAOStdRdOptions(StdRdOptions *opts, Datum withOpts)
 				 * Record "none" as compresstype in reloptions if it was
 				 * explicitly specified in WITH clause.
 				 */
-				strval = (opts->compresstype[0]) ?
-					opts->compresstype : "none";
-				len = VARHDRSZ + strlen(SOPT_COMPTYPE) + 1 + strlen(strval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_COMPTYPE, strval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%s",
+												 SOPT_COMPTYPE,
+												 (opts->compresstype[0] ? opts->compresstype : "none")));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 			soptLen = strlen(SOPT_COMPLEVEL);
 			if (withLen > soptLen &&
 				pg_strncasecmp(strval, SOPT_COMPLEVEL, soptLen) == 0)
 			{
 				foundComplevel = true;
-				snprintf(intval, MAX_SOPT_VALUE_LEN, "%d", opts->compresslevel);
-				len = VARHDRSZ + strlen(SOPT_COMPLEVEL) + 1 + strlen(intval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_COMPLEVEL, intval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%d",
+												 SOPT_COMPLEVEL,
+												 opts->compresslevel));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 			soptLen = strlen(SOPT_CHECKSUM);
 			if (withLen > soptLen &&
 				pg_strncasecmp(strval, SOPT_CHECKSUM, soptLen) == 0)
 			{
 				foundChecksum = true;
-				strval = opts->checksum ? "true" : "false";
-				len = VARHDRSZ + strlen(SOPT_CHECKSUM) + 1 + strlen(strval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_CHECKSUM, strval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%s",
+												 SOPT_CHECKSUM,
+												 (opts->checksum ? "true" : "false")));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 			soptLen = strlen(SOPT_ORIENTATION);
 			if (withLen > soptLen &&
 				pg_strncasecmp(strval, SOPT_ORIENTATION, soptLen) == 0)
 			{
 				foundOrientation = true;
-				strval = opts->columnstore ? "column" : "row";
-				len = VARHDRSZ + strlen(SOPT_ORIENTATION) + 1 + strlen(strval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_ORIENTATION, strval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%s",
+												 SOPT_ORIENTATION,
+												 (opts->columnstore ? "column" : "row")));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 
 			/*
@@ -730,42 +716,30 @@ transformAOStdRdOptions(StdRdOptions *opts, Datum withOpts)
 			if (withLen > soptLen &&
 				pg_strncasecmp(strval, SOPT_FILLFACTOR, soptLen) == 0)
 			{
-				snprintf(intval, MAX_SOPT_VALUE_LEN, "%d", opts->fillfactor);
-				len = VARHDRSZ + strlen(SOPT_FILLFACTOR) + 1 + strlen(intval);
-				/* +1 leaves room for sprintf's trailing null */
-				t = (text *) palloc(len + 1);
-				SET_VARSIZE(t, len);
-				sprintf(VARDATA(t), "%s=%s", SOPT_FILLFACTOR, intval);
-				astate = accumArrayResult(astate, PointerGetDatum(t), false,
-										  TEXTOID, CurrentMemoryContext);
+				d = CStringGetTextDatum(psprintf("%s=%d",
+												 SOPT_FILLFACTOR,
+												 opts->fillfactor));
+				astate = accumArrayResult(astate, d, false, TEXTOID,
+										  CurrentMemoryContext);
 			}
 		}
 	}
+
 	/* Include options that are not defaults and not already included. */
 	if ((opts->appendonly != AO_DEFAULT_APPENDONLY) && !foundAO)
 	{
-		/* appendonly */
-		strval = opts->appendonly ? "true" : "false";
-		len = VARHDRSZ + strlen(SOPT_APPENDONLY) + 1 + strlen(strval);
-		/* +1 leaves room for sprintf's trailing null */
-		t = (text *) palloc(len + 1);
-		SET_VARSIZE(t, len);
-		sprintf(VARDATA(t), "%s=%s", SOPT_APPENDONLY, strval);
-		astate = accumArrayResult(astate, PointerGetDatum(t),
-								  false, TEXTOID,
+		d = CStringGetTextDatum(psprintf("%s=%s",
+										 SOPT_APPENDONLY,
+										 (opts->appendonly ? "true" : "false")));
+		astate = accumArrayResult(astate, d, false, TEXTOID,
 								  CurrentMemoryContext);
 	}
 	if ((opts->blocksize != AO_DEFAULT_BLOCKSIZE) && !foundBlksz)
 	{
-		/* blocksize */
-		snprintf(intval, MAX_SOPT_VALUE_LEN, "%d", opts->blocksize);
-		len = VARHDRSZ + strlen(SOPT_BLOCKSIZE) + 1 + strlen(intval);
-		/* +1 leaves room for sprintf's trailing null */
-		t = (text *) palloc(len + 1);
-		SET_VARSIZE(t, len);
-		sprintf(VARDATA(t), "%s=%s", SOPT_BLOCKSIZE, intval);
-		astate = accumArrayResult(astate, PointerGetDatum(t),
-								  false, TEXTOID,
+		d = CStringGetTextDatum(psprintf("%s=%d",
+										 SOPT_BLOCKSIZE,
+										 opts->blocksize));
+		astate = accumArrayResult(astate, d, false, TEXTOID,
 								  CurrentMemoryContext);
 	}
 
@@ -783,57 +757,38 @@ transformAOStdRdOptions(StdRdOptions *opts, Datum withOpts)
 							   pg_strcasecmp(opts->compresstype,
 											 AO_DEFAULT_COMPRESSTYPE) != 0))
 		{
-			/* compress type */
-			strval = opts->compresstype;
-			len = VARHDRSZ + strlen(SOPT_COMPTYPE) + 1 + strlen(strval);
-			/* +1 leaves room for sprintf's trailing null */
-			t = (text *) palloc(len + 1);
-			SET_VARSIZE(t, len);
-			sprintf(VARDATA(t), "%s=%s", SOPT_COMPTYPE, strval);
-			astate = accumArrayResult(astate, PointerGetDatum(t),
-									  false, TEXTOID,
+			d = CStringGetTextDatum(psprintf("%s=%s",
+											 SOPT_COMPTYPE,
+											 opts->compresstype));
+			astate = accumArrayResult(astate, d, false, TEXTOID,
 									  CurrentMemoryContext);
 		}
 		/* When compression is enabled, default compresslevel is 1. */
 		if ((opts->compresslevel != 1) &&
 			!foundComplevel)
 		{
-			/* compress level */
-			snprintf(intval, MAX_SOPT_VALUE_LEN, "%d", opts->compresslevel);
-			len = VARHDRSZ + strlen(SOPT_COMPLEVEL) + 1 + strlen(intval);
-			/* +1 leaves room for sprintf's trailing null */
-			t = (text *) palloc(len + 1);
-			SET_VARSIZE(t, len);
-			sprintf(VARDATA(t), "%s=%s", SOPT_COMPLEVEL, intval);
-			astate = accumArrayResult(astate, PointerGetDatum(t),
-									  false, TEXTOID,
+			d = CStringGetTextDatum(psprintf("%s=%d",
+											 SOPT_COMPLEVEL,
+											 opts->compresslevel));
+			astate = accumArrayResult(astate, d, false, TEXTOID,
 									  CurrentMemoryContext);
 		}
 	}
+
 	if ((opts->checksum != AO_DEFAULT_CHECKSUM) && !foundChecksum)
 	{
-		/* checksum */
-		strval = opts->checksum ? "true" : "false";
-		len = VARHDRSZ + strlen(SOPT_CHECKSUM) + 1 + strlen(strval);
-		/* +1 leaves room for sprintf's trailing null */
-		t = (text *) palloc(len + 1);
-		SET_VARSIZE(t, len);
-		sprintf(VARDATA(t), "%s=%s", SOPT_CHECKSUM, strval);
-		astate = accumArrayResult(astate, PointerGetDatum(t),
-								  false, TEXTOID,
+		d = CStringGetTextDatum(psprintf("%s=%s",
+										 SOPT_CHECKSUM,
+										 (opts->checksum ? "true" : "false")));
+		astate = accumArrayResult(astate, d, false, TEXTOID,
 								  CurrentMemoryContext);
 	}
 	if ((opts->columnstore != AO_DEFAULT_COLUMNSTORE) && !foundOrientation)
 	{
-		/* orientation */
-		strval = opts->columnstore ? "column" : "row";
-		len = VARHDRSZ + strlen(SOPT_ORIENTATION) + 1 + strlen(strval);
-		/* +1 leaves room for sprintf's trailing null */
-		t = (text *) palloc(len + 1);
-		SET_VARSIZE(t, len);
-		sprintf(VARDATA(t), "%s=%s", SOPT_ORIENTATION, strval);
-		astate = accumArrayResult(astate, PointerGetDatum(t),
-								  false, TEXTOID,
+		d = CStringGetTextDatum(psprintf("%s=%s",
+										 SOPT_ORIENTATION,
+										 (opts->columnstore ? "column" : "row")));
+		astate = accumArrayResult(astate, d, false, TEXTOID,
 								  CurrentMemoryContext);
 	}
 	return astate ?
@@ -917,7 +872,7 @@ validate_and_adjust_options(StdRdOptions *result,
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("invalid option \"compresstype\" for base relation"),
-					 errhint("\"compresstype\" is only valid for Append Only relations, create an AO relation to use \"compresstype\"")));
+					 errhint("\"compresstype\" is only valid for Append Only relations, create an AO relation to use \"compresstype\".")));
 
 		if (!compresstype_is_valid(comptype_opt->values.string_val))
 			ereport(ERROR,
@@ -1048,7 +1003,7 @@ validate_and_adjust_options(StdRdOptions *result,
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("invalid option \"checksum\" for base relation"),
-					 errhint("\"checksum\" option only valid for Append Only relations, data checksum for heap relations are turned on at cluster creation")));
+					 errhint("\"checksum\" option only valid for Append Only relations, data checksum for heap relations are turned on at cluster creation.")));
 		result->checksum = checksum_opt->values.bool_val;
 	}
 	/* Disable checksum for heap relations. */
@@ -1265,7 +1220,7 @@ validateAppendOnlyRelOptions(bool ao,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("block size (%d) is smaller gp_safefswritesize (%d)",
 						blocksize, gp_safefswritesize),
-				 errhint("Increase blocksize or decrease gp_safefswritesize if it is safe to do so on this file system")));
+				 errhint("Increase blocksize or decrease gp_safefswritesize if it is safe to do so on this file system.")));
 }
 
 /*

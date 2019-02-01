@@ -176,6 +176,7 @@ HOSTFILE=/etc/hosts
 PG_PID=postmaster.pid
 PG_OPT=postmaster.opts
 PG_CONF=postgresql.conf
+PG_INTERNAL_CONF=internal.auto.conf
 PG_HBA=pg_hba.conf
 if [ x"$TRUSTED_SHELL" = x"" ]; then TRUSTED_SHELL="$SSH"; fi
 if [ x"$TRUSTED_COPY" = x"" ]; then TRUSTED_COPY="$SCP"; fi
@@ -1280,29 +1281,6 @@ CHK_GPDB_ID () {
 		LOG_MSG "[WARN]:-No initdb file, unable to verify id" 1
 	fi
 	LOG_MSG "[INFO]:-End Function $FUNCNAME"
-}
-
-# Make a dbid file at a particular host. The dbid file is used by gpstart
-# to tell the process in question which segment/master it is.
-# Arguments:
-#   1 - DBID
-#   2 - host name
-#   3 - path to data directory
-MAKE_DBID_FILE() {
-	DBID=$1; shift
-	HOST=$1; shift
-	DATADIR=$1; shift
-
-	FILEPATH=$DATADIR/gp_dbid
-
-	if [ "$FILEPATH" = "/gp_dbid" ]; then # DATADIR is empty
-		ERROR_EXIT "[FATAL]:-Internal error -- expected non-empty data directory" 2
-	fi
-
-	$TRUSTED_SHELL $HOST \
-	  "$ECHO \"# Greenplum Database identifier for this master/segment.
-# Do not change the contents of this file.
-dbid = $DBID\" > $FILEPATH &&  chmod 400 $FILEPATH"
 }
 
 #******************************************************************************

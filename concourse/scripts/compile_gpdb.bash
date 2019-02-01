@@ -15,6 +15,12 @@ function expand_glob_ensure_exists() {
   echo "${glob[0]}"
 }
 
+function install_deps_for_centos() {
+  # quicklz is proprietary code that we cannot put in our public Docker images.
+  rpm -i libquicklz-installer/libquicklz-*.rpm
+  rpm -i libquicklz-devel-installer/libquicklz-*.rpm
+}
+
 function prep_env_for_centos() {
   case "${TARGET_OS_VERSION}" in
     6)
@@ -68,18 +74,28 @@ function build_gpdb() {
   popd
 }
 
-function build_quicklz() {
-  pushd gpaddon_src/quicklz
-    # Need to have pg_config available to compile and install quicklz.
-    source ${GREENPLUM_INSTALL_DIR}/greenplum_path.sh
-    export PATH=${GREENPLUM_INSTALL_DIR}/bin:$PATH
-    make install
-  popd
-}
-
 function build_gppkg() {
   pushd ${GPDB_SRC_PATH}/gpAux
     make gppkg BLD_TARGETS="gppkg" INSTLOC="${GREENPLUM_INSTALL_DIR}" GPPKGINSTLOC="${GPDB_ARTIFACTS_DIR}" RELENGTOOLS=/opt/releng/tools
+  popd
+}
+
+function git_info() {
+  pushd ${GPDB_SRC_PATH}
+
+  "${CWDIR}/git_info.bash" | tee ${GREENPLUM_INSTALL_DIR}/etc/git-info.json
+
+  PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+
+  cat > ${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt <<-EOF
+	======================================================================
+	Git log since previous release tag (${PREV_TAG})
+	----------------------------------------------------------------------
+
+	EOF
+
+  git log --abbrev-commit --date=relative "${PREV_TAG}..HEAD" >> ${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt
+
   popd
 }
 
@@ -96,6 +112,14 @@ function include_zstd() {
       cp /usr/lib64/pkgconfig/libzstd.pc lib/pkgconfig/.
       cp /usr/lib64/libzstd.so* lib/.
       cp /usr/include/zstd*.h include/.
+    fi
+  popd
+}
+
+function include_quicklz() {
+  pushd ${GREENPLUM_INSTALL_DIR}
+    if [ "${TARGET_OS}" == "centos" ] ; then
+      cp /usr/lib64/libquicklz.so* lib/.
     fi
   popd
 }
@@ -133,6 +157,7 @@ function export_gpdb_win32_ccl() {
 function _main() {
   case "${TARGET_OS}" in
    centos)
+      install_deps_for_centos
       prep_env_for_centos
       ;;
     sles)
@@ -178,10 +203,7 @@ function _main() {
   rsync -au gpaddon_src/ ${GPDB_SRC_PATH}/gpAux/${ADDON_DIR}
 
   build_gpdb "${BLD_TARGET_OPTION[@]}"
-  if [ "${TARGET_OS}" != "win32" ] ; then
-      # Do not build quicklz support for windows
-      build_quicklz
-  fi
+  git_info
   build_gppkg
   if [ "${TARGET_OS}" != "win32" ] ; then
       # Don't unit test when cross compiling. Tests don't build because they
@@ -189,6 +211,7 @@ function _main() {
       unittest_check_gpdb
   fi
   include_zstd
+  include_quicklz
   export_gpdb
   export_gpdb_extensions
   export_gpdb_win32_ccl

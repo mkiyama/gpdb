@@ -1104,6 +1104,13 @@ PGAC_ARG_BOOL(with, zstd, yes,
 AC_SUBST(with_zstd)
 
 #
+# quicklz
+#
+PGAC_ARG_BOOL(with, quicklz, no,
+              [build with QuickLZ support (requires quicklz library)])
+AC_SUBST(with_quicklz)
+
+#
 # Realtime library
 #
 PGAC_ARG_BOOL(with, rt, yes,
@@ -1308,7 +1315,15 @@ fi
 
 if test "$with_zstd" = yes; then
   AC_CHECK_LIB(zstd, ZSTD_compressCCtx, [],
-               [AC_MSG_ERROR([zstd library not found.])])
+               [AC_MSG_ERROR([zstd library not found
+If you have libzstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zstd support.])])
+fi
+
+if test "$with_quicklz" = yes; then
+  AC_CHECK_LIB(quicklz, qlz_compress, [],
+               [AC_MSG_ERROR([quicklz library not found.])])
 fi
 
 if test "$enable_spinlocks" = yes; then
@@ -1568,6 +1583,11 @@ fi
 if test "$with_zstd" = yes; then
   AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([header file <zstd.h> is required for zstd support])])
   AC_CHECK_HEADER(zstd_errors.h, [], [AC_MSG_ERROR([header file <zstd_errors.h> is required for zstd support])])
+fi
+
+# Check for quicklz.h
+if test "$with_quicklz" = yes; then
+  AC_CHECK_HEADER(quicklz.h, [], [AC_MSG_ERROR([header file <quicklz.h> is required for QuickLZ support])])
 fi
 
 if test "$with_gssapi" = yes ; then
@@ -2306,7 +2326,10 @@ AC_CHECK_ALIGNOF(double)
 
 # Compute maximum alignment of any basic type.
 # We assume long's alignment is at least as strong as char, short, or int;
-# but we must check long long (if it exists) and double.
+# but we must check long long (if it is being used for int64) and double.
+# Note that we intentionally do not consider any types wider than 64 bits,
+# as allowing MAXIMUM_ALIGNOF to exceed 8 would be too much of a penalty
+# for disk and memory space.
 
 MAX_ALIGNOF=$ac_cv_alignof_long
 if test $MAX_ALIGNOF -lt $ac_cv_alignof_double ; then
@@ -2327,7 +2350,7 @@ AC_CHECK_TYPES([int8, uint8, int64, uint64], [], [],
 # C, but is missing on some old platforms.
 AC_CHECK_TYPES(sig_atomic_t, [], [], [#include <signal.h>])
 
-# Check for extensions offering the integer scalar type __int128.
+# Some compilers offer a 128-bit integer scalar type.
 PGAC_TYPE_128BIT_INT
 
 # Check for various atomic operations now that we have checked how to declare

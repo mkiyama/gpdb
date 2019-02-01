@@ -9,9 +9,11 @@ Feature: Replication Slots
     Given a preferred primary has failed
     When primary and mirror switch to non-preferred roles
     Then the primaries and mirrors should be replicating using replication slots
+    And the mirrors should not have replication slots
 
     When the user runs "gprecoverseg -ra"
     Then gprecoverseg should return a return code of 0
+    And the primaries and mirrors should be replicating using replication slots
 
     When a mirror has crashed
     And I fully recover a mirror

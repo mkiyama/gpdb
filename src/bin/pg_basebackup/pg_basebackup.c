@@ -118,7 +118,7 @@ static bool reached_end_position(XLogRecPtr segendpos, uint32 timeline,
 
 static const char *get_tablespace_mapping(const char *dir);
 static void tablespace_list_append(const char *arg);
-
+static void WriteInternalConfFile(void);
 
 static void
 disconnect_and_exit(int code)
@@ -1172,7 +1172,7 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 
 		if (target_gp_dbid < 1)
 		{
-			fprintf(stderr, _("%s: cannot restore user-defined tablespaces without the --target-gp-dbid option"),
+			fprintf(stderr, _("%s: cannot restore user-defined tablespaces without the --target-gp-dbid option\n"),
 					progname);
 			disconnect_and_exit(1);
 		}
@@ -1291,11 +1291,15 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 					 */
 					if (forceoverwrite && pg_check_dir(filename) != 0)
 					{
-						int filename_offset = strlen(filename) - 7;
-
-						/* replace with pg_str_endswith() after merging Postgres 9.5 */
-						if (filename_offset >= 0 &&
-							strcmp(filename + filename_offset, "/pg_log") == 0)
+						/*
+						 * We want to retain the contents of pg_log. And for
+						 * pg_xlog we assume is deleted at the start of
+						 * pg_basebackup. We cannot delete pg_xlog because if
+						 * streammode was used then it may have already copied
+						 * new xlog files into pg_xlog directory.
+						 */
+						if (pg_str_endswith(filename, "/pg_log") ||
+							pg_str_endswith(filename, "/pg_xlog"))
 							continue;
 
 						rmtree(filename, true);
@@ -1454,6 +1458,9 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 
 	if (basetablespace && writerecoveryconf)
 		WriteRecoveryConf();
+
+	if (basetablespace)
+		WriteInternalConfFile();
 }
 
 /*
@@ -1893,6 +1900,21 @@ BaseBackup(void)
 	}
 
 	/*
+	 * In the case of forceoverwrite the base directory may already exist. In
+	 * this case we need to wipeout the old pg_xlog directory. This is done
+	 * before StartLogStreamer and ReceiveAndUnpackTarFile so that either can
+	 * create pg_xlog directory and begin populating new contents to it.
+	 */
+	if (forceoverwrite)
+	{
+		char xlog_path[MAXPGPATH];
+		snprintf(xlog_path, MAXPGPATH, "%s/pg_xlog", basedir);
+
+		if (pg_check_dir(xlog_path) != 0)
+			rmtree(xlog_path, true);
+	}
+
+	/*
 	 * If we're streaming WAL, start the streaming session before we start
 	 * receiving the actual data chunks.
 	 */
@@ -2310,6 +2332,13 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
+	if (target_gp_dbid <= 0)
+	{
+		fprintf(stderr, _("%s: no target dbid specified, --target-gp-dbid is required.\n"),
+				progname);
+		exit(1);
+	}
+
 	/*
 	 * Mutually exclusive arguments
 	 */
@@ -2412,4 +2441,34 @@ main(int argc, char **argv)
 	BaseBackup();
 
 	return 0;
+}
+
+static void
+WriteInternalConfFile(void)
+{
+	char		filename[MAXPGPATH];
+	FILE	   *cf;
+	char line_to_write[100];
+	int length;
+
+	sprintf(filename, "%s/%s", basedir, GP_INTERNAL_AUTO_CONF_FILE_NAME);
+
+	cf = fopen(filename, "w");
+	if (cf == NULL)
+	{
+		fprintf(stderr, _("%s: could not create file \"%s\": %s\n"), progname, filename, strerror(errno));
+		disconnect_and_exit(1);
+	}
+
+	length = snprintf(line_to_write, 100, "gp_dbid=%d\n", target_gp_dbid);
+
+	if (fwrite(line_to_write, length, 1, cf) != 1)
+	{
+		fprintf(stderr,
+				_("%s: could not write to file \"%s\": %s\n"),
+				progname, filename, strerror(errno));
+		disconnect_and_exit(1);
+	}
+
+	fclose(cf);
 }

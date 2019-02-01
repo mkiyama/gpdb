@@ -11,7 +11,7 @@ ERROR:  replication slot "some_replication_slot" does not exist
 (exited with code 0)
 
 -- When pg_basebackup runs with --slot and stream as xlog-method
-select pg_basebackup(address, port, 'some_replication_slot', '/tmp/some_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
+select pg_basebackup(address, dbid, port, 'some_replication_slot', '/tmp/some_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
  pg_basebackup 
 ---------------
                
@@ -28,7 +28,7 @@ select pg_basebackup(address, port, 'some_replication_slot', '/tmp/some_isolatio
 (1 row)
 
 -- When another basebackup is run with the same slot name
-select pg_basebackup(address, port, 'some_replication_slot', '/tmp/some_other_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
+select pg_basebackup(address, dbid, port, 'some_replication_slot', '/tmp/some_other_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
  pg_basebackup 
 ---------------
                
@@ -69,7 +69,7 @@ primary_slot_name = 'some_replication_slot'
 (exited with code 0)
 
 -- When pg_basebackup runs without --slot
-select pg_basebackup(address, port, null, '/tmp/some_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
+select pg_basebackup(address, dbid, port, null, '/tmp/some_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';
  pg_basebackup 
 ---------------
                
@@ -80,52 +80,5 @@ select pg_basebackup(address, port, null, '/tmp/some_isolation2_pg_basebackup') 
  count 
 -------
  0     
-(1 row)
-
--- Given that we suspend a WAL sender
-create extension if not exists gp_inject_fault;
-CREATE
-select gp_inject_fault_infinite('wal_sender_loop', 'suspend', 2);
- gp_inject_fault_infinite 
---------------------------
- t                        
-(1 row)
-!\retcode rm -rf /tmp/some_isolation2_pg_basebackup;
--- start_ignore
-
--- end_ignore
-(exited with code 0)
-
--- And we make a call pg_basebackup that will lead to WAL sender fork
-1&:select pg_basebackup(address, port, null, '/tmp/some_isolation2_pg_basebackup') from gp_segment_configuration where content = 0 and role = 'p';  <waiting ...>
-SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE content = 0 AND role = 'p';
- gp_wait_until_triggered_fault 
--------------------------------
- t                             
-(1 row)
-
--- Then we expect that the application_name of the  WAL sender is not the same
--- 'gp_walreceiver' application name used by primary/mirror WAL sender
-0U: select count(application_name) > 0 as has_replication_app_names from pg_stat_replication where application_name <> 'gp_walreceiver';
- has_replication_app_names 
----------------------------
- t                         
-(1 row)
-
-select gp_inject_fault('wal_sender_loop', 'resume', 2);
- gp_inject_fault 
------------------
- t               
-(1 row)
-select gp_inject_fault('wal_sender_loop', 'reset', 2);
- gp_inject_fault 
------------------
- t               
-(1 row)
-
-1<:  <... completed>
- pg_basebackup 
----------------
-               
 (1 row)
 

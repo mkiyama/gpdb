@@ -1,21 +1,24 @@
-/*------------------------------------------------------------------------------
+/*-------------------------------------------------------------------------
  *
- * Persistent storage for the Sparse Vector Datatype
+ * sparse_vector.h
+ *        Persistent storage for the Sparse Vector Datatype
  *
  * Consists of the dimension of the vector (how many elements) and a SparseData
  * structure that stores the data in a compressed format.
  *
  * Copyright (c) 2010, Greenplum Software
+ * Portions Copyright (c) 2013-Present Pivotal Software, Inc.
  *
- * $$
- *------------------------------------------------------------------------------
+ *
+ * IDENTIFICATION
+ *	    gpcontrib/gp_sparse_vector/sparse_vector.h
+ *
+ *-------------------------------------------------------------------------
  */
-
 #ifndef SPARSEVECTOR_H
 #define SPARSEVECTOR_H
 
 #include "SparseData.h"
-//#include "float_specials.h"
 
 typedef struct {
 	int32 vl_len_;

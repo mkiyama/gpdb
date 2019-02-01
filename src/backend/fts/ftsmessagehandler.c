@@ -18,6 +18,7 @@
 #include <replication/slot.h>
 
 #include "access/xlog.h"
+#include "cdb/cdbvars.h"
 #include "libpq/pqformat.h"
 #include "libpq/libpq.h"
 #include "postmaster/fts.h"
@@ -274,19 +275,6 @@ HandleFtsWalRepProbe(void)
 			/* Syncrep is enabled now, so respond accordingly. */
 			response.IsSyncRepEnabled = true;
 		}
-
-		/*
-		 * Precautionary action: Unlink PROMOTE_SIGNAL_FILE if incase it
-		 * exists. This is to avoid driving to any incorrect conclusions when
-		 * this segment starts acting as mirror or gets copied over using
-		 * pg_basebackup.
-		 */
-		// GPDB_93_MERGE_FIXME: should we check for FALLBACK_PROMOTE_SIGNAL_FILE, too?
-		if (CheckPromoteSignal())
-		{
-			unlink(PROMOTE_SIGNAL_FILE);
-			elog(LOG, "found and hence deleted '%s' file", PROMOTE_SIGNAL_FILE);
-		}
 	}
 
 	/*
@@ -389,7 +377,7 @@ HandleFtsWalRepPromote(void)
 	 * idempotent way.
 	 */
 	DBState state = GetCurrentDBState();
-	if (state == DB_IN_STANDBY_MODE)
+	if (state == DB_IN_ARCHIVE_RECOVERY)
 	{
 		/*
 		 * Reset sync_standby_names on promotion. This is to avoid commits
@@ -417,6 +405,34 @@ HandleFtsWalRepPromote(void)
 void
 HandleFtsMessage(const char* query_string)
 {
+	int dbid;
+	int contid;
+	char message_type[FTS_MSG_MAX_LEN];
+	int error_level;
+
+	if (sscanf(query_string, FTS_MSG_FORMAT,
+			   message_type, &dbid, &contid) != 3)
+	{
+		ereport(ERROR,
+				(errmsg("received invalid FTS query: %s", query_string)));
+	}
+
+#ifdef USE_ASSERT_CHECKING
+	error_level = PANIC;
+#else
+	error_level = WARNING;
+#endif
+
+	if (dbid != GpIdentity.dbid)
+		ereport(error_level,
+				(errmsg("message type: %s received dbid:%d doesn't match this segments configured dbid:%d",
+						message_type, dbid, GpIdentity.dbid)));
+
+	if (contid != GpIdentity.segindex)
+		ereport(error_level,
+				(errmsg("message type: %s received contentid:%d doesn't match this segments configured contentid:%d",
+						message_type, contid, GpIdentity.segindex)));
+
 	SIMPLE_FAULT_INJECTOR(FtsHandleMessage);
 
 	if (strncmp(query_string, FTS_MSG_PROBE,

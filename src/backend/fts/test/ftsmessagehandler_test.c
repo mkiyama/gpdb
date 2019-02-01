@@ -80,7 +80,6 @@ test_HandleFtsWalRepProbePrimary(void **state)
 	will_be_called(GetMirrorStatus);
 
 	will_be_called(SetSyncStandbysDefined);
-	will_be_called(CheckPromoteSignal);
 
 	/* SyncRep should be enabled as soon as we found mirror is up. */
 	mockresponse.IsSyncRepEnabled = true;
@@ -149,7 +148,7 @@ test_HandleFtsWalRepPromoteMirror(void **state)
 	max_replication_slots = 1;
 	am_mirror = true;
 
-	will_return(GetCurrentDBState, DB_IN_STANDBY_MODE);
+	will_return(GetCurrentDBState, DB_IN_ARCHIVE_RECOVERY);
 	will_be_called(UnsetSyncStandbysDefined);
 	will_be_called(SignalPromote);
 
