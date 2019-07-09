@@ -1705,7 +1705,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 	gp_motion_cost_per_row :
 	2.0 * cpu_tuple_cost;
 
-	CdbPathLocus_MakeNull(&current_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+	CdbPathLocus_MakeNull(&current_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 
 	/* Tweak caller-supplied tuple_fraction if have LIMIT/OFFSET */
 	if (parse->limitCount || parse->limitOffset)
@@ -2342,7 +2342,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 				/* Hashed aggregation produces randomly-ordered results */
 				current_pathkeys = NIL;
-				CdbPathLocus_MakeNull(&current_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+				CdbPathLocus_MakeNull(&current_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 			}
 			else if (!grpext && (parse->hasAggs || parse->groupClause))
 			{
@@ -2407,7 +2407,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												  0);
 				}
 
-				CdbPathLocus_MakeNull(&current_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+				CdbPathLocus_MakeNull(&current_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 			}
 			else if (grpext && (parse->hasAggs || parse->groupClause))
 			{
@@ -2467,7 +2467,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 							make_pathkeys_for_sortclauses(root,
 														  parse->sortClause,
 														  result_plan->targetlist);
-					CdbPathLocus_MakeNull(&current_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+					CdbPathLocus_MakeNull(&current_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 				}
 			}
 			else if (root->hasHavingQual)
@@ -2492,8 +2492,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												   NULL);
 				/* Result will be only one row anyway; no sort order */
 				current_pathkeys = NIL;
-				mark_plan_general(result_plan, GP_POLICY_ALL_NUMSEGMENTS);
-				CdbPathLocus_MakeNull(&current_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+				mark_plan_general(result_plan, getgpsegmentCount());
+				CdbPathLocus_MakeNull(&current_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 			}
 		}						/* end of non-minmax-aggregate case */
 
@@ -3081,7 +3081,9 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
 		}
 
-		if (must_gather && result_plan->flow->flotype != FLOW_SINGLETON)
+		if (must_gather &&
+			result_plan->flow->flotype != FLOW_SINGLETON &&
+			!parse->canOptSelectLockingClause) /* We can only lock rows on segments */
 		{
 			/*
 			 * current_pathkeys might contain unneeded columns that have been
@@ -3096,46 +3098,36 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 	}
 
 	/*
-	 * If there is a FOR [KEY] UPDATE/SHARE clause, add the LockRows node.
-	 * (Note: we intentionally test parse->rowMarks not root->rowMarks here.
-	 * If there are only non-locking rowmarks, they should be handled by the
-	 * ModifyTable node instead.)
+	 * Greenplum specific behavior:
+	 * The implementation of select statement with locking clause
+	 * (for update | no key update | share | key share) in postgres
+	 * is to hold RowShareLock on tables during parsing stage, and
+	 * generate a LockRows plan node for executor to lock the tuples.
+	 * It is not easy to lock tuples in Greenplum database, since
+	 * tuples may be fetched through motion nodes.
+	 *
+	 * But when Global Deadlock Detector is enabled, and the select
+	 * statement with locking clause contains only one table, we are
+	 * sure that there are no motions. For such simple cases, we could
+	 * make the behavior just the same as Postgres.
+	 *
+	 * The conflict with UPDATE|DELETE is implemented by locking the entire
+	 * table in ExclusiveMode. More details please refer docs.
 	 */
 	if (parse->rowMarks)
 	{
 		ListCell   *lc;
-		List	   *newmarks = NIL;
+		List   *newmarks = NIL;
 
-		/*
-		 * select for update will lock the whole table, we do it at addRangeTableEntry.
-		 * The reason is that gpdb is an MPP database, the result tuples may not be on
-		 * the same segment. And for cursor statement, reader gang cannot get Xid to lock
-		 * the tuples. (More details: https://groups.google.com/a/greenplum.org/forum/#!topic/gpdb-dev/p-6_dNjnRMQ)
-		 * Upgrading the lock mode (see below) for distributed table is probably
-		 * not needed for all the cases and we may want to enhance this later.
-		 */
 		foreach(lc, root->rowMarks)
 		{
 			PlanRowMark *rc = (PlanRowMark *) lfirst(lc);
 
-			if (rc->markType == ROW_MARK_EXCLUSIVE || rc->markType == ROW_MARK_SHARE)
+			if (parse->canOptSelectLockingClause)
 			{
-				RelOptInfo *brel = root->simple_rel_array[rc->rti];
-
-				if (GpPolicyIsPartitioned(brel->cdbpolicy) ||
-					GpPolicyIsReplicated(brel->cdbpolicy))
-				{
-					if (rc->markType == ROW_MARK_EXCLUSIVE)
-						rc->markType = ROW_MARK_TABLE_EXCLUSIVE;
-					else
-						rc->markType = ROW_MARK_TABLE_SHARE;
-				}
-			}
-
-			/* We only need LockRows for the tuple-level locks */
-			if (rc->markType != ROW_MARK_TABLE_EXCLUSIVE &&
-				rc->markType != ROW_MARK_TABLE_SHARE)
+				rc->canOptSelectLockingClause = true;
 				newmarks = lappend(newmarks, rc);
+			}
 		}
 
 		if (newmarks)
@@ -3144,6 +3136,22 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												 newmarks,
 												 SS_assign_special_param(root));
 			result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
+
+
+			if (must_gather && result_plan->flow->flotype != FLOW_SINGLETON)
+			{
+				/*
+				 * Greeplum specific behavior:
+				 * Add the postponed gather motion of sorting here.
+				 *`The SQL can reach here has the pattern: select xxx from t order by yyy for update (see
+				 * above must_gather's assignment for details). For read committed isolation level,
+				 * The statement `select order by for update` cannot guarantee order (see discussion
+				 * https://www.postgresql.org/message-id/CAO0i4_QCf8LUCO9xDgDpJ0zdsyM7q83APtqHamdsswQ6NVT3ZQ%40mail.gmail.com
+				 * for details) even in postgres. So it is OK to generate two-stage merge sort plan here. And
+				 * document the limitations in Greenplum.
+				 */
+				result_plan = (Plan *) make_motion_gather(root, result_plan, current_pathkeys);
+			}
 
 			/*
 			 * The result can no longer be assumed sorted, since locking might
@@ -3176,8 +3184,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			 */
 			if (parse->sortClause)
 			{
-				if (!pathkeys_contained_in(root->sort_pathkeys, current_pathkeys))
-					elog(ERROR, "invalid result order generated for ORDER BY + LIMIT");
 				current_pathkeys = root->sort_pathkeys;
 				result_plan = (Plan *) make_motion_gather_to_QE(root, result_plan,
 																current_pathkeys);

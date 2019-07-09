@@ -27,10 +27,8 @@ SET_VERSION_SCRIPTS = \
 	bin/gpstop \
 	bin/gpsys1 \
 	bin/gpcheckcat \
-	sbin/gpaddconfig.py \
-	sbin/gpchangeuserpassword \
+	sbin/gpconfig_helper.py \
 	sbin/gpcleansegmentdir.py \
-	sbin/gpfixuserlimts \
 	sbin/gpgetstatususingtransition.py \
 	sbin/gpsegstart.py \
 	sbin/gpsegstop.py \
@@ -68,20 +66,11 @@ install: generate_greenplum_path_file
 
 	# Setup /lib/python contents
 	cp -rp bin/gppylib $(DESTDIR)$(prefix)/lib/python
-	if [ -e bin/ext/Crypto ]; then \
-	    cp -rp bin/ext/Crypto $(DESTDIR)$(prefix)/lib/python ; \
-	fi
 	if [ -e bin/ext/__init__.py ]; then \
 	    cp -rp bin/ext/__init__.py $(DESTDIR)$(prefix)/lib/python ; \
 	fi
 	if [ -e bin/ext/lockfile ]; then \
 	    cp -rp bin/ext/lockfile $(DESTDIR)$(prefix)/lib/python ; \
-	fi
-	if [ -e bin/ext/paramiko ]; then \
-	    cp -rp bin/ext/paramiko $(DESTDIR)$(prefix)/lib/python ; \
-	fi
-	if [ -e bin/ext/ecdsa ]; then \
-	    cp -rp bin/ext/ecdsa $(DESTDIR)$(prefix)/lib/python ; \
 	fi
 	if [ -e bin/ext/psutil ]; then \
 	    cp -rp bin/ext/psutil $(DESTDIR)$(prefix)/lib/python ; \
@@ -111,8 +100,6 @@ install: generate_greenplum_path_file
 	cp $(top_builddir)/src/test/regress/*.pm $(DESTDIR)$(prefix)/bin
 	if [ ! -d ${DESTDIR}${prefix}/docs ] ; then mkdir ${DESTDIR}${prefix}/docs ; fi
 	if [ -d doc ]; then cp -rp doc $(DESTDIR)$(prefix)/docs/cli_help; fi
-	mkdir -p $(DESTDIR)$(prefix)/etc
-	cp -p doc/gpconfigs/gpcheck.cnf $(DESTDIR)$(prefix)/etc/
 
 #	THIS NEEDS TO MOVE
 #	if [ -d demo/gpfdist_transform ]; then \
@@ -128,6 +115,7 @@ install: generate_greenplum_path_file
 	rm -rf $(DESTDIR)$(prefix)/bin/src
 	rm -rf $(DESTDIR)$(prefix)/bin/gppylib
 	rm -rf $(DESTDIR)$(prefix)/bin/gpload_test
+	rm -rf $(DESTDIR)$(prefix)/bin/README*
 	find $(DESTDIR)$(prefix)/lib/python/gppylib -name test -type d | xargs rm -rf
 
 clean distclean:

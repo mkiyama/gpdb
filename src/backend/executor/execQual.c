@@ -73,8 +73,8 @@ static Datum ExecEvalArrayRef(ArrayRefExprState *astate,
 				 bool *isNull, ExprDoneCond *isDone);
 static bool isAssignmentIndirectionExpr(ExprState *exprstate);
 static Datum ExecEvalAggref(AggrefExprState *aggref,
-		   ExprContext *econtext,
-		   bool *isNull, ExprDoneCond *isDone);
+			   ExprContext *econtext,
+			   bool *isNull, ExprDoneCond *isDone);
 static Datum ExecEvalGroupingFunc(GroupingFuncExprState *gstate,
 							  ExprContext *econtext,
 							  bool *isNull, ExprDoneCond *isDone);
@@ -5207,18 +5207,18 @@ ExecEvalArrayCoerceExpr(ArrayCoerceExprState *astate,
 }
 
 /* ----------------------------------------------------------------
- *    ExecEvalCurrentOfExpr
+ *		ExecEvalCurrentOfExpr
  *
- *    Evaluate CURRENT OF
+ * Evaluate CURRENT OF
  *
- *    Constant folding must have bound observed values of
- * 	gp_segment_id, ctid, and tableoid into the CurrentOfExpr for
- *	this function's consumption.
+ * Constant folding must have bound observed values of gp_segment_id,
+ * ctid, and tableoid into the CurrentOfExpr for this function's
+ * consumption.
  * ----------------------------------------------------------------
  */
 static Datum
 ExecEvalCurrentOfExpr(ExprState *exprstate, ExprContext *econtext,
-						bool *isNull, ExprDoneCond *isDone)
+					  bool *isNull, ExprDoneCond *isDone)
 {
 	CurrentOfExpr 	*cexpr = (CurrentOfExpr *) exprstate->expr;
 	bool 			result = false;
@@ -5257,73 +5257,6 @@ ExecEvalCurrentOfExpr(ExprState *exprstate, ExprContext *econtext,
 
 	return BoolGetDatum(result);
 }
- 
-/* ----------------------------------------------------------------
- *		ExecEvalReshuffleExpr
- *
- *		Evaluate an Reshuffle expression node.
- * ----------------------------------------------------------------
- */
-static Datum
-ExecEvalReshuffleExpr(ReshuffleExprState *astate,
-					  ExprContext *econtext,
-					  bool *isNull,
-					  ExprDoneCond *isDone)
-{
-	ReshuffleExpr *sr = (ReshuffleExpr *) astate->xprstate.expr;
-	uint32		newSeg;
-	bool		result;
-
-	Assert(!IS_QUERY_DISPATCHER());
-	Assert(sr->ptype != POLICYTYPE_REPLICATED);
-
-	if(sr->ptype == POLICYTYPE_PARTITIONED)
-	{
-		if (NULL != sr->hashKeys)
-		{
-			/* For hash distributed tables */
-			ListCell   *k;
-			int			i;
-
-			cdbhashinit(astate->cdbhash);
-			i = 0;
-			foreach(k, astate->hashKeys)
-			{
-				ExprState *vstate = (ExprState *) lfirst(k);
-				Datum		val;
-				bool		valnull;
-
-				val = ExecEvalExpr(vstate, econtext, &valnull, isDone);
-
-				cdbhash(astate->cdbhash, i + 1, val, valnull);
-				i++;
-			}
-
-			newSeg = cdbhashreduce(astate->cdbhash);
-			result = (GpIdentity.segindex != newSeg);
-		}
-		else
-		{
-			/*
-			 * For random distributed tables
-			 *
-			 * We generate a random value between[0, newSegs). When this
-			 * value is greater than oldSegs, it indicates that the tuple
-			 * needs to be reshuffled.
-			 */
-			int			newSegs = getgpsegmentCount();
-
-			result = (cdbhashrandomseg(newSegs) >= sr->oldSegs);
-		}
-	}
-	else
-		result = false;
-
-	*isNull = false;
-	return BoolGetDatum(result);
-
-}
-
 
 /*
  * ExecEvalExprSwitchContext
@@ -5438,7 +5371,6 @@ ExecInitExpr(Expr *node, PlanState *parent)
 			state->evalfunc = ExecEvalCaseTestExpr;
 			break;
 		case T_Aggref:
-
 			{
 				Aggref	   *aggref = (Aggref *) node;
 				AggrefExprState *astate = makeNode(AggrefExprState);
@@ -6185,30 +6117,6 @@ ExecInitExpr(Expr *node, PlanState *parent)
 				state = (ExprState *) exprstate;
 			}
 			break;
-
-        case T_ReshuffleExpr:
-			{
-				ReshuffleExpr *sr = (ReshuffleExpr *) node;
-				ReshuffleExprState *exprstate = makeNode(ReshuffleExprState);
-				Oid		   *hashFuncs;
-				int			i;
-				ListCell   *lc;
-
-				exprstate->hashKeys = (List *) ExecInitExpr((Expr *) sr->hashKeys, parent);
-				exprstate->xprstate.evalfunc = (ExprStateEvalFunc) ExecEvalReshuffleExpr;
-
-				hashFuncs = palloc(list_length(sr->hashFuncs) * sizeof(Oid));
-				i = 0;
-				foreach(lc, sr->hashFuncs)
-				{
-					hashFuncs[i++] = lfirst_oid(lc);
-				}
-
-				exprstate->cdbhash = makeCdbHash(sr->newSegs, list_length(sr->hashKeys), hashFuncs);
-
-				state = (ExprState *) exprstate;
-			}
-		    break;
 
 		default:
 			elog(ERROR, "unrecognized node type: %d",

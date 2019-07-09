@@ -312,6 +312,11 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col3"/>
             </row>
             <row>
+              <entry><codeph>ALTER SYSTEM</codeph></entry>
+              <entry><b>NO</b></entry>
+              <entry/>
+            </row>
+            <row>
               <entry colname="col1"><codeph>ALTER TABLE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3"><b>Unsupported Clauses / Options:</b><p><codeph>CLUSTER
@@ -440,7 +445,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>CREATE EXTERNAL TABLE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3">Greenplum Database parallel ETL feature - not in PostgreSQL
-                8.3.</entry>
+                9.4.</entry>
             </row>
             <row>
               <entry colname="col1"><codeph>CREATE FUNCTION</codeph></entry>
@@ -505,7 +510,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>CREATE RESOURCE QUEUE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3">Greenplum Database resource management feature - not in
-                PostgreSQL 8.3.</entry>
+                PostgreSQL 9.4.</entry>
             </row>
             <row>
               <entry colname="col1"><codeph>CREATE ROLE</codeph></entry>
@@ -546,7 +551,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
                       (<i>column</i>, [ ... ] ) |</codeph></p><p><codeph>DISTRIBUTED
                     RANDOMLY</codeph></p><p><codeph>PARTITION BY <i>type</i> (<i>column</i> [, ...])
                        ( <i>partition_specification</i>, [...] )</codeph></p><p><codeph>WITH
-                    (appendonly=true      [,compresslevel=value,blocksize=value]
+                    (appendoptimized=true      [,compresslevel=value,blocksize=value]
                 )</codeph></p></entry>
             </row>
             <row>
@@ -650,7 +655,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>DROP EXTERNAL TABLE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3">Greenplum Database parallel ETL feature - not in PostgreSQL
-                8.3.</entry>
+                9.4.</entry>
             </row>
             <row>
               <entry colname="col1"><codeph>DROP FUNCTION</codeph></entry>
@@ -702,7 +707,7 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>DROP RESOURCE QUEUE</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3">Greenplum Database resource management feature - not in
-                PostgreSQL 8.3.</entry>
+                PostgreSQL 9.4.</entry>
             </row>
             <row>
               <entry colname="col1"><codeph>DROP ROLE</codeph></entry>
@@ -787,6 +792,11 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
               <entry colname="col1"><codeph>INSERT</codeph></entry>
               <entry colname="col2">YES</entry>
               <entry colname="col3"/>
+            </row>
+            <row>
+              <entry><codeph>LATERAL</codeph> Join Type</entry>
+              <entry><b>NO</b></entry>
+              <entry/>
             </row>
             <row>
               <entry colname="col1"><codeph>LISTEN</codeph></entry>
@@ -919,7 +929,9 @@ NEXT 10 ROWS ONLY; </codeblock><p>Greenplum
             <row>
               <entry colname="col1"><codeph>SET TRANSACTION</codeph></entry>
               <entry colname="col2">YES</entry>
-              <entry colname="col3"/>
+              <entry colname="col3"><b>Limitations:</b><p><codeph>DEFERRABLE</codeph> clause has no
+                  effect.</p><p><codeph>SET TRANSACTION SNAPSHOT</codeph> command is not
+                  supported.</p></entry>
             </row>
             <row>
               <entry colname="col1"><codeph>SHOW</codeph></entry>

@@ -1256,6 +1256,7 @@ SPI_cursor_open_internal(const char *name, SPIPlanPtr plan,
 	CachedPlan *cplan;
 	List	   *stmt_list;
 	char	   *query_string;
+	ListCell   *lc;
 	Snapshot	snapshot;
 	MemoryContext oldcontext;
 	Portal		portal;
@@ -1327,6 +1328,14 @@ SPI_cursor_open_internal(const char *name, SPIPlanPtr plan,
 	/* Replan if needed, and increment plan refcount for portal */
 	cplan = GetCachedPlan(plansource, paramLI, false, NULL);
 	stmt_list = cplan->stmt_list;
+
+	/* GPDB: Mark all queries as SPI inner queries for extension usage */
+	foreach(lc, stmt_list)
+	{
+		Node *stmt = (Node *) lfirst(lc);
+		if (IsA(stmt, PlannedStmt))
+			((PlannedStmt*)stmt)->metricsQueryType = SPI_INNER_QUERY;
+	}
 
 	/* Pop the error context stack */
 	error_context_stack = spierrcontext.previous;
@@ -2213,7 +2222,10 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 
 			if (IsA(stmt, PlannedStmt))
 			{
-				canSetTag = ((PlannedStmt *) stmt)->canSetTag;
+				PlannedStmt* pstmt = (PlannedStmt *) stmt;
+				canSetTag = pstmt->canSetTag;
+				/* GPDB: Mark all queries as SPI inner query for extension usage */
+				((PlannedStmt*)pstmt)->metricsQueryType = SPI_INNER_QUERY;
 			}
 			else
 			{
@@ -2640,7 +2652,7 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, int64 tcount)
 			/*
 			 * only check number tuples if the SPI 64 bit test is NOT running
 			 */
-			if (!FaultInjector_InjectFaultIfSet(ExecutorRunHighProcessed,
+			if (!FaultInjector_InjectFaultIfSet("executor_run_high_processed",
 										   DDLNotSpecified,
 										   "" /* databaseName */,
 										   "" /* tableName */))

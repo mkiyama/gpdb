@@ -58,6 +58,7 @@ begin
 	-- WAL record is created right after the checkpoint record, which
 	-- doesn't get replayed on the mirror until something else forces it
 	-- out.
+	drop table if exists dummy;
 	create temp table dummy (id int4) distributed randomly;
 
 	-- Wait until all mirrors have replayed up to the location we
@@ -109,10 +110,26 @@ begin
 end;
 $$ language plpgsql;
 
+-- function to wait for mirror to come up in sync (10 minute timeout)
+create or replace function wait_for_mirror_sync(contentid smallint)
+	returns void as $$
+declare
+	updated bool;
+begin
+for i in 1 .. 1200 loop
+perform gp_request_fts_probe_scan();
+select (mode = 's' and status = 'u') into updated
+from gp_segment_configuration
+where content = contentid and role = 'm';
+exit when updated;
+perform pg_sleep(0.5);
+end loop;
+end;
+$$ language plpgsql;
+
 -- checkpoint to ensure clean xlog replication before bring down mirror
 select checkpoint_and_wait_for_replication_replay(500);
 
-create extension if not exists gp_inject_fault;
 -- Prevent FTS from probing segments as we don't want a change in
 -- cluster configuration to be triggered after the mirror is stoped
 -- temporarily in the test.  Request a scan so that the skip fault is
@@ -153,3 +170,8 @@ select gp_request_fts_probe_scan();
 -- Validate that the mirror for content=0 is marked up.
 select count(*) = 2 as mirror_up from gp_segment_configuration
  where content=0 and status='u';
+-- make sure leave the test only after mirror is in sync to avoid
+-- affecting other tests. Thumb rule: leave cluster in same state as
+-- test started.
+select wait_for_mirror_sync(0::smallint);
+select role, preferred_role, content, mode, status from gp_segment_configuration;

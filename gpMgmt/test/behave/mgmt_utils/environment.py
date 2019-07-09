@@ -1,15 +1,24 @@
 import os
 import shutil
 
+import behave
+
 from test.behave_utils.utils import drop_database_if_exists, start_database_if_not_started,\
                                             create_database, \
                                             run_command, check_user_permissions, run_gpcommand
+from steps.mirrors_mgmt_utils import MirrorMgmtContext
+from steps.gpconfig_mgmt_utils import GpConfigContext
+from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from gppylib.db import dbconn
 
-def before_feature(context, feature):
+def before_all(context):
+    if map(int, behave.__version__.split('.')) < [1,2,6]:
+        raise Exception("Requires at least behave version 1.2.6 (found %s)" % behave.__version__)
 
+def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    if 'gpexpand' in feature.tags or 'gpaddmirrors' in feature.tags or 'gpstate' in feature.tags:
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors', 'gpconfig', 'gpssh-exkeys', 'gpstop']
+    if set(context.feature.tags).intersection(tags_to_skip):
         return
 
     drop_database_if_exists(context, 'testdb')
@@ -52,28 +61,74 @@ def before_feature(context, feature):
         dbconn.execSQL(context.conn, 'insert into t3 values(1, 4)')
         context.conn.commit()
 
+    if 'gppkg' in feature.tags:
+        run_command(context, 'bash demo/gppkg/generate_sample_gppkg.sh buildGppkg')
+        run_command(context, 'cp -f /tmp/sample-gppkg/sample.gppkg test/behave/mgmt_utils/steps/data/')
+
+
 def after_feature(context, feature):
     if 'analyzedb' in feature.tags:
         context.conn.close()
     if 'minirepro' in feature.tags:
         context.conn.close()
+    if 'gpconfig' in feature.tags:
+        context.execute_steps(u'''
+            Then the user runs "gpstop -ar"
+            And gpstop should return a return code of 0
+            ''')
 
 def before_scenario(context, scenario):
-    if 'gpexpand' in context.feature.tags or 'gpaddmirrors' in context.feature.tags or 'gpstate' in context.feature.tags:
+    if "skip" in scenario.effective_tags:
+        scenario.skip("skipping scenario tagged with @skip")
+        return
+
+    if 'gpmovemirrors' in context.feature.tags:
+        context.mirror_context = MirrorMgmtContext()
+
+    if 'gpconfig' in context.feature.tags:
+        context.gpconfig_context = GpConfigContext()
+
+    if 'gpssh-exkeys' in context.feature.tags:
+        context.gpssh_exkeys_context = GpsshExkeysMgmtContext(context)
+
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors', 'gpconfig', 'gpssh-exkeys', 'gpstop']
+    if set(context.feature.tags).intersection(tags_to_skip):
         return
 
     if 'analyzedb' not in context.feature.tags:
         start_database_if_not_started(context)
         drop_database_if_exists(context, 'testdb')
 
+
 def after_scenario(context, scenario):
-    if 'gpexpand' in context.feature.tags \
-        or 'gpaddmirrors' in context.feature.tags \
-        or 'gpinitstandby' in context.feature.tags \
-        or 'gpstate' in context.feature.tags:
+    #TODO: you'd think that the scenario.skip() in before_scenario() would
+    #  cause this to not be needed
+    if "skip" in scenario.effective_tags:
         return
 
-    if 'analyzedb' not in context.feature.tags:
+    if 'tablespaces' in context:
+        for tablespace in context.tablespaces.values():
+            tablespace.cleanup()
+
+    if 'gpstop' in scenario.effective_tags:
+        context.execute_steps(u'''
+            # restart the cluster so that subsequent tests re-use the existing demo cluster
+            Then the user runs "gpstart -a"
+            And gpstart should return a return code of 0
+            ''')
+
+    # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpinitstandby', 'gpconfig', 'gpstop']
+    if set(context.feature.tags).intersection(tags_to_skip):
+        return
+
+    tags_to_cleanup = ['gpmovemirrors', 'gpssh-exkeys']
+    if set(context.feature.tags).intersection(tags_to_cleanup):
+        if 'temp_base_dir' in context:
+            shutil.rmtree(context.temp_base_dir)
+
+    tags_to_not_restart_db = ['analyzedb', 'gpssh-exkeys']
+    if not set(context.feature.tags).intersection(tags_to_not_restart_db):
         start_database_if_not_started(context)
 
         home_dir = os.path.expanduser('~')

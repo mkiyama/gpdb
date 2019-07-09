@@ -357,3 +357,80 @@ select a.f1, b.f1, t.thousand, t.tenthous from
      (select sum(f1)+1 as f1 from int4_tbl i4a) a ON a.f1 = b.f1
       left outer join
         tenk1 t ON b.f1 = t.thousand and (a.f1+b.f1+999) = t.tenthous;
+
+
+-- tests to ensure that join reordering of LOJs and inner joins produces the
+-- correct join predicates & residual filters
+drop table if exists t1, t2, t3;
+CREATE TABLE t1 (a int, b int, c int);
+CREATE TABLE t2 (a int, b int, c int);
+CREATE TABLE t3 (a int, b int, c int);
+INSERT INTO t1 SELECT i, i, i FROM generate_series(1, 1000) i;
+INSERT INTO t2 SELECT i, i, i FROM generate_series(2, 1000) i; -- start from 2 so that one row from t1 doesn't match
+INSERT INTO t3 VALUES (1, 2, 3), (NULL, 2, 2);
+ANALYZE t1;
+ANALYZE t2;
+ANALYZE t3;
+
+-- ensure plan has a filter over left outer join
+explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a IS NULL OR (t1.c = t3.c));
+select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a IS NULL OR (t1.c = t3.c));
+
+-- ensure plan has two inner joins with the where clause & join predicates ANDed
+explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a = t3.a);
+select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a = t3.a);
+
+-- ensure plan has a filter over left outer join
+explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
+select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
+
+-- ensure plan has a filter over left outer join
+explain select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
+select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
+
+-- ensure plan has a filter over left outer join
+explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt 
+  join t3 on tt.t1b = t3.b 
+  join (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt1 on tt1.t1b = t3.b 
+  join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
+
+select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt 
+  join t3 on tt.t1b = t3.b 
+  join (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt1 on tt1.t1b = t3.b 
+  join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
+
+-- test different join order enumeration methods
+set optimizer_join_order = query;
+select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
+set optimizer_join_order = greedy;
+select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
+set optimizer_join_order = exhaustive;
+select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
+set optimizer_join_order = exhaustive2;
+select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
+reset optimizer_join_order;
+select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
+
+drop table t1, t2, t3;
+
+--
+-- Test a bug that nestloop path previously can not generate motion above
+-- index path, which sometimes is wrong (this test case is an example).
+-- We now depend on parameterized path related variables to judge instead.
+-- We conservatively disallow motion when there is parameter requirement
+-- for either outer or inner at this moment though there could be room
+-- for further improvement (e.g. referring subplan code to do broadcast
+-- for base rel if needed, which needs much effort and does not seem to
+-- be deserved given we will probably refactor related code for the lateral
+-- support in the near future). For the query and guc settings below, Postgres
+-- planner can not generate a plan.
+set enable_nestloop = 1;
+set enable_material = 0;
+set enable_seqscan = 0;
+set enable_bitmapscan = 0;
+explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
+select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
+reset enable_nestloop;
+reset enable_material;
+reset enable_seqscan;
+reset enable_bitmapscan;

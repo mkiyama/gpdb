@@ -5557,13 +5557,6 @@ exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo)
 	unlink(recoveryPath);		/* ignore any error */
 
 	/*
-	 * Rename the config file out of the way, so that we don't accidentally
-	 * re-enter archive recovery mode in a subsequent crash.
-	 */
-	unlink(RECOVERY_COMMAND_DONE);
-	durable_rename(RECOVERY_COMMAND_FILE, RECOVERY_COMMAND_DONE, FATAL);
-
-	/*
 	 * Response to FTS probes after this point will not indicate that we are a
 	 * mirror because the am_mirror flag is set based on existence of
 	 * RECOVERY_COMMAND_FILE.  New libpq connections to the postmaster should
@@ -5571,6 +5564,14 @@ exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo)
 	 * mirror.
 	 */
 	ResetMirrorReadyFlag();
+
+	/*
+	 * Rename the config file out of the way, so that we don't accidentally
+	 * re-enter archive recovery mode in a subsequent crash.
+	 */
+	unlink(RECOVERY_COMMAND_DONE);
+	durable_rename(RECOVERY_COMMAND_FILE, RECOVERY_COMMAND_DONE, FATAL);
+
 	ereport(LOG,
 			(errmsg("archive recovery complete")));
 }
@@ -6689,17 +6690,6 @@ StartupXLOG(void)
 						ControlFile->minRecoveryPointTLI)));
 
 	LastRec = RecPtr = checkPointLoc;
-
-	CheckpointExtendedRecord ckptExtended;
-	UnpackCheckPointRecord(record, &ckptExtended);
-	if (ckptExtended.ptas)
-		SetupCheckpointPreparedTransactionList(ckptExtended.ptas);
-
-	/*
-	 * Find Xacts that are distributed committed from the checkpoint record and
-	 * store them such that they can utilized later during DTM recovery.
-	 */
-	XLogProcessCheckpointRecord(record);
 
 	ereport(DEBUG1,
 			(errmsg("redo record is at %X/%X; shutdown %s",
@@ -8206,6 +8196,26 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		}
 		return NULL;
 	}
+
+	/*
+	 * We should be wary of conflating "report" parameter.  It is currently
+	 * always true when we want to process the extended checkpoint record.
+	 * For now this seems fine as it avoids a diff with postgres.
+	 */
+	if (report)
+	{
+		CheckpointExtendedRecord ckptExtended;
+		UnpackCheckPointRecord(record, &ckptExtended);
+		if (ckptExtended.ptas)
+			SetupCheckpointPreparedTransactionList(ckptExtended.ptas);
+
+		/*
+		 * Find Xacts that are distributed committed from the checkpoint record and
+		 * store them such that they can utilized later during DTM recovery.
+		 */
+		XLogProcessCheckpointRecord(record);
+	}
+
 	return record;
 }
 
@@ -8584,7 +8594,7 @@ CreateCheckPoint(int flags)
 
 #ifdef FAULT_INJECTOR
 	if (FaultInjector_InjectFaultIfSet(
-			Checkpoint,
+			"checkpoint",
 			DDLNotSpecified,
 			"" /* databaseName */,
 			"" /* tableName */) == FaultInjectorTypeSkip)
@@ -8883,6 +8893,8 @@ CreateCheckPoint(int flags)
 	 */
 	if (!shutdown && XLogStandbyInfoActive())
 		LogStandbySnapshot();
+
+	SIMPLE_FAULT_INJECTOR("checkpoint_after_redo_calculated");
 
 	START_CRIT_SECTION();
 
@@ -10076,6 +10088,8 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 							checkPoint.ThisTimeLineID, ThisTimeLineID)));
 
 		RecoveryRestartPoint(&checkPoint);
+
+		SIMPLE_FAULT_INJECTOR("after_xlog_redo_checkpoint_online");
 	}
 	else if (info == XLOG_END_OF_RECOVERY)
 	{
@@ -10100,6 +10114,7 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 	}
 	else if (info == XLOG_NOOP)
 	{
+		SIMPLE_FAULT_INJECTOR("after_xlog_redo_noop");
 		/* nothing to do here */
 	}
 	else if (info == XLOG_SWITCH)

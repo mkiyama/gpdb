@@ -45,11 +45,9 @@ test__CreateDistributedSnapshot(void **state)
 
 	ds->inProgressXidArray =
 		(DistributedTransactionId*)malloc(SIZE_OF_IN_PROGRESS_ARRAY);
-	ds->maxCount = 10;
 
 	distribSnapshotWithLocalMapping.inProgressMappedLocalXids =
 		(TransactionId*) malloc(1 * sizeof(TransactionId));
-	distribSnapshotWithLocalMapping.maxLocalXidsCount = 1;
 
 	setup(&controlBlock);
 
@@ -57,13 +55,14 @@ test__CreateDistributedSnapshot(void **state)
 	expect_value_count(LWLockHeldByMe, l, ProcArrayLock, -1);
 	will_return_count(LWLockHeldByMe, true, -1);
 #endif
+	will_return_count(getDtxStartTime, 0, -1);
 
 	ShmemVariableCache->latestCompletedDxid = 24;
 
 	/* This is going to act as our gxact */
 	allTmGxact[procArray->pgprocnos[0]].gxid = 20;
 	allTmGxact[procArray->pgprocnos[0]].state = DTX_STATE_ACTIVE_DISTRIBUTED;
-	allTmGxact[procArray->pgprocnos[0]].xminDistributedSnapshot = 20;
+	allTmGxact[procArray->pgprocnos[0]].xminDistributedSnapshot = InvalidDistributedTransactionId;
 
 	procArray->numProcs = 1;
 
@@ -88,6 +87,8 @@ test__CreateDistributedSnapshot(void **state)
 	 * differ from xminAllDistributedSnapshots. Also, validates xmin and xmax
 	 * get adjusted correctly based on in-progress.
 	 */
+	allTmGxact[procArray->pgprocnos[0]].xminDistributedSnapshot = InvalidDistributedTransactionId;
+
 	allTmGxact[procArray->pgprocnos[1]].gxid = 10;
 	allTmGxact[procArray->pgprocnos[1]].state = DTX_STATE_ACTIVE_DISTRIBUTED;
 	allTmGxact[procArray->pgprocnos[1]].xminDistributedSnapshot = 5;
@@ -114,6 +115,8 @@ test__CreateDistributedSnapshot(void **state)
 	 * Add more elemnets, just to have validation that in-progress array is in
 	 * ascending sorted order with distributed transactions.
 	 */
+	allTmGxact[procArray->pgprocnos[0]].xminDistributedSnapshot = InvalidDistributedTransactionId;
+
 	allTmGxact[procArray->pgprocnos[3]].gxid = 15;
 	allTmGxact[procArray->pgprocnos[3]].state = DTX_STATE_ACTIVE_DISTRIBUTED;
 	allTmGxact[procArray->pgprocnos[3]].xminDistributedSnapshot = 12;
@@ -126,6 +129,9 @@ test__CreateDistributedSnapshot(void **state)
 
 	memset(ds->inProgressXidArray, 0, SIZE_OF_IN_PROGRESS_ARRAY);
 	CreateDistributedSnapshot(&distribSnapshotWithLocalMapping);
+	if (ds->count > 1)
+		qsort(ds->inProgressXidArray, ds->count,
+				sizeof(DistributedTransactionId), DistributedSnapshotMappedEntry_Compare);
 
 	/* perform all the validations */
 	assert_true(ds->xminAllDistributedSnapshots == 5);

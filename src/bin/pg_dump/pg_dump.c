@@ -1818,7 +1818,7 @@ selectDumpableCast(CastInfo *cast)
 	if (checkExtensionMembership(&cast->dobj))
 		return;					/* extension membership overrides all else */
 
-	if (cast->dobj.catId.oid <= (Oid) FirstNormalObjectId)
+	if (cast->dobj.catId.oid < (Oid) FirstNormalObjectId)
 		cast->dobj.dump = false;
 	else
 		cast->dobj.dump = include_everything;
@@ -1838,7 +1838,7 @@ selectDumpableProcLang(ProcLangInfo *plang)
 	if (checkExtensionMembership(&plang->dobj))
 		return;					/* extension membership overrides all else */
 
-	if (plang->dobj.catId.oid <= (Oid) FirstNormalObjectId)
+	if (plang->dobj.catId.oid < (Oid) FirstNormalObjectId)
 		plang->dobj.dump = false;
 	else
 		plang->dobj.dump = include_everything;
@@ -1857,7 +1857,7 @@ selectDumpableProcLang(ProcLangInfo *plang)
 static void
 selectDumpableExtension(ExtensionInfo *extinfo)
 {
-	if (binary_upgrade && extinfo->dobj.catId.oid <= (Oid) FirstNormalObjectId)
+	if (binary_upgrade && extinfo->dobj.catId.oid < (Oid) FirstNormalObjectId)
 		extinfo->dobj.dump = false;
 	else
 		extinfo->dobj.dump = include_everything;
@@ -5227,6 +5227,7 @@ getTables(Archive *fout, int *numTables)
 						  "LEFT JOIN pg_partition p ON pr.paroid = p.oid "
 						  "LEFT JOIN pg_partition pl ON (c.oid = pl.parrelid AND pl.parlevel = 0)"
 				   "WHERE c.relkind in ('%c', '%c', '%c', '%c', '%c', '%c') "
+						  "AND c.relnamespace <> 7012 " /* BM_BITMAPINDEX_NAMESPACE */
 						  "AND c.oid NOT IN (SELECT p.parchildrelid FROM pg_partition_rule p LEFT "
 						  "JOIN pg_exttable e ON p.parchildrelid=e.reloid WHERE e.reloid IS NULL)"
 						  "ORDER BY c.oid",
@@ -5307,6 +5308,8 @@ getTables(Archive *fout, int *numTables)
 						  "(SELECT spcname FROM pg_tablespace t WHERE t.oid = c.reltablespace) AS reltablespace, "
 						  "c.reloptions AS reloptions, "
 						  "tc.reloptions AS toast_reloptions "
+						  ", p.parrelid as parrelid, "
+						  " pl.parlevel as parlevel "
 						  "FROM pg_class c "
 						  "LEFT JOIN pg_depend d ON "
 						  "(c.relkind = '%c' AND "
@@ -7238,6 +7241,17 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				appendPQExpBuffer(q, "SELECT tableoid, oid, conname, "
 						   "pg_catalog.pg_get_constraintdef(oid) AS consrc, "
 								  "conislocal, true AS convalidated "
+								  "FROM pg_catalog.pg_constraint "
+								  "WHERE conrelid = '%u'::pg_catalog.oid "
+								  "   AND contype = 'c' "
+								  "ORDER BY conname",
+								  tbinfo->dobj.catId.oid);
+			}
+			else if (fout->remoteVersion >= 70400)
+			{
+				appendPQExpBuffer(q, "SELECT tableoid, oid, conname, "
+						   "pg_catalog.pg_get_constraintdef(oid) AS consrc, "
+								  "true AS conislocal, true AS convalidated "
 								  "FROM pg_catalog.pg_constraint "
 								  "WHERE conrelid = '%u'::pg_catalog.oid "
 								  "   AND contype = 'c' "
@@ -10305,7 +10319,7 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 					"pg_catalog.pg_get_function_arguments(oid) AS funcargs, "
 		  "pg_catalog.pg_get_function_identity_arguments(oid) AS funciargs, "
 					 "pg_catalog.pg_get_function_result(oid) AS funcresult, "
-						  "proiswindow, provolatile, proisstrict, prosecdef, "
+						  "proiswin as proiswindow, provolatile, proisstrict, prosecdef, "
 						  "false AS proleakproof, "
 						  "proconfig, procost, prorows, prodataaccess, "
 						  "'a' as proexeclocation, "
@@ -13903,8 +13917,7 @@ dumpExternal(Archive *fout, TableInfo *tbinfo, PQExpBuffer q, PQExpBuffer delq)
 		appendPQExpBuffer(q, "FORMAT '%s' (%s)\n",
 						  tabfmt,
 						  customfmt ? customfmt : tmpstring);
-		free(tmpstring);
-		tmpstring = NULL;
+		pg_free(tmpstring);
 		if (customfmt)
 		{
 			free(customfmt);

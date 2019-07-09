@@ -579,9 +579,8 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	if (into)
 		eflags |= GetIntoRelEFlags(into);
 
-
-			queryDesc->plannedstmt->query_mem = ResourceManagerGetQueryMemoryLimit(
-			queryDesc->plannedstmt);
+	queryDesc->plannedstmt->query_mem =
+		ResourceManagerGetQueryMemoryLimit(queryDesc->plannedstmt);
 
 	/* call ExecutorStart to prepare the plan for execution */
 	ExecutorStart(queryDesc, eflags);
@@ -645,10 +644,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	ExplainOpenGroup("Settings", "Settings", true, es);
 	
 	if (queryDesc->plannedstmt->planGen == PLANGEN_PLANNER)
-		ExplainProperty("Optimizer", "legacy query optimizer", false, es);
+		ExplainProperty("Optimizer", "Postgres query optimizer", false, es);
 #ifdef USE_ORCA
 	else
-		ExplainPropertyStringInfo("Optimizer", es, "PQO version %s", OptVersion());
+		ExplainPropertyStringInfo("Optimizer", es, "Pivotal Optimizer (GPORCA) version %s", OptVersion());
 #endif
 
 	/* We only list the non-default GUCs in verbose mode */
@@ -1178,6 +1177,19 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			 */
 			scaleFactor = 1.0;
 		}
+		else if (plan->flow != NULL && CdbPathLocus_IsSegmentGeneral(*(plan->flow)))
+		{
+			/* Replicated table has full data on every segment */
+			scaleFactor = 1.0;
+		}
+		else if (plan->flow != NULL && es->pstmt->planGen == PLANGEN_PLANNER)
+		{
+			/*
+			 * The plan node is executed on multiple nodes, so scale down the
+			 * number of rows seen by each segment
+			 */
+			scaleFactor = CdbPathLocus_NumSegments(*(plan->flow));
+		}
 		else
 		{
 			/*
@@ -1492,9 +1504,6 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 		case T_SplitUpdate:
 			pname = sname = "Split";
-			break;
-		case T_Reshuffle:
-			pname = "Reshuffle";
 			break;
 		case T_AssertOp:
 			pname = sname = "Assert";
@@ -2559,7 +2568,6 @@ show_sort_group_keys(PlanState *planstate, const char *qlabel,
 	 *	appendStringInfo(es->str, " (%d times)", rollup_gs_times);
 	 */
 }
-
 
 /*
  * If it's EXPLAIN ANALYZE, show tuplesort stats for a sort node

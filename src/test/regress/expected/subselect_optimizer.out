@@ -678,7 +678,7 @@ explain (verbose, costs off)
                      Output: 'regression'::name
                      ->  Result
                            Output: true
- Optimizer: PQO version 3.1.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
  Settings: optimizer=on
 (15 rows)
 
@@ -694,7 +694,7 @@ explain (verbose, costs off)
          InitPlan 1 (returns $0)
            ->  Result
                  Output: random()
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 explain (verbose, costs off)
@@ -715,7 +715,7 @@ explain (verbose, costs off)
                      Output: 'regression'::name
                      ->  Result
                            Output: true
- Optimizer: PQO version 3.1.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
  Settings: optimizer=on
 (15 rows)
 
@@ -732,7 +732,7 @@ explain (verbose, costs off)
            ->  Result
                  Output: random()
                  One-Time Filter: ("*VALUES*".column1 = "*VALUES*".column1)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 --
@@ -811,7 +811,7 @@ select * from int4_tbl where
                  Output: tenk1_1.ten
                  ->  Seq Scan on public.tenk1 tenk1_1
                        Output: tenk1_1.ten
- Optimizer: PQO version 3.1.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
  Settings: optimizer=on
 (27 rows)
 
@@ -847,7 +847,7 @@ select * from int4_tbl o where (f1, f1) in
                            Output: i.f1, (generate_series(1, 2) / 10)
                            ->  Seq Scan on public.int4_tbl i
                                  Output: i.f1
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (17 rows)
 
 select * from int4_tbl o where (f1, f1) in

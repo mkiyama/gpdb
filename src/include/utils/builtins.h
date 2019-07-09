@@ -18,7 +18,6 @@
 
 #include "fmgr.h"
 #include "nodes/parsenodes.h"
-#include "executor/executor.h" /* for AttrMap */
 
 /*
  *		Defined in adt/
@@ -721,6 +720,7 @@ extern char *pg_get_constraintdef_string(Oid constraintId);
 extern char *pg_get_constraintexpr_string(Oid constraintId);
 extern Datum pg_get_expr(PG_FUNCTION_ARGS);
 extern Datum pg_get_expr_ext(PG_FUNCTION_ARGS);
+extern Datum pg_get_expr_ext_lock(PG_FUNCTION_ARGS);
 extern Datum pg_get_userbyid(PG_FUNCTION_ARGS);
 extern Datum pg_get_serial_sequence(PG_FUNCTION_ARGS);
 extern Datum pg_get_functiondef(PG_FUNCTION_ARGS);
@@ -802,6 +802,8 @@ extern Datum bpchar_pattern_le(PG_FUNCTION_ARGS);
 extern Datum bpchar_pattern_gt(PG_FUNCTION_ARGS);
 extern Datum bpchar_pattern_ge(PG_FUNCTION_ARGS);
 extern Datum btbpchar_pattern_cmp(PG_FUNCTION_ARGS);
+extern Datum hashtext(PG_FUNCTION_ARGS);
+extern Datum hashvarlena(PG_FUNCTION_ARGS);
 
 extern Datum varcharin(PG_FUNCTION_ARGS);
 extern Datum varcharout(PG_FUNCTION_ARGS);
@@ -1313,7 +1315,7 @@ extern Datum pg_resgroup_get_status(PG_FUNCTION_ARGS);
 extern Datum pg_resgroup_get_status_kv(PG_FUNCTION_ARGS);
 
 /* utils/gdd/gddfuncs.c */
-extern Datum pg_dist_wait_status(PG_FUNCTION_ARGS);
+extern Datum gp_dist_wait_status(PG_FUNCTION_ARGS);
 
 /* utils/adt/matrix.c */
 extern Datum matrix_add(PG_FUNCTION_ARGS);
@@ -1375,7 +1377,8 @@ extern Datum percentile_cont_trans(PG_FUNCTION_ARGS);
 extern Datum percentile_disc_trans(PG_FUNCTION_ARGS);
 
 /* gp_partition_functions.c */
-extern void dumpDynamicTableScanPidIndex(EState *estate, int index);
+struct EState;
+extern void dumpDynamicTableScanPidIndex(struct EState *estate, int index);
 
 /* XForms */
 extern Datum disable_xform(PG_FUNCTION_ARGS);

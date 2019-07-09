@@ -82,6 +82,7 @@ static void intorel_receive(TupleTableSlot *slot, DestReceiver *self);
 static void intorel_shutdown(DestReceiver *self);
 static void intorel_destroy(DestReceiver *self);
 
+
 /*
  * create_ctas_internal
  *
@@ -187,7 +188,7 @@ create_ctas_internal(List *attrList, IntoClause *into, QueryDesc *queryDesc, boo
 									relkind,
 									InvalidOid,
 									relstorage,
-									dispatch,
+									false,
 									queryDesc->ddesc ? queryDesc->ddesc->useChangedAOOpts : true,
 									queryDesc->plannedstmt->intoPolicy);
 
@@ -221,7 +222,13 @@ create_ctas_internal(List *attrList, IntoClause *into, QueryDesc *queryDesc, boo
 		StoreViewQuery(intoRelationId, query, false);
 		CommandCounterIncrement();
 	}
-
+	if (Gp_role == GP_ROLE_DISPATCH && dispatch)
+		CdbDispatchUtilityStatement((Node *) create,
+									DF_CANCEL_ON_ERROR |
+									DF_NEED_TWO_PHASE |
+									DF_WITH_SNAPSHOT,
+									GetAssignedOidsForDispatch(),
+									NULL);
 	return intoRelationId;
 }
 
@@ -754,12 +761,11 @@ intorel_shutdown(DestReceiver *self)
 	if (RelationIsAoRows(into_rel) && myState->ao_insertDesc)
 		appendonly_insert_finish(myState->ao_insertDesc);
 	else if (RelationIsAoCols(into_rel) && myState->aocs_insertDes)
-        aocs_insert_finish(myState->aocs_insertDes);
+		aocs_insert_finish(myState->aocs_insertDes);
 
 	/* close rel, but keep lock until commit */
 	heap_close(into_rel, NoLock);
 	myState->rel = NULL;
-
 }
 
 /*

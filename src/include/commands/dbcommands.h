@@ -67,5 +67,4 @@ extern void dbase_redo(XLogRecPtr beginLoc  __attribute__((unused)), XLogRecPtr 
 extern void dbase_desc(StringInfo buf, XLogRecord *record);
 
 extern void check_encoding_locale_matches(int encoding, const char *collate, const char *ctype);
-
 #endif   /* DBCOMMANDS_H */

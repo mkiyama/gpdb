@@ -6,7 +6,6 @@
   <shortdesc>Verify your new host systems are ready for integration into the existing Greenplum
     system. </shortdesc>
   <body>
-    <draft-comment author="msk">GPDB 6 updates for online expand</draft-comment>
     <p>To prepare new host systems for expansion, install the Greenplum Database software binaries,
       exchange the required SSH keys, and run performance tests. </p>
     <p>Run performance tests first on the new hosts and then all hosts. Run the tests on all hosts
@@ -110,24 +109,6 @@ gpadmin --stdin'</codeblock></li>
             the key exchange between all hosts. Enter the <codeph>gpadmin</codeph> user password
             when prompted. For
             example:<codeblock>***Enter password for gpadmin@<i>hostname</i>: <i>&lt;gpadmin_password&gt;</i></codeblock></li>
-        </ol>
-      </section>
-    </body>
-  </topic>
-  <topic id="topic19" xml:lang="en">
-    <title id="no159124">Verifying OS Settings</title>
-    <body>
-      <p>Use the <codeph><xref href="../../utility_guide/admin_utilities/gpcheck.xml"
-          >gpcheck</xref></codeph> utility to verify all new hosts in your array have the correct OS
-        settings to run Greenplum Database software. </p>
-      <section id="no159174">
-        <title>To run gpcheck</title>
-        <ol>
-          <li id="no173509">Log in on the master host as the user who will run your Greenplum
-            Database system (for example,
-            <codeph>gpadmin</codeph>).<codeblock>$ su - gpadmin</codeblock></li>
-          <li id="no173521">Run the <codeph>gpcheck</codeph> utility using your host file for new
-            hosts. For example:<codeblock>$ gpcheck -f <i>new_hosts_file</i></codeblock></li>
         </ol>
       </section>
     </body>

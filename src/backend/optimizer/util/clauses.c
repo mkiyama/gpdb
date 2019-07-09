@@ -1209,8 +1209,6 @@ contain_volatile_functions_walker(Node *node, void *context)
 								 contain_volatile_functions_walker,
 								 context, 0);
 	}
-	else if (IsA(node, ReshuffleExpr))
-		return true;
 
 	return expression_tree_walker(node, contain_volatile_functions_walker,
 								  context);
@@ -2530,13 +2528,12 @@ fold_constants(PlannerInfo *root, Query *q, ParamListInfo boundParams, Size max_
  * the ArrayExpr into its disjunctive normal form and then deriving constraints
  * based on the elements in the ArrayExpr. It doesn't currently know how to
  * extract elements from an Array const, however, so to enable those
- * optimizations in ORCA, we convert small Array Consts into corresponding
+ * optimizations in ORCA, we convert Array Consts into corresponding
  * ArrayExprs.
  *
- * If the argument is not an array constant or the number of elements in the
- * array is greater than optimizer_array_expansion_threshold, returns the
- * original Const unmodified since it is expensive to derive constraints for
- * large arrays.
+ * If the argument is not an array constant return the original Const unmodified.
+ * We convert an array const of any size to ArrayExpr. ORCA can use it to derive
+ * statistics.
  */
 Expr *
 transform_array_Const_to_ArrayExpr(Const *c)
@@ -2569,9 +2566,6 @@ transform_array_Const_to_ArrayExpr(Const *c)
 	get_typlenbyvalalign(elemtype, &elemlen, &elembyval, &elemalign);
 	deconstruct_array(ac, elemtype, elemlen, elembyval, elemalign,
 					  &elems, &nulls, &nelems);
-
-	if (nelems > optimizer_array_expansion_threshold)
-		return (Expr *) c;	/* too many elements */
 
 	aexpr = makeNode(ArrayExpr);
 	aexpr->array_typeid = c->consttype;
@@ -4147,12 +4141,8 @@ simplify_boolean_equality(Oid opno, List *args)
  * will be done even if simplification of the function call itself is not
  * possible.
  */
-/*
- * GPDB_92_MERGE_FIXME: please check if the arguments input by whom is
- * called this function is correct,?
- */
-static Expr *simplify_function(Oid funcid,
-				  Oid result_type, int32 result_typmod,
+static Expr *
+simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
 				  Oid result_collid, Oid input_collid, List **args_p,
 				  bool funcvariadic, bool process_args, bool allow_non_const,
 				  eval_const_expressions_context *context)

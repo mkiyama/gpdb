@@ -219,6 +219,7 @@ SharedSnapshotShmemSize(void)
 {
 	Size		size;
 
+	/* should be the same as PROCARRAY_MAXPROCS */
 	xipEntryCount = MaxBackends + max_prepared_xacts;
 
 	slotSize = sizeof(SharedSnapshotSlot);
@@ -278,6 +279,11 @@ CreateSharedSnapshotArray(void)
 		sharedSnapshotArray->maxSlots = slotCount;
 		sharedSnapshotArray->nextSlot = 0;
 
+		/*
+		 * Set slots to point to the next byte beyond what was allocated for
+		 * SharedSnapshotStruct. xips is the last element in the struct but is
+		 * not included in SharedSnapshotShmemSize allocation.
+		 */
 		sharedSnapshotArray->slots = (SharedSnapshotSlot *)&sharedSnapshotArray->xips;
 
 		/* xips start just after the last slot structure */
@@ -297,7 +303,7 @@ CreateSharedSnapshotArray(void)
 			 * Note: xipEntryCount is initialized in SharedSnapshotShmemSize().
 			 * So each slot gets (MaxBackends + max_prepared_xacts) transaction-ids.
 			 */
-			tmpSlot->snapshot.xip = &xip_base[xipEntryCount];
+			tmpSlot->snapshot.xip = &xip_base[0];
 			xip_base += xipEntryCount;
 		}
 	}
@@ -742,7 +748,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 }
 
 void
-readSharedLocalSnapshot_forCursor(Snapshot snapshot)
+readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTransactionContext)
 {
 	BufFile *f;
 	char *fname=NULL;
@@ -867,7 +873,10 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot)
 	/* we're done with file. */
 	BufFileClose(f);
 
-	SetSharedTransactionId_reader(localXid, snapshot->curcid);
+	SetSharedTransactionId_reader(
+		localXid,
+		snapshot->curcid,
+		distributedTransactionContext);
 
 	return;
 }

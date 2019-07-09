@@ -223,7 +223,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12v x, atest12v y WHERE x.a = y.b;
          ->  Index Scan using atest12_a_idx on atest12
                Index Cond: (a = atest12_1.b)
                Filter: (b <<< 5)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (10 rows)
 
 -- And this one.
@@ -240,7 +240,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12 x, atest12 y
                      Hash Key: y.b
                      ->  Seq Scan on atest12 y
                            Filter: (abs(a) <<< 5)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (10 rows)
 
 reset enable_nestloop;
@@ -268,7 +268,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12v x, atest12v y WHERE x.a = y.b;
          ->  Hash
                ->  Seq Scan on atest12
                      Filter: (b <<< 5)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (11 rows)
 
 -- Now regressuser1 grants sufficient access to regressuser2.
@@ -289,7 +289,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12v x, atest12v y WHERE x.a = y.b;
          ->  Index Scan using atest12_a_idx on atest12
                Index Cond: (a = atest12_1.b)
                Filter: (b <<< 5)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (10 rows)
 
 reset enable_nestloop;
@@ -308,7 +308,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12 x, atest12 y
                      Hash Key: y.b
                      ->  Seq Scan on atest12 y
                            Filter: (abs(a) <<< 5)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (10 rows)
 
 -- clean up (regressuser1's objects are all dropped later)
@@ -1752,6 +1752,9 @@ DROP GROUP regressgroup2;
 -- these are needed to clean up permissions
 REVOKE USAGE ON LANGUAGE sql FROM regressuser1;
 DROP OWNED BY regressuser1;
+-- regression test: superuser create a schema and authorize it to a non-superuser
+CREATE ROLE "non_superuser_schema";
+CREATE SCHEMA test_non_superuser_schema AUTHORIZATION "non_superuser_schema";
 DROP USER regressuser1;
 DROP USER regressuser2;
 DROP USER regressuser3;

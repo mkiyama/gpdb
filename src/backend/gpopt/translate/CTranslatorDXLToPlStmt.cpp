@@ -70,7 +70,7 @@ using namespace gpmd;
 //---------------------------------------------------------------------------
 CTranslatorDXLToPlStmt::CTranslatorDXLToPlStmt
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	CContextDXLToPlStmt* dxl_to_plstmt_context,
 	ULONG num_of_segments
@@ -1361,8 +1361,21 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry
 	func_expr->inputcollid = gpdb::ExprCollation((Node *) func_expr->args);
 	func_expr->funccollid = gpdb::TypeCollation(func_expr->funcresulttype);
 
+	// Populate RangeTblFunction::funcparams, by walking down the entire
+	// func_expr to capture ids of all the PARAMs
+	ListCell *lc = NULL;
+	List *param_exprs = gpdb::ExtractNodesExpression(
+			(Node *) func_expr, T_Param, false /*descend_into_subqueries */);
+	Bitmapset  *funcparams = NULL;
+	ForEach (lc, param_exprs)
+	{
+		Param *param = (Param*) lfirst(lc);
+		funcparams = gpdb::BmsAddMember(funcparams, param->paramid);
+	}
+
 	RangeTblFunction *rtfunc = MakeNode(RangeTblFunction);
 	rtfunc->funcexpr = (Node *) func_expr;
+	rtfunc->funcparams = funcparams;
 	// GPDB_91_MERGE_FIXME: collation
 	// set rtfunc->funccoltypemods & rtfunc->funccolcollations?
 	rte->functions = ListMake1(rtfunc);

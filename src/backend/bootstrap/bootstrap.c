@@ -23,6 +23,8 @@
 #include "catalog/index.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "catalog/storage_tablespace.h"
+#include "commands/tablespace.h"
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -174,6 +176,7 @@ typedef struct _IndexList
 
 static IndexList *ILHead = NULL;
 
+
 /*
  *	 AuxiliaryProcessMain
  *
@@ -230,7 +233,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 	/* If no -x argument, we are a CheckerProcess */
 	MyAuxProcType = CheckerProcess;
 
-	while ((flag = getopt(argc, argv, "B:c:d:D:Fkr:x:y:-:")) != -1)
+	while ((flag = getopt(argc, argv, "B:c:d:D:Fkr:x:-:")) != -1)
 	{
 		switch (flag)
 		{
@@ -435,7 +438,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 			proc_exit(1);		/* should never return */
 
 		case CheckpointerProcess:
-			/* don't set signals, checkpointer is similar to bgwriter and has its own agenda */
+			/* don't set signals, checkpointer has its own agenda */
 			CheckpointerMain();
 			proc_exit(1);		/* should never return */
 
@@ -448,7 +451,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 		case WalReceiverProcess:
 			/* don't set signals, walreceiver has its own agenda */
 			WalReceiverMain();
-			proc_exit(1);
+			proc_exit(1);		/* should never return */
 
 		default:
 			elog(PANIC, "unrecognized process type: %d", (int) MyAuxProcType);

@@ -11,6 +11,7 @@ include $(top_builddir)/src/Makefile.global
 $(call recurse,all install,src config)
 
 all:
+	$(MAKE) -C contrib/auto_explain all
 	$(MAKE) -C contrib/file_fdw all
 	$(MAKE) -C contrib/formatter all
 	$(MAKE) -C contrib/formatter_fixedwidth all
@@ -44,7 +45,8 @@ html man:
 	$(MAKE) -C doc $@
 
 install:
-	#$(MAKE) -C contrib/file_fdw $@ # GPDB_91_MERGE_FIXME: disable installation until it's officially supported.
+	$(MAKE) -C contrib/auto_explain $@
+	$(MAKE) -C contrib/file_fdw $@
 	$(MAKE) -C contrib/formatter $@
 	$(MAKE) -C contrib/formatter_fixedwidth $@
 	$(MAKE) -C contrib/fuzzystrmatch $@
@@ -139,6 +141,8 @@ $(call recurse,installcheck-world, \
 			   src/test/ \
 			   src/pl \
 			   src/interfaces/gppc \
+			   contrib/auto_explain \
+			   contrib/file_fdw \
 			   contrib/formatter_fixedwidth \
 			   contrib/extprotocol \
 			   contrib/dblink \
@@ -148,6 +152,14 @@ $(call recurse,installcheck-world, \
 			   gpcontrib \
 			   src/bin/ \
 			   gpMgmt/bin,installcheck)
+
+# GPDB: Postgres disables the SSL tests during ICW because of the TCP port that
+# it opens to other users on the same machine during testing. GPDB makes no such
+# security guarantees during tests: currently, it is unsafe to run
+# installcheck-world on a machine with untrusted users.
+$(call recurse,installcheck-world, \
+			   src/test/ssl,check)
+
 .PHONY: installcheck-gpcheckcat
 installcheck-world: installcheck-gpcheckcat
 installcheck-gpcheckcat:

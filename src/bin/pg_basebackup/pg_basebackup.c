@@ -238,7 +238,7 @@ usage(void)
 	printf(_("  %s [OPTION]...\n"), progname);
 	printf(_("\nOptions controlling the output:\n"));
 	printf(_("  -D, --pgdata=DIRECTORY receive base backup into directory\n"));
-	printf(_("  -F, --format=p|t       output format (plain (default), tar)\n"));
+	printf(_("  -F, --format=p|t       output format (plain (default), tar (Unsupported in GPDB))\n"));
 	printf(_("  -r, --max-rate=RATE    maximum transfer rate to transfer data directory\n"
 			 "                         (in kB/s, or use suffix \"k\" or \"M\")\n"));
 	printf(_("  -R, --write-recovery-conf\n"
@@ -1156,6 +1156,7 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 {
 	char		current_path[MAXPGPATH];
 	char		filename[MAXPGPATH];
+	char		gp_tablespace_filename[MAXPGPATH] = {0};
 	const char *mapped_tblspc_path;
 	pgoff_t		current_len_left = 0;
 	int			current_padding = 0;
@@ -1169,13 +1170,21 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 	else
 	{
 		strlcpy(current_path, get_tablespace_mapping(PQgetvalue(res, rownum, 1)), sizeof(current_path));
-
+		
 		if (target_gp_dbid < 1)
 		{
 			fprintf(stderr, _("%s: cannot restore user-defined tablespaces without the --target-gp-dbid option\n"),
 					progname);
 			disconnect_and_exit(1);
 		}
+		
+		/* 
+		 * Construct the new tablespace path using the given target gp dbid
+		 */
+		snprintf(gp_tablespace_filename, sizeof(filename), "%s/%d/%s",
+				current_path,
+				target_gp_dbid,
+				GP_TABLESPACE_VERSION_DIRECTORY);
 	}
 
 	/*
@@ -1250,8 +1259,7 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 			if (!basetablespace)
 			{
 				/*
-				 * Reconstruct the path replacing the source tablespace path's
-				 * dbid with the dbid provided from --target-gp-dbid option.
+				 * Append relfile path to --target-gp-dbid tablespace path.
 				 *
 				 * For example, copybuf can be
 				 * "<GP_TABLESPACE_VERSION_DIRECTORY>_db<dbid>/16384/16385".
@@ -1261,9 +1269,9 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 				 */
 				char *copybuf_dbid_relfile = strstr(copybuf, "/");
 
-				snprintf(filename, sizeof(filename), "%s/%s_db%d", current_path,
-						 GP_TABLESPACE_VERSION_DIRECTORY, target_gp_dbid);
-				strcat(filename, copybuf_dbid_relfile);
+				snprintf(filename, sizeof(filename), "%s%s",
+						 gp_tablespace_filename,
+						 copybuf_dbid_relfile);
 			}
 			else
 			{
@@ -1303,6 +1311,15 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 							continue;
 
 						rmtree(filename, true);
+
+					}
+
+					bool is_gp_tablespace_directory = strncmp(gp_tablespace_filename, filename, strlen(filename)) == 0;
+					if (is_gp_tablespace_directory && !forceoverwrite) {
+						/*
+						 * This directory has already been created during beginning of BaseBackup().
+						 */
+						continue;
 					}
 
 					if (mkdir(filename, S_IRWXU) != 0)
@@ -1349,14 +1366,16 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 					filename[strlen(filename) - 1] = '\0';		/* Remove trailing slash */
 
 					mapped_tblspc_path = get_tablespace_mapping(&copybuf[157]);
-					if (symlink(mapped_tblspc_path, filename) != 0)
+					char *mapped_tblspc_path_with_dbid = psprintf("%s/%d", mapped_tblspc_path, target_gp_dbid);
+					if (symlink(mapped_tblspc_path_with_dbid, filename) != 0)
 					{
 						fprintf(stderr,
 								_("%s: could not create symbolic link from \"%s\" to \"%s\": %s\n"),
-								progname, filename, mapped_tblspc_path,
+								progname, filename, mapped_tblspc_path_with_dbid,
 								strerror(errno));
 						disconnect_and_exit(1);
 					}
+					pfree(mapped_tblspc_path_with_dbid);
 				}
 				else
 				{
@@ -1882,7 +1901,7 @@ BaseBackup(void)
 			char	   *path = (char *) get_tablespace_mapping(PQgetvalue(res, i, 1));
 			char path_with_subdir[MAXPGPATH];
 
-			sprintf(path_with_subdir, "%s/%s_db%d", path, GP_TABLESPACE_VERSION_DIRECTORY, target_gp_dbid);
+			sprintf(path_with_subdir, "%s/%d/%s", path, target_gp_dbid, GP_TABLESPACE_VERSION_DIRECTORY);
 
 			verify_dir_is_empty_or_create(path_with_subdir);
 		}
@@ -2413,6 +2432,17 @@ main(int argc, char **argv)
 	 */
 	if (format == 'p' || strcmp(basedir, "-") != 0)
 		verify_dir_is_empty_or_create(basedir);
+
+	/*
+	 * GPDB: Backups in tar mode will not have the internal.auto.conf file,
+	 * nor will any tablespaces have the dbid appended to their symlinks in
+	 * pg_tblspc. The backups are still, in theory, valid, but the tablespace
+	 * mapping and internal.auto.conf files will need to be added manually
+	 * when extracting the backups.
+	 */
+	if (format == 't')
+		fprintf(stderr,
+			_("WARNING: tar backups are not supported on GPDB\n"));
 
 	/* Create transaction log symlink, if required */
 	if (strcmp(xlog_dir, "") != 0)

@@ -19,6 +19,7 @@
 #include "executor/spi.h"
 #include "postmaster/fts.h"
 #include "replication/walsender.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/resource_manager.h"
 #include "utils/resgroup-ops.h"
@@ -29,35 +30,10 @@
 bool	ResourceScheduler = false;						/* Is scheduling enabled? */
 ResourceManagerPolicy Gp_resource_manager_policy;
 
-static bool resourceGroupActivated = false;
-
-bool
-IsResQueueEnabled(void)
-{
-	return ResourceScheduler &&
-		Gp_resource_manager_policy == RESOURCE_MANAGER_POLICY_QUEUE;
-}
-
 /*
- * Caution: resource group may be enabled but not activated.
+ * Global variables.
  */
-bool
-IsResGroupEnabled(void)
-{
-	return ResourceScheduler &&
-		Gp_resource_manager_policy == RESOURCE_MANAGER_POLICY_GROUP;
-}
-
-/*
- * Resource group do not govern the auxiliary processes and special backends
- * like ftsprobe, filerep process, so we need to check if resource group is
- * actually activated
- */
-bool
-IsResGroupActivated(void)
-{
-	return IsResGroupEnabled() && resourceGroupActivated;
-}
+bool		ResGroupActivated = false;
 
 void
 ResManagerShmemInit(void)
@@ -88,7 +64,7 @@ InitResManager(void)
 	else if  (IsResGroupEnabled() &&
 			 (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
 			 IsUnderPostmaster &&
-			 !am_walsender && !am_ftshandler)
+			 !am_walsender && !am_ftshandler && !IsFaultHandler)
 	{
 		/*
 		 * InitResManager() is called under PostgresMain(), so resource group is not
@@ -104,7 +80,7 @@ InitResManager(void)
 		InitResGroups();
 		ResGroupOps_AdjustGUCs();
 
-		resourceGroupActivated = true;
+		ResGroupActivated = true;
 	}
 	else
 	{

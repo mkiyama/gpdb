@@ -139,7 +139,8 @@ extern PGDLLIMPORT LWLockPadded *MainLWLockArray;
 #define SessionStateLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 7].lock)
 #define RelfilenodeGenLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 8].lock)
 #define WorkFileManagerLock			(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 9].lock)
-#define GP_NUM_INDIVIDUAL_LWLOCKS		9
+#define DistributedLogTruncateLock	(&MainLWLockArray[PG_NUM_INDIVIDUAL_LWLOCKS + 10].lock)
+#define GP_NUM_INDIVIDUAL_LWLOCKS		10
 
 /*
  * It would probably be better to allocate separate LWLock tranches
@@ -164,7 +165,6 @@ extern PGDLLIMPORT LWLockPadded *MainLWLockArray;
  * It's a bit odd to declare NUM_BUFFER_PARTITIONS and NUM_LOCK_PARTITIONS
  * here, but we need them to figure out offsets within MainLWLockArray, and
  * having this file include lock.h or bufmgr.h would be backwards.
- * This also applies for WORKFILE_HASHSTABLE_NUM_PARTITIONS.
  */
 
 /* Number of partitions of the shared buffer mapping hashtable */
@@ -214,14 +214,6 @@ extern void LWLockRelease(LWLock *lock);
 extern void LWLockReleaseAll(void);
 extern bool LWLockHeldByMe(LWLock *lock);
 extern bool LWLockHeldExclusiveByMe(LWLock *lock);
-
-#ifdef USE_TEST_UTILS_X86
-// GPDB_94_MERGE_FIXME: do these still work? Are they still needed?
-extern uint32 LWLocksHeld(void);
-extern LWLock *LWLockHeldLatest(void);
-extern void *LWLockHeldLatestCaller(void);
-extern const char *LWLocksHeldStackTraces(void);
-#endif /* USE_TEST_UTILS_X86 */
 
 extern bool LWLockAcquireWithVar(LWLock *lock, uint64 *valptr, uint64 val);
 extern bool LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval);

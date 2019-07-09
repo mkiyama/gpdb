@@ -7,6 +7,8 @@
 TODO: docs!
 """
 import os, pickle, base64, time
+import os.path
+import pipes
 
 import re, socket
 
@@ -34,6 +36,11 @@ COMMAND_NOT_FOUND=127
 
 #Default size of thread pool for gpstart and gpsegstart
 DEFAULT_GPSTART_NUM_WORKERS=64
+
+# Application name used by the pg_rewind instance that gprecoverseg starts
+# during incremental recovery. gpstate uses this to figure out when incremental
+# recovery is active.
+RECOVERY_REWIND_APPNAME = '__gprecoverseg_pg_rewind__'
 
 def get_postmaster_pid_locally(datadir):
     cmdStr = "ps -ef | grep postgres | grep -v grep | awk '{print $2}' | grep `cat %s/postmaster.pid | head -1` || echo -1" % (datadir)
@@ -407,7 +414,11 @@ class SegmentRewind(Command):
                  verbose=False, ctxt=REMOTE):
 
         # Construct the source server libpq connection string
-        source_server = "host=%s port=%s dbname=template1" % (source_host, source_port)
+        # We set application_name here so gpstate can identify whether an
+        # incremental recovery is occurring.
+        source_server = "host={} port={} dbname=template1 application_name={}".format(
+            source_host, source_port, RECOVERY_REWIND_APPNAME
+        )
 
         # Build the pg_rewind command. Do not run pg_rewind if recovery.conf
         # file exists in target data directory because the target instance can
@@ -842,10 +853,12 @@ class ConfigureNewSegment(Command):
       etc.
     """
 
-    def __init__(self, name, confinfo, newSegments=False, tarFile=None,
+    def __init__(self, name, confinfo, logdir, newSegments=False, tarFile=None,
                  batchSize=None, verbose=False,ctxt=LOCAL, remoteHost=None, validationOnly=False, writeGpIdFileOnly=False,
                  forceoverwrite=False):
-        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\"' % (confinfo)
+
+        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\" -l %s' % (confinfo, pipes.quote(logdir))
+
         if newSegments:
             cmdStr += ' -n'
         if tarFile:
@@ -888,7 +901,6 @@ class ConfigureNewSegment(Command):
                         : <segment dbid>
         """
         result = {}
-
         for segIndex, seg in enumerate(segments):
             if primaryMirror == 'primary' and seg.isSegmentPrimary() == False:
                continue
@@ -912,13 +924,16 @@ class ConfigureNewSegment(Command):
                 isPrimarySegment = "false"
                 isTargetReusedLocationString = "false"
 
-            result[hostname] += '%s:%d:%s:%s:%d:%d:%s:%s' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
+            progressFile = getattr(seg, 'progressFile', "")
+
+            result[hostname] += '%s:%d:%s:%s:%d:%d:%s:%s:%s' % (seg.getSegmentDataDirectory(), seg.getSegmentPort(),
                                                           isPrimarySegment,
                                                           isTargetReusedLocationString,
                                                           seg.getSegmentDbId(),
                                                           seg.getSegmentContentId(),
                                                           primaryHostname,
-                                                          primarySegmentPort
+                                                          primarySegmentPort,
+                                                          progressFile
             )
         return result
 
@@ -990,29 +1005,31 @@ class GpCatVersionDirectory(Command):
         cmd.run(validateAfter=True)
         return cmd.get_version()
 
-#-----------------------------------------------
-class GpAddConfigScript(Command):
-    def __init__(self, name, directorystring, entry, value=None, removeonly=False, ctxt=LOCAL, remoteHost=None):
-        cmdStr="echo '%s' | $GPHOME/sbin/gpaddconfig.py --entry %s" % (directorystring, entry)
-        if value:
-            # value will be encoded and unencoded in the script to protect against shell interpretation
-            value = base64.urlsafe_b64encode(pickle.dumps(value))
-            cmdStr = cmdStr + " --value '" + value + "'"
-        if removeonly:
-            cmdStr = cmdStr + " --removeonly "
-
-        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
 
 #-----------------------------------------------
-class GpAppendGucToFile(Command):
+class GpConfigHelper(Command):
+    def __init__(self, command_name, postgresconf_dir, name, value=None, segInfo=None, removeParameter=False, getParameter=False, ctxt=LOCAL, remoteHost=None):
+        self.segInfo = segInfo
 
-    # guc value will come in pickled and base64 encoded
+        addParameter = (not getParameter) and (not removeParameter)
+        if addParameter:
+            args = '--add-parameter %s --value %s ' % (name, base64.urlsafe_b64encode(pickle.dumps(value)))
+        if getParameter:
+            args = '--get-parameter %s' % name
+        if removeParameter:
+            args = '--remove-parameter %s' % name
 
-    def __init__(self,name,file,guc,value,ctxt=LOCAL,remoteHost=None):
-        unpickledText = pickle.loads(base64.urlsafe_b64decode(value))
-        finalText = unpickledText.replace('"', '\\\"')
-        cmdStr = 'echo "%s=%s" >> %s' %  (guc, finalText, file)
-        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
+        cmdStr = "$GPHOME/sbin/gpconfig_helper.py --file %s %s" % (
+            os.path.join(postgresconf_dir, 'postgresql.conf'),
+            args)
+
+        Command.__init__(self, command_name, cmdStr, ctxt, remoteHost)
+
+    # FIXME: figure out how callers of this can handle exceptions here
+    def get_value(self):
+        raw_value = self.get_results().stdout
+        return pickle.loads(base64.urlsafe_b64decode(raw_value))
+
 
 #-----------------------------------------------
 class GpLogFilter(Command):
@@ -1102,6 +1119,150 @@ def check_permissions(username):
 
 
 
+class _GpExpandStatus(object):
+    '''
+    Internal class to store gpexpand status, note it's different with the
+    GpExpandStatus class inside the gpexpand command.
+    '''
+
+    dbname = 'postgres'
+
+    # status information
+    phase = 0
+    status = 'NO EXPANSION DETECTED'
+
+    # progress information, arrays of (dbname, relname, status)
+    uncompleted = []
+    completed = []
+    inprogress = []
+
+    def _get_phase1_status(self):
+        # first assume no expansion is in progress
+        self.phase = 0
+        self.status = 'NO EXPANSION DETECTED'
+
+        datadir = get_masterdatadir()
+        filename = os.path.join(datadir, 'gpexpand.status')
+        try:
+            with open(filename, 'r') as f:
+                # it is phase1 as long as the status file exists
+                self.phase = 1
+                self.status = 'UNKNOWN PHASE1 STATUS'
+
+                lines = f.readlines()
+        except IOError:
+            return self.phase > 0
+
+        if lines and lines[-1].split(':')[0]:
+            self.status = lines[-1].split(':')[0]
+
+        return True
+
+    def _get_phase2_status(self):
+        # first assume no expansion is in progress
+        self.phase = 0
+        self.status = 'NO EXPANSION DETECTED'
+
+        sql = '''
+            SELECT status FROM gpexpand.status ORDER BY updated DESC LIMIT 1
+        '''
+
+        try:
+            dburl = dbconn.DbURL(dbname=self.dbname)
+            with dbconn.connect(dburl, encoding='UTF8') as conn:
+                status = dbconn.execSQLForSingleton(conn, sql)
+        except Exception:
+            # schema table not found
+            return False
+
+        # it is phase2 as long as the schema table exists
+        self.phase = 2
+        if status:
+            self.status = status
+        else:
+            self.status = 'UNKNOWN PHASE2 STATUS'
+        return True
+
+    def _get_phase2_progress(self):
+        self.uncompleted = []
+        self.completed = []
+        self.inprogress = []
+
+        sql = '''
+            SELECT quote_ident(dbname) AS fq_dbname, fq_name, status
+              FROM gpexpand.status_detail
+        '''
+
+        try:
+            dburl = dbconn.DbURL(dbname=self.dbname)
+            with dbconn.connect(dburl, encoding='UTF8') as conn:
+                cursor = dbconn.execSQL(conn, sql)
+                rows = cursor.fetchall()
+        except Exception:
+            return False
+
+        for row in rows:
+            _, _, status = row
+            if status == 'COMPLETED':
+                self.completed.append(row)
+            elif status == 'IN PROGRESS':
+                self.inprogress.append(row)
+            else:
+                self.uncompleted.append(row)
+
+        return True
+
+    def get_status(self):
+        '''
+        Get gpexpand status, such as whether an expansion is in progress,
+        which expansion phase it is.
+        '''
+
+        if self._get_phase1_status():
+            pass
+        elif self._get_phase2_status():
+            pass
+
+        return self
+
+    def get_progress(self):
+        '''
+        Get data redistribution progress of phase 2.
+        '''
+
+        self._get_phase2_progress()
+
+        return self
+
+def get_gpexpand_status():
+    '''
+    Get gpexpand status
+    '''
+    status = _GpExpandStatus()
+    status.get_status()
+    return status
+
+def conflict_with_gpexpand(utility, refuse_phase1=True, refuse_phase2=False):
+    '''
+    Generate error message when gpexpand is running in specified phases.
+    Some utilities can not run in parallel with gpexpand, this function can be
+    used to simplify the checks on gpexpand status.
+    '''
+    status = get_gpexpand_status()
+
+    if status.phase == 1 and refuse_phase1:
+        err_msg = ("ERROR: Usage of {utility} is not supported while the "
+                   "cluster is in a reconfiguration state, "
+                   "exit {utility}")
+        return (False, err_msg.format(utility=utility))
+
+    if status.phase == 2 and refuse_phase2:
+        err_msg = ("ERROR: Usage of {utility} is not supported while the "
+                   "cluster has tables waiting for expansion, "
+                   "exit {utility}")
+        return (False, err_msg.format(utility=utility))
+
+    return (True, "")
 
 #=-=-=-=-=-=-=-=-=-= Bash Migration Helper Functions =-=-=-=-=-=-=-=-
 
@@ -1298,13 +1459,8 @@ def chk_local_db_running(datadir, port):
         finally:
             f.close()
 
-    cmd=FileDirExists('check for /tmp/.s.PGSQL file file', "/tmp/.s.PGSQL.%d" % port)
-    cmd.run(validateAfter=True)
-    tmpfile_exists = cmd.filedir_exists()
-
-    cmd=FileDirExists('check for lock file', get_lockfile_name(port))
-    cmd.run(validateAfter=True)
-    lockfile_exists = cmd.filedir_exists()
+    tmpfile_exists = os.path.exists("/tmp/.s.PGSQL.%d" % port)
+    lockfile_exists = os.path.exists(get_lockfile_name(port))
 
     netstat_port_active = PgPortIsActive.local('check netstat for postmaster port',"/tmp/.s.PGSQL.%d" % port, port)
 
@@ -1386,47 +1542,6 @@ class GpRecoverSeg(Command):
 
        cmdStr = "$GPHOME/bin/gprecoverseg %s" % (options)
        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
-
-class GpReadConfig(Command):
-    def __init__(self, name, seg, guc_name):
-        self.seg_db_id = seg.getSegmentDbId()
-        self.seg_content_id = seg.getSegmentContentId()
-        self.guc_name = guc_name
-        self.role = seg.getSegmentRole()
-        cat_path = findCmdInPath('cat')
-
-        cmdStr = "%s %s/postgresql.conf" % (cat_path, seg.getSegmentDataDirectory())
-        ctxt = LOCAL
-        remote_host = None
-        if seg.hostname != socket.gethostname():
-            ctxt = REMOTE
-            remote_host = seg.hostname
-        Command.__init__(self, name, cmdStr, ctxt, remote_host)
-
-    def get_guc_value(self):
-        std_out = self.get_results().stdout
-        std_out = std_out.split('\n')
-
-        VALUE_PATTERN = re.compile(".*=(.*)")
-
-        GUC_PATTERN = re.compile("^[\s]*" + self.guc_name + "[ \t]*=")
-
-        value = None
-        key_lines = [line for line in std_out if GUC_PATTERN.match(line)]
-        if key_lines:
-            value = VALUE_PATTERN.match(key_lines[-1]).group(1)
-            value = value.split('#')[0].strip()
-
-        return value
-
-    def get_seg_content_id(self):
-        return self.seg_content_id
-
-    def get_seg_role(self):
-        return self.role
-
-    def get_seg_dbid(self):
-        return self.seg_db_id
 
 
 if __name__ == '__main__':

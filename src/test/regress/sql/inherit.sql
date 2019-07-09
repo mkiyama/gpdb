@@ -142,6 +142,7 @@ DROP TABLE firstparent, secondparent, jointchild, thirdparent, otherchild;
 
 -- Test changing the type of inherited columns
 insert into d values('test','one','two','three');
+alter table z drop constraint z_pkey;
 alter table a alter column aa type integer using bit_length(aa);
 select * from d;
 
@@ -338,6 +339,8 @@ ALTER TABLE ONLY test_constraints DROP CONSTRAINT test_constraints_val1_val2_key
 DROP TABLE test_constraints_inh;
 DROP TABLE test_constraints;
 
+-- start_ignore
+-- GPDB does not support exclusion constraints, so no need to run this test
 CREATE TABLE test_ex_constraints (
     c circle,
     EXCLUDE USING gist (c WITH &&)
@@ -349,6 +352,7 @@ ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_c_excl;
 \d+ test_ex_constraints_inh
 DROP TABLE test_ex_constraints_inh;
 DROP TABLE test_ex_constraints;
+-- end_ignore
 
 -- Test non-inheritable foreign key contraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);

@@ -530,7 +530,6 @@ class GpStart:
         # stop them, stopping primaries before mirrors
         #
         for type in ["primary", "mirror"]:
-            dispatch_count = 0
             for hostName, segments in segmentsByHost.iteritems():
 
                 if type == "primary":
@@ -546,11 +545,11 @@ class GpStart:
                                           verbose=logging_is_verbose(),
                                           ctxt=base.REMOTE, remoteHost=hostName)
                     self.pool.addCommand(cmd)
-                    dispatch_count += 1
 
-            if dispatch_count > 0:
-                self.pool.wait_and_printdots(dispatch_count, self.quiet)
-        pass
+            if self.quiet:
+                self.pool.join()
+            else:
+                base.join_and_indicate_progress(self.pool)
 
     ######
     def _print_segment_start(self, segmentStartResult, invalidSegments, willShutdownSegments):
@@ -706,8 +705,6 @@ class GpStart:
                 host = self.gparray.standbyMaster.hostname
                 datadir = self.gparray.standbyMaster.datadir
                 port = self.gparray.standbyMaster.port
-                dbid = self.gparray.standbyMaster.dbid
-                ncontents = self.gparray.getNumSegmentContents()
                 return gp.start_standbymaster(host, datadir, port, era=self.era,
                                               wrapper=self.wrapper,
                                               wrapper_args=self.wrapper_args)

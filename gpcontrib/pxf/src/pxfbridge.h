@@ -33,14 +33,15 @@
  */
 typedef struct
 {
-	CHURL_HEADERS churl_headers;
-	CHURL_HANDLE churl_handle;
-	GPHDUri    *gphd_uri;
+	CHURL_HEADERS  churl_headers;
+	CHURL_HANDLE   churl_handle;
+	GPHDUri        *gphd_uri;
 	StringInfoData uri;
-	ListCell   *current_fragment;
-	StringInfoData write_file_name;
-	Relation	relation;
-	char *filterstr;
+	ListCell       *current_fragment;
+	Relation       relation;
+	char           *filterstr;
+	ProjectionInfo *proj_info;
+	List           *quals;
 } gphadoop_context;
 
 /*

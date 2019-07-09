@@ -25,6 +25,7 @@
 #include <locale.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <catalog/storage.h>
 
 #include "access/transam.h"
 #include "access/genam.h"
@@ -43,6 +44,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_tablespace.h"
+#include "catalog/storage_database.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/seclabel.h"
@@ -1158,8 +1160,7 @@ movedb(const char *dbname, const char *tblspcname)
 	 * lock be released at commit, except that someone could try to move
 	 * relations of the DB back into the old directory while we rmtree() it.)
 	 */
-	LockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-							   AccessExclusiveLock);
+	MoveDbSessionLockAcquire(db_id);
 
 	/*
 	 * Permission checks
@@ -1204,8 +1205,7 @@ movedb(const char *dbname, const char *tblspcname)
 	if (src_tblspcoid == dst_tblspcoid)
 	{
 		heap_close(pgdbrel, NoLock);
-		UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-									 AccessExclusiveLock);
+		MoveDbSessionLockRelease();
 		return;
 	}
 
@@ -1329,6 +1329,8 @@ movedb(const char *dbname, const char *tblspcname)
 			(void) XLogInsert(RM_DBASE_ID, XLOG_DBASE_CREATE, rdata);
 		}
 
+		ScheduleDbDirDelete(db_id, dst_tblspcoid, false);
+
 		/*
 		 * Update the database's pg_database tuple
 		 */
@@ -1389,6 +1391,13 @@ movedb(const char *dbname, const char *tblspcname)
 								PointerGetDatum(&fparms));
 
 	/*
+	 * GPDB: GPDB uses two phase commit and pending deletes, hence cannot locally
+	 * commit here. The rest of the logic related to the non-catalog changes from
+	 * this function is extracted into DropDatabaseDirectories() which is executed at
+	 * commit time.
+	 */
+#if 0
+	/*
 	 * Commit the transaction so that the pg_database update is committed. If
 	 * we crash while removing files, the database won't be corrupt, we'll
 	 * just leave some orphaned files in the old directory.
@@ -1404,36 +1413,24 @@ movedb(const char *dbname, const char *tblspcname)
 
 	/* Start new transaction for the remaining work; don't need a snapshot */
 	StartTransactionCommand();
+#endif
 
-	/*
-	 * Remove files from the old tablespace
-	 */
-	if (!rmtree(src_dbpath, true))
-		ereport(WARNING,
-				(errmsg("some useless files may be left behind in old database directory \"%s\"",
-						src_dbpath)));
-
-	/*
-	 * Record the filesystem change in XLOG
-	 */
+	if (Gp_role == GP_ROLE_EXECUTE)
 	{
-		xl_dbase_drop_rec xlrec;
-		XLogRecData rdata[1];
-
-		xlrec.db_id = db_id;
-		xlrec.tablespace_id = src_tblspcoid;
-
-		rdata[0].data = (char *) &xlrec;
-		rdata[0].len = sizeof(xl_dbase_drop_rec);
-		rdata[0].buffer = InvalidBuffer;
-		rdata[0].next = NULL;
-
-		(void) XLogInsert(RM_DBASE_ID, XLOG_DBASE_DROP, rdata);
+		/*
+		 * QE needs to release session level locks as can't Prepare Transaction
+		 * with session locks.
+		 */
+		MoveDbSessionLockRelease();
 	}
 
-	/* Now it's safe to release the database lock */
-	UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-								 AccessExclusiveLock);
+	/*
+	 * register the db_id with pending deletes list to schedule removing database
+	 * directory on transaction commit.
+	 */
+	ScheduleDbDirDelete(db_id, src_tblspcoid, true);
+
+	SIMPLE_FAULT_INJECTOR("inside_move_db_transaction");
 }
 
 /* Error cleanup callback for movedb */
@@ -1500,9 +1497,33 @@ AlterDatabase(AlterDatabaseStmt *stmt, bool isTopLevel)
 	{
 		/* currently, can't be specified along with any other options */
 		Assert(!dconnlimit);
-		/* this case isn't allowed within a transaction block */
-		PreventTransactionChain(isTopLevel, "ALTER DATABASE SET TABLESPACE");
+		if (Gp_role != GP_ROLE_EXECUTE)
+		{
+			/*
+			 * GPDB: allow this in query executor, as distributed transaction
+			 * participants. The QD already checked this, and should've prevented
+			 * running this in any genuine transaction block.
+			 */
+			/* this case isn't allowed within a transaction block */
+			PreventTransactionChain(isTopLevel, "ALTER DATABASE SET TABLESPACE");
+		}
 		movedb(stmt->dbname, strVal(dtablespace->arg));
+		if (Gp_role == GP_ROLE_DISPATCH)
+		{
+			char	*cmd;
+
+			cmd = psprintf("ALTER DATABASE %s SET TABLESPACE %s",
+							quote_identifier(stmt->dbname),
+							quote_identifier(strVal(dtablespace->arg)));
+
+			CdbDispatchCommand(cmd,
+								DF_CANCEL_ON_ERROR|
+								DF_NEED_TWO_PHASE|
+								DF_WITH_SNAPSHOT,
+								NULL);
+			pfree(cmd);
+		}
+
 		return InvalidOid;
 	}
 
@@ -2123,6 +2144,7 @@ dbase_redo(XLogRecPtr beginLoc  __attribute__((unused)), XLogRecPtr lsn  __attri
 		xl_dbase_create_rec *xlrec = (xl_dbase_create_rec *) XLogRecGetData(record);
 		char	   *src_path;
 		char	   *dst_path;
+		char	   *parentdir;
 		struct stat st;
 
 		src_path = GetDatabasePath(xlrec->src_db_id, xlrec->src_tablespace_id);
@@ -2141,6 +2163,30 @@ dbase_redo(XLogRecPtr beginLoc  __attribute__((unused)), XLogRecPtr lsn  __attri
 						(errmsg("some useless files may be left behind in old database directory \"%s\"",
 								dst_path)));
 		}
+
+		/*
+		 * It is possible that the tablespace was later dropped, but we are
+		 * re-redoing database create before that. In that case,
+		 * either src_path or dst_path is probably missing here and needs to
+		 * be created. We create directories here so that copy_dir() won't
+		 * fail, but do not bother to create the symlink under pg_tblspc
+		 * if the tablespace is not global/default.
+		 */
+		if (stat(src_path, &st) != 0 && pg_mkdir_p(src_path, S_IRWXU) != 0)
+		{
+			ereport(WARNING,
+					(errmsg("can not recursively create directory \"%s\"",
+							src_path)));
+		}
+		parentdir = pstrdup(dst_path);
+		get_parent_directory(parentdir);
+		if (stat(parentdir, &st) != 0 && pg_mkdir_p(parentdir, S_IRWXU) != 0)
+		{
+			ereport(WARNING,
+					(errmsg("can not recursively create directory \"%s\"",
+							parentdir)));
+		}
+		pfree(parentdir);
 
 		/*
 		 * Force dirty buffers out to disk, to ensure source database is

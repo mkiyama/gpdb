@@ -132,18 +132,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 		return InvalidOid;
 	}
 
-	/*
-	 * If the requested authorization is different from the current user,
-	 * temporarily set the current user so that the object(s) will be created
-	 * with the correct ownership.
-	 *
-	 * (The setting will be restored at the end of this routine, or in case of
-	 * error, transaction abort will clean things up.)
-	 */
-	if (saved_uid != owner_uid)
-		SetUserIdAndSecContext(owner_uid,
-							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-
 	/* Create the schema's namespace */
 	if (shouldDispatch || Gp_role != GP_ROLE_EXECUTE)
 	{
@@ -178,6 +166,18 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	{
 		namespaceId = NamespaceCreate(schemaName, owner_uid, false);
 	}
+
+	/*
+	 * If the requested authorization is different from the current user,
+	 * temporarily set the current user so that the object(s) will be created
+	 * with the correct ownership.
+	 *
+	 * (The setting will be restored at the end of this routine, or in case of
+	 * error, transaction abort will clean things up.)
+	 */
+	if (saved_uid != owner_uid)
+		SetUserIdAndSecContext(owner_uid,
+							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 	/* Advance cmd counter to make the namespace visible */
 	CommandCounterIncrement();
@@ -263,7 +263,6 @@ RenameSchema(const char *oldname, const char *newname)
 {
 	Oid			nspOid;
 	HeapTuple	tup;
-	Oid			nsoid;
 	Relation	rel;
 	AclResult	aclresult;
 
@@ -284,8 +283,7 @@ RenameSchema(const char *oldname, const char *newname)
 				 errmsg("schema \"%s\" already exists", newname)));
 
 	/* must be owner */
-	nsoid = HeapTupleGetOid(tup);
-	if (!pg_namespace_ownercheck(nsoid, GetUserId()))
+	if (!pg_namespace_ownercheck(nspOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_NAMESPACE,
 					   oldname);
 
@@ -321,7 +319,7 @@ RenameSchema(const char *oldname, const char *newname)
 	/* MPP-6929: metadata tracking */
 	if (Gp_role == GP_ROLE_DISPATCH)
 		MetaTrackUpdObject(NamespaceRelationId,
-						   nsoid,
+						   nspOid,
 						   GetUserId(),
 						   "ALTER", "RENAME"
 				);

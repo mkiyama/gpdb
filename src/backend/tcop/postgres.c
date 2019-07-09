@@ -620,7 +620,7 @@ ReadCommand(StringInfo inBuf)
 {
 	int			result;
 
-	SIMPLE_FAULT_INJECTOR(BeforeReadCommand);
+	SIMPLE_FAULT_INJECTOR("before_read_command");
 
 	if (whereToSendOutput == DestRemote)
 		result = SocketBackend(inBuf);
@@ -3416,7 +3416,8 @@ die(SIGNAL_ARGS)
 				 * lock(though we can handle this using pq_send_mutex_lock() now, it
 				 * is better to avoid the unnecessary cost).
 				 */
-				close(MyProcPort->sock);
+				if (MyProcPort)
+					close(MyProcPort->sock);
 				whereToSendOutput = DestNone;
 			}
 
@@ -4544,16 +4545,17 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 }
 
 /*
- * Throw an error if we're a FTS handler process.
+ * Throw an error if we're a GPDB specific message handler process.
  *
- * This is used to forbid anything else than simple query protocol messages
- * in a FTS handler process.  'firstchar' specifies what kind of a forbidden
- * message was received, and is used to construct the error message.
+ * This is used to forbid anything else than simple query protocol messages in
+ * a GPDB specific message handler process (e.g. FTS or fault message
+ * handlers).  'firstchar' specifies what kind of a forbidden message was
+ * received, and is used to construct the error message.
  */
 static void
-check_forbidden_in_fts_handler(char firstchar)
+check_forbidden_in_gpdb_handlers(char firstchar)
 {
-	if (am_ftshandler)
+	if (am_ftshandler || IsFaultHandler)
 	{
 		switch (firstchar)
 		{
@@ -4564,7 +4566,7 @@ check_forbidden_in_fts_handler(char firstchar)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_PROTOCOL_VIOLATION),
-						 errmsg("protocol '%c' is not supported in a FTS connection",
+						 errmsg("protocol '%c' is not supported in a GPDB message handler connection",
 								firstchar)));
 		}
 	}
@@ -4880,10 +4882,10 @@ PostgresMain(int argc, char *argv[],
 	}
 
 	/* Also send GPDB QE-backend startup info (motion listener, version). */
-	if (!am_ftshandler && Gp_role == GP_ROLE_EXECUTE)
+	if (!(am_ftshandler || IsFaultHandler) && Gp_role == GP_ROLE_EXECUTE)
 	{
 #ifdef FAULT_INJECTOR
-		if (SIMPLE_FAULT_INJECTOR(SendQEDetailsInitBackend) != FaultInjectorTypeSkip)
+		if (SIMPLE_FAULT_INJECTOR("send_qe_details_init_backend") != FaultInjectorTypeSkip)
 #endif
 			sendQEDetails();
 	}
@@ -4928,6 +4930,8 @@ PostgresMain(int argc, char *argv[],
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
+		elog(DEBUG5, "error caught. jumped back to PostgresMain local_sigjmp_buf");
+		
 		/*
 		 * NOTE: if you are tempted to add more code in this if-block,
 		 * consider the high probability that it should be in
@@ -5156,11 +5160,6 @@ PostgresMain(int argc, char *argv[],
 		 */
 		DoingCommandRead = true;
 
-#ifdef USE_TEST_UTILS
-		/* reset time slice */
-		TimeSliceReset();
-#endif /* USE_TEST_UTILS */
-
 		/*
 		 * (2b) Check for temp table delete reset session work.
 		 * Also clean up idle resources.
@@ -5221,7 +5220,7 @@ PostgresMain(int argc, char *argv[],
 		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
 				(errmsg_internal("First char: '%c'; gp_role = '%s'.", firstchar, role_to_string(Gp_role))));
 
-		check_forbidden_in_fts_handler(firstchar);
+		check_forbidden_in_gpdb_handlers(firstchar);
 
 		switch (firstchar)
 		{
@@ -5242,6 +5241,8 @@ PostgresMain(int argc, char *argv[],
 						exec_replication_command(query_string);
 					else if (am_ftshandler)
 						HandleFtsMessage(query_string);
+					else if (IsFaultHandler)
+						HandleFaultMessage(query_string);
 					else
 						exec_simple_query(query_string);
 

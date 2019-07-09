@@ -144,6 +144,11 @@ typedef struct PlannedStmt
 	 */
 	IntoClause *intoClause;
 	CopyIntoClause *copyIntoClause;
+
+	/* 
+ 	 * GPDB: whether a query is a SPI inner query for extension usage 
+ 	 */
+	int8		metricsQueryType;
 } PlannedStmt;
 
 /*
@@ -862,6 +867,7 @@ typedef struct Join
 	List	   *joinqual;		/* JOIN quals (in addition to plan.qual) */
 
 	bool		prefetch_inner; /* to avoid deadlock in MPP */
+	bool		prefetch_joinqual; /* to avoid deadlock in MPP */
 } Join;
 
 /* ----------------
@@ -977,6 +983,7 @@ typedef struct Material
 {
 	Plan		plan;
 	bool		cdb_strict;
+	bool		cdb_shield_child_from_rescans;
 
 	/* Material can be shared */
 	ShareType 	share_type;
@@ -1332,21 +1339,6 @@ typedef struct SplitUpdate
 } SplitUpdate;
 
 /*
- * Reshuffle Node
- * More details please read the description in the nodeReshuffle.c
- */
-typedef struct Reshuffle
-{
-	Plan		plan;
-	AttrNumber	tupleSegIdx;
-	int			numPolicyAttrs;
-	AttrNumber *policyAttrs;
-	Oid		   *policyHashFuncs;
-	int			oldSegs;
-	GpPolicyType ptype;
-} Reshuffle;
-
-/*
  * AssertOp Node
  *
  */
@@ -1410,11 +1402,7 @@ typedef enum RowMarkType
 	ROW_MARK_SHARE,				/* obtain shared tuple lock */
 	ROW_MARK_KEYSHARE,			/* obtain keyshare tuple lock */
 	ROW_MARK_REFERENCE,			/* just fetch the TID */
-	ROW_MARK_COPY,				/* physically copy the row value */
-	ROW_MARK_TABLE_SHARE,		/* (GPDB) Acquire RowShareLock on table,
-								 * but no tuple locks */
-	ROW_MARK_TABLE_EXCLUSIVE	/* (GPDB) Acquire ExclusiveLock on table,
-								 * blocking all other updates */
+	ROW_MARK_COPY				/* physically copy the row value */
 } RowMarkType;
 
 #define RowMarkRequiresRowShareLock(marktype)  ((marktype) <= ROW_MARK_KEYSHARE)
@@ -1462,6 +1450,7 @@ typedef struct PlanRowMark
 	RowMarkType markType;		/* see enum above */
 	bool		noWait;			/* NOWAIT option */
 	bool		isParent;		/* true if this is a "dummy" parent entry */
+	bool        canOptSelectLockingClause; /* Whether can do some optimization on select with locking clause */
 } PlanRowMark;
 
 

@@ -65,6 +65,10 @@ static Bitmapset *bitmapsetRead(void);
 #define READ_INT_FIELD(fldname) \
 	memcpy(&local_node->fldname, read_str_ptr, sizeof(int));  read_str_ptr+=sizeof(int)
 
+/* Read an int8 field  */
+#define READ_INT8_FIELD(fldname) \
+	memcpy(&local_node->fldname, read_str_ptr, sizeof(int8));  read_str_ptr+=sizeof(int8)
+
 /* Read an int16 field  */
 #define READ_INT16_FIELD(fldname) \
 	memcpy(&local_node->fldname, read_str_ptr, sizeof(int16));  read_str_ptr+=sizeof(int16)
@@ -238,6 +242,7 @@ _readQuery(void)
 	READ_BOOL_FIELD(hasRecursive);
 	READ_BOOL_FIELD(hasModifyingCTE);
 	READ_BOOL_FIELD(hasForUpdate);
+	READ_BOOL_FIELD(canOptSelectLockingClause);
 	READ_NODE_FIELD(cteList);
 	READ_NODE_FIELD(rtable);
 	READ_NODE_FIELD(jointree);
@@ -256,7 +261,6 @@ _readQuery(void)
 	READ_NODE_FIELD(setOperations);
 	READ_NODE_FIELD(constraintDeps);
 	READ_BOOL_FIELD(parentStmtType);
-	READ_BOOL_FIELD(needReshuffle);
 
 	/* policy not serialized */
 
@@ -701,7 +705,6 @@ _readUpdateStmt(void)
 	READ_NODE_FIELD(fromClause);
 	READ_NODE_FIELD(returningList);
 	READ_NODE_FIELD(withClause);
-	READ_BOOL_FIELD(needReshuffle);
 	READ_DONE();
 }
 
@@ -1225,11 +1228,6 @@ _readExpandStmtSpec(void)
 {
 	READ_LOCALS(ExpandStmtSpec);
 
-	READ_ENUM_FIELD(method, ExpandMethod);
-	READ_BITMAPSET_FIELD(ps_none);
-	READ_BITMAPSET_FIELD(ps_root);
-	READ_BITMAPSET_FIELD(ps_interior);
-	READ_BITMAPSET_FIELD(ps_leaf);
 	READ_OID_FIELD(backendId);
 
 	READ_DONE();
@@ -1434,6 +1432,7 @@ _readPlannedStmt(void)
 	READ_UINT64_FIELD(query_mem);
 	READ_NODE_FIELD(intoClause);
 	READ_NODE_FIELD(copyIntoClause);
+	READ_INT8_FIELD(metricsQueryType);
 	READ_DONE();
 }
 
@@ -2042,7 +2041,8 @@ _readMaterial(void)
 {
 	READ_LOCALS(Material);
 
-    READ_BOOL_FIELD(cdb_strict);
+	READ_BOOL_FIELD(cdb_strict);
+	READ_BOOL_FIELD(cdb_shield_child_from_rescans);
 
 	READ_ENUM_FIELD(share_type, ShareType);
 	READ_INT_FIELD(share_id);
@@ -2186,6 +2186,7 @@ _readPlanRowMark(void)
 	READ_ENUM_FIELD(markType, RowMarkType);
 	READ_BOOL_FIELD(noWait);
 	READ_BOOL_FIELD(isParent);
+	READ_BOOL_FIELD(canOptSelectLockingClause);
 
 	READ_DONE();
 }
@@ -2297,25 +2298,6 @@ _readSplitUpdate(void)
 	READ_NODE_FIELD(insertColIdx);
 	READ_NODE_FIELD(deleteColIdx);
 
-	readPlanInfo((Plan *)local_node);
-
-	READ_DONE();
-}
-
-/*
- * _readReshuffle
- */
-static Reshuffle *
-_readReshuffle(void)
-{
-	READ_LOCALS(Reshuffle);
-
-	READ_INT_FIELD(tupleSegIdx);
-	READ_INT_FIELD(numPolicyAttrs);
-	READ_INT_ARRAY(policyAttrs, local_node->numPolicyAttrs, AttrNumber);
-	READ_OID_ARRAY(policyHashFuncs, local_node->numPolicyAttrs);
-	READ_INT_FIELD(oldSegs);
-	READ_INT_FIELD(ptype);
 	readPlanInfo((Plan *)local_node);
 
 	READ_DONE();
@@ -2447,6 +2429,7 @@ void readJoinInfo(Join *local_node)
 	readPlanInfo((Plan *) local_node);
 
 	READ_BOOL_FIELD(prefetch_inner);
+	READ_BOOL_FIELD(prefetch_joinqual);
 
 	READ_ENUM_FIELD(jointype, JoinType);
 	READ_NODE_FIELD(joinqual);
@@ -2931,19 +2914,17 @@ _readLockRows(void)
 	READ_DONE();
 }
 
-static ReshuffleExpr *
-_readReshuffleExpr(void)
+static LockingClause *
+_readLockingClause(void)
 {
-	READ_LOCALS(ReshuffleExpr);
+	READ_LOCALS(LockingClause);
 
-	READ_INT_FIELD(newSegs);
-	READ_INT_FIELD(oldSegs);
-	READ_NODE_FIELD(hashKeys);
-	READ_NODE_FIELD(hashFuncs);
-	READ_INT_FIELD(ptype);
+	READ_NODE_FIELD(lockedRels);
+	READ_ENUM_FIELD(strength, LockClauseStrength);
+	READ_BOOL_FIELD(noWait);
+
 	READ_DONE();
 }
-
 
 static Node *
 _readValue(NodeTag nt)
@@ -3228,9 +3209,6 @@ readNodeBinary(void)
 				break;
 			case T_SplitUpdate:
 				return_value = _readSplitUpdate();
-				break;
-			case T_Reshuffle:
-				return_value = _readReshuffle();
 				break;
 			case T_RowTrigger:
 				return_value = _readRowTrigger();
@@ -3887,8 +3865,8 @@ readNodeBinary(void)
 			case T_AlterTableMoveAllStmt:
 				return_value = _readAlterTableMoveAllStmt();
 				break;
-			case T_ReshuffleExpr:
-				return_value = _readReshuffleExpr();
+			case T_LockingClause:
+				return_value = _readLockingClause();
 				break;
 			default:
 				return_value = NULL; /* keep the compiler silent */

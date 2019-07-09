@@ -202,6 +202,7 @@ struct PGPROC
 
 /* NOTE: "typedef struct PGPROC PGPROC" appears in storage/lock.h. */
 
+
 extern PGDLLIMPORT PGPROC *MyProc;
 extern PGDLLIMPORT struct PGXACT *MyPgXact;
 extern PGDLLIMPORT struct TMGXACT *MyTmGxact;
@@ -261,7 +262,6 @@ typedef struct PROC_HDR
 	Latch	   *checkpointerLatch;
 	/* Current shared estimate of appropriate spins_per_delay value */
 	int			spins_per_delay;
-
 	/* The proc of the Startup process, since not in ProcArray */
 	PGPROC	   *startupProc;
 	int			startupProcPid;
@@ -283,11 +283,8 @@ extern PGPROC *PreparedXactProcs;
  * Background writer, checkpointer and WAL writer run during normal operation.
  * Startup process and WAL receiver also consume 2 slots, but WAL writer is
  * launched only after startup has exited, so we only need 4 slots.
- *
- * In GPDB, we have some extra processes.
- * GPDB_90_MERGE_FIXME: count them correctly. 10 is an exaggeration.
  */
-#define NUM_AUXILIARY_PROCS		(/* PG */ 4 + /* GPDB */ 10)
+#define NUM_AUXILIARY_PROCS		4
 
 
 /* configurable options */

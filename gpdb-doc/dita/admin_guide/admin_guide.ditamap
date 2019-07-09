@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-    <topicref href="../../600/homenav.html" scope="external"
+    <topicref href="../../6-0/homenav.html" scope="external"
         navtitle="Greenplum Database® 6.0 Documentation" format="html" otherprops="oss-only"/>
-    <topicref href="../../600/homenav.html" scope="external"
+    <topicref href="../../6-0/homenav.html" scope="external"
         navtitle="Pivotal Greenplum® 6.0 Documentation" format="html" otherprops="pivotal"/>
     <topicref href="admin_guide.xml" navtitle="Administration Guide">
         <topicref href="intro/partI.xml" id="partI" format="dita">
@@ -22,6 +22,7 @@
             <topicref href="managing/startstop.xml" navtitle="Starting and Stopping Greenplum"/>
             <topicref href="access_db/access_db.ditamap" format="ditamap"/>
             <topicref href="configure.ditamap" format="ditamap"/>
+            <topicref href="managing/compression.xml"/>
             <topicref href="highavail/highavail.ditamap" format="ditamap"/>
             <topicref href="managing/backup.ditamap" format="ditamap"/>
             <topicref href="expand/expand.ditamap" format="ditamap"/>

@@ -16,6 +16,7 @@ class GpCheckCatTestCase(GpTestCase):
         #   self.subject = gpcheckcat
         gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckcat")
         self.subject = imp.load_source('gpcheckcat', gpcheckcat_file)
+        self.subject.check_gpexpand = lambda : (True, "")
 
         self.db_connection = Mock(spec=['close', 'query'])
         self.unique_index_violation_check = Mock(spec=['runCheck'])
@@ -135,7 +136,7 @@ class GpCheckCatTestCase(GpTestCase):
 
     @patch('gpcheckcat.GPCatalog', return_value=Mock())
     @patch('sys.exit')
-    @patch('gpcheckcat.log_literal')
+    @patch('gppylib.gplog.log_literal')
     def test_truncate_batch_size(self, mock_log, mock_gpcheckcat, mock_sys_exit):
         self.subject.GV.opt['-B'] = 300  # override the setting from available memory
         # setup conditions for 50 primaries and plenty of RAM such that max threads > 50
@@ -293,6 +294,17 @@ class GpCheckCatTestCase(GpTestCase):
     def test_getReportConfiguration_uses_contentid(self):
         report_cfg = self.subject.getReportConfiguration()
         self.assertEqual("content -1", report_cfg[-1]['segname'])
+
+    def test_RelationObject_reportAllIssues_handles_None_fields(self):
+        uut = self.subject.RelationObject(None, 'pg_class')
+        uut.setRelInfo(relname=None, nspname=None, relkind='t', paroid=0)
+
+        uut.reportAllIssues()
+        log_messages = [args[0][1].strip() for args in self.subject.logger.log.call_args_list]
+
+        self.assertIn('Relation oid: N/A', log_messages)
+        self.assertIn('Relation schema: N/A', log_messages)
+        self.assertIn('Relation name: N/A', log_messages)
 
     ####################### PRIVATE METHODS #######################
 

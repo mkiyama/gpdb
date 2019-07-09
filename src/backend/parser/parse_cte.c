@@ -16,6 +16,7 @@
 
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "cdb/cdbvars.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/analyze.h"
 #include "parser/parse_cte.h"
@@ -111,6 +112,16 @@ transformWithClause(ParseState *pstate, WithClause *withClause)
 	/* Only one WITH clause per query level */
 	Assert(pstate->p_ctenamespace == NIL);
 	Assert(pstate->p_future_ctes == NIL);
+
+	/*
+	 * WITH RECURSIVE is disabled if gp_recursive_cte is not set
+	 * to allow recursive CTEs.
+	 */
+	if (withClause->recursive && !gp_recursive_cte)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("RECURSIVE clauses in WITH queries are currently disabled"),
+				 errhint("In order to use recursive CTEs, \"gp_recursive_cte\" must be turned on.")));
 
 	/*
 	 * For either type of WITH, there must not be duplicate CTE names in the
@@ -1065,7 +1076,7 @@ checkWindowFuncInRecursiveTerm(SelectStmt *stmt, CteState *cstate)
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("Window Functions in a recursive query is not implemented"),
+							 errmsg("window functions in a recursive query is not implemented"),
 							 parser_errposition(cstate->pstate,
 												exprLocation((Node *) fc))));
 				}

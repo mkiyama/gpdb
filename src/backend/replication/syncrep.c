@@ -142,7 +142,6 @@ SyncRepWaitForLSN(XLogRecPtr XactCommitLSN)
 
 			SpinLockAcquire(&walsnd->mutex);
 			syncStandbyPresent = (walsnd->pid != 0)
-				&& (walsnd->synchronous)
 				&& ((walsnd->state == WALSNDSTATE_STREAMING)
 					|| (walsnd->state == WALSNDSTATE_CATCHUP &&
 						walsnd->caughtup_within_range));
@@ -308,7 +307,7 @@ SyncRepWaitForLSN(XLogRecPtr XactCommitLSN)
 			ereport(WARNING,
 					(errmsg("ignoring query cancel request for synchronous replication to ensure cluster consistency"),
 					 errdetail("The transaction has already changed locally, it has to be replicated to standby.")));
-			SIMPLE_FAULT_INJECTOR(SyncRepQueryCancel);
+			SIMPLE_FAULT_INJECTOR("sync_rep_query_cancel");
 		}
 
 		/*

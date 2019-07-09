@@ -94,6 +94,11 @@ test_pxfprotocol_import_first_call(void **state)
 	((ExtProtocolData *) fcinfo->context)->prot_last_call = false;
 	((ExtProtocolData *) fcinfo->context)->prot_url = uri_param;
 
+	ExternalSelectDesc desc = (ExternalSelectDesc) palloc0(sizeof(ExternalSelectDesc));
+	desc->projInfo = NULL;
+
+	((ExtProtocolData*) fcinfo->context)->desc = desc;
+
 	Relation	relation = (Relation) palloc0(sizeof(Relation));
 
 	((ExtProtocolData *) fcinfo->context)->prot_relation = relation;
@@ -137,12 +142,12 @@ test_pxfprotocol_import_first_call(void **state)
 	/* uri has been initialized */
 	assert_true(context->uri.data != NULL);
 	/* no write file name for import case */
-	assert_int_equal(context->write_file_name.len, 0);
 	assert_true(context->relation != NULL);
 	/* relation pointer is copied */
 	assert_int_equal(context->relation, relation);
 
 	/* cleanup */
+	pfree(desc);
 	pfree(relation);
 	pfree(gphd_uri);
 	pfree(EXTPROTOCOL_GET_USER_CTX(fcinfo));
@@ -202,7 +207,6 @@ test_pxfprotocol_import_last_call(void **state)
 
 	/* init data in context that will be cleaned up */
 	initStringInfo(&call_context->uri);
-	initStringInfo(&call_context->write_file_name);
 
 	/* set mock behavior for bridge cleanup */
 	expect_value(gpbridge_cleanup, context, call_context);
@@ -231,6 +235,11 @@ test_pxfprotocol_export_first_call(void **state)
 	EXTPROTOCOL_GET_DATABUF(fcinfo) = palloc0(EXTPROTOCOL_GET_DATALEN(fcinfo));
 	((ExtProtocolData *) fcinfo->context)->prot_last_call = false;
 	((ExtProtocolData *) fcinfo->context)->prot_url = uri_param;
+
+	ExternalSelectDesc desc = (ExternalSelectDesc) palloc0(sizeof(ExternalSelectDesc));
+	desc->projInfo = NULL;
+
+	((ExtProtocolData*) fcinfo->context)->desc = desc;
 
 	Relation	relation = (Relation) palloc0(sizeof(Relation));
 
@@ -268,12 +277,12 @@ test_pxfprotocol_export_first_call(void **state)
 	/* uri has been initialized */
 	assert_true(context->uri.data != NULL);
 	/* write file name initialized, but empty, since it is filled by another component */
-	assert_int_equal(context->write_file_name.len, 0);
 	assert_true(context->relation != NULL);
 	/* relation pointer is copied */
 	assert_int_equal(context->relation, relation);
 
 	/* cleanup */
+	pfree(desc);
 	pfree(relation);
 	pfree(gphd_uri);
 	pfree(EXTPROTOCOL_GET_USER_CTX(fcinfo));
@@ -333,7 +342,6 @@ test_pxfprotocol_export_last_call(void **state)
 
 	/* init data in context that will be cleaned up */
 	initStringInfo(&call_context->uri);
-	initStringInfo(&call_context->write_file_name);
 
 	/* set mock behavior for bridge cleanup */
 	expect_value(gpbridge_cleanup, context, call_context);

@@ -15,7 +15,7 @@
  *
  *	  The transition function might actually be a "combine" function, if this
  *	  Aggregate node is part of a multi-stage aggregate. Note that although
- *	  we use the same "combine" functions and catalogs as PostgrSQL 9.4,
+ *	  we use the same "combine" functions and catalogs as PostgreSQL 9.4,
  *	  the implementation in this file is quite different. TODO: refactor
  *	  this to not be so different.
  *
@@ -574,19 +574,19 @@ advance_aggregates(AggState *aggstate, AggStatePerGroup pergroup)
 				for (i = 0; i < numTransInputs; i++)
 				{
 					value = slot_getattr(slot, i+1, &isnull);
-					
+
 					if (isnull)
 						break; /* arg loop */
 				}
 				if (i < numTransInputs)
 					continue;
 			}
-			
+
 			/* OK, put the tuple into the tuplesort object */
 			if (peraggstate->numInputs == 1)
 			{
 				value = slot_getattr(slot, 1, &isnull);
-				
+
 				tuplesort_putdatum(peraggstate->sortstate,
 								   value, isnull);
 			}
@@ -711,7 +711,8 @@ process_ordered_aggregate_single(AggState *aggstate,
 	 * pfree them when they are no longer needed.
 	 */
 
-	while (tuplesort_getdatum(peraggstate->sortstate, true, newVal, isNull))
+	while (tuplesort_getdatum(peraggstate->sortstate, true,
+							  newVal, isNull))
 	{
 		/*
 		 * Clear and select the working context for evaluation of the equality
@@ -755,7 +756,6 @@ process_ordered_aggregate_single(AggState *aggstate,
 		pfree(DatumGetPointer(oldVal));
 
 	tuplesort_end(peraggstate->sortstate);
-
 	peraggstate->sortstate = NULL;
 }
 
@@ -1595,7 +1595,6 @@ agg_retrieve_direct(AggState *aggstate)
 					process_ordered_aggregate_multi(aggstate,
 													peraggstate,
 													pergroupstate);
-
 			}
 
 			finalize_aggregate(aggstate, peraggstate, pergroupstate,
@@ -1702,7 +1701,7 @@ agg_retrieve_direct(AggState *aggstate)
 }
 
 /*
- * ExecAgg for hashed case: retrieve groups from hash table
+ * ExecAgg for hashed case: phase 2, retrieving groups from hash table
  */
 static TupleTableSlot *
 agg_retrieve_hash_table(AggState *aggstate)
@@ -1946,9 +1945,7 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 	ExecAssignResultTypeFromTL(&aggstate->ss.ps);
 	ExecAssignProjectionInfo(&aggstate->ss.ps, NULL);
 
-#if 0
-	aggstate->ss.ps.ps_TupFromTlist = false;
-#endif
+	aggstate->ps_TupFromTlist = false;
 
 	/*
 	 * get the count of aggregates in targetlist and quals

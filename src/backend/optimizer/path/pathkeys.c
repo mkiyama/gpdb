@@ -150,10 +150,6 @@ gen_implied_qual(PlannerInfo *root,
 	if (subexpression_match((Expr *) new_expr, old_rinfo->clause))
 		return;
 
-	/* No inferences may be performed across an outer join */
-	if (old_rinfo->outer_relids)
-		return;
-
 	/*
 	 * Have we seen this clause before? This is needed to avoid infinite
 	 * recursion.
@@ -229,6 +225,9 @@ gen_implied_quals(PlannerInfo *root, RestrictInfo *rinfo)
 	Expr	   *item1;
 	Expr	   *item2;
 	ListCell   *lcec;
+
+	/* No inferences may be performed across an outer join */
+	Assert(rinfo->outer_relids == NULL);
 
 	if (rinfo->pseudoconstant)
 		return;
@@ -1093,7 +1092,7 @@ convert_subquery_pathkeys(PlannerInfo *root, RelOptInfo *rel,
 					outer_ec = get_eclass_for_sort_expr(root,
 														outer_expr,
 														NULL,
-												   sub_eclass->ec_opfamilies,
+														sub_eclass->ec_opfamilies,
 														sub_expr_type,
 														sub_expr_coll,
 														0,
@@ -1109,9 +1108,9 @@ convert_subquery_pathkeys(PlannerInfo *root, RelOptInfo *rel,
 
 					outer_pk = make_canonical_pathkey(root,
 													  outer_ec,
-													sub_pathkey->pk_opfamily,
-													sub_pathkey->pk_strategy,
-												sub_pathkey->pk_nulls_first);
+													  sub_pathkey->pk_opfamily,
+													  sub_pathkey->pk_strategy,
+													  sub_pathkey->pk_nulls_first);
 					/* score = # of equivalence peers */
 					score = list_length(outer_ec->ec_members) - 1;
 					/* +1 if it matches the proper query_pathkeys item */
@@ -1247,8 +1246,12 @@ cdb_make_distkey_for_expr(PlannerInfo *root,
 	if (get_typtype(lefttype) == 'd')
 		lefttype = getBaseType(lefttype);
 
+	/*
+	 * It should be OK to set nullable_relids = NULL, since this eclass is only
+	 * used for DistributionKey, so it would not participate in qual deduction.
+	 */
 	eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
-									  NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
+									  NULL,
 									  mergeopfamilies,
 									  lefttype,
 									  exprCollation(expr),
@@ -1347,9 +1350,13 @@ cdb_pull_up_eclass(PlannerInfo *root,
 	if (!newexpr)
 		elog(ERROR, "could not pull up equivalence class using projected target list");
 
+	/*
+	 * It should be OK to set nullable_relids = NULL, since this eclass is only
+	 * used for DistributionKey, so it would not participate in qual deduction.
+	 */
 	outer_ec = get_eclass_for_sort_expr(root,
 										newexpr,
-										NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
+										NULL,
 										eclass->ec_opfamilies,
 										exprType((Node *) newexpr),
 										exprCollation((Node *) newexpr),

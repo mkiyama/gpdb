@@ -166,6 +166,7 @@ static void CopyFromInsertBatch(CopyState cstate, EState *estate,
 					BulkInsertState bistate,
 					int nBufferedTuples, HeapTuple *bufferedTuples,
 					uint64 firstBufferedLineNo);
+static bool CopyReadLine(CopyState cstate);
 static bool CopyReadLineText(CopyState cstate);
 static int	CopyReadAttributesText(CopyState cstate);
 static int	CopyReadAttributesCSV(CopyState cstate);
@@ -217,7 +218,6 @@ static void HandleQDErrorFrame(CopyState cstate);
 
 static void CopyInitDataParser(CopyState cstate);
 static void setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable);
-static void CopyEolStrToType(CopyState cstate);
 
 static GpDistributionData *InitDistributionData(CopyState cstate, EState *estate);
 static void FreeDistributionData(GpDistributionData *distData);
@@ -1687,13 +1687,18 @@ ProcessCopyOptions(CopyState cstate,
 		}
 		else
 		{
-			if(pg_strcasecmp(cstate->eol_str, "lf") != 0 &&
-			   pg_strcasecmp(cstate->eol_str, "cr") != 0 &&
-			   pg_strcasecmp(cstate->eol_str, "crlf") != 0)
+			if (pg_strcasecmp(cstate->eol_str, "lf") == 0)
+				cstate->eol_type = EOL_NL;
+			else if (pg_strcasecmp(cstate->eol_str, "cr") == 0)
+				cstate->eol_type = EOL_CR;
+			else if (pg_strcasecmp(cstate->eol_str, "crlf") == 0)
+				cstate->eol_type = EOL_CRNL;
+			else
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("invalid value for NEWLINE (%s)", cstate->eol_str),
-						errhint("valid options are: 'LF', 'CRLF', 'CR'")));
+						 errmsg("invalid value for NEWLINE \"%s\"",
+								cstate->eol_str),
+						 errhint("Valid options are: 'LF', 'CRLF' and 'CR'.")));
 		}
 	}
 
@@ -1701,10 +1706,6 @@ ProcessCopyOptions(CopyState cstate,
 	{
 		cstate->escape_off = true;
 	}
-
-	/* set end of line type if NEWLINE keyword was specified */
-	if (cstate->eol_str)
-		CopyEolStrToType(cstate);
 }
 
 /*
@@ -2628,7 +2629,7 @@ CopyToDispatch(CopyState cstate)
 	/* We use fe_msgbuf as a per-row buffer regardless of copy_dest */
 	cstate->fe_msgbuf = makeStringInfo();
 
-	cdbCopy = makeCdbCopy(false);
+	cdbCopy = makeCdbCopy(cstate, false);
 
 	/* XXX: lock all partitions */
 
@@ -2911,15 +2912,6 @@ CopyTo(CopyState cstate)
 
 	if (cstate->rel)
 	{
-		/* For replicated table, choose only one segment to scan data */
-		if (Gp_role == GP_ROLE_EXECUTE && !cstate->on_segment &&
-				GpPolicyIsReplicated(cstate->rel->rd_cdbpolicy) &&
-				gp_session_id % getgpsegmentCount() != GpIdentity.segindex)
-		{
-			MemoryContextDelete(cstate->rowcontext);
-			return 0;
-		}
-
 		foreach(lc, target_rels)
 		{
 			Relation rel = lfirst(lc);
@@ -3282,12 +3274,12 @@ CopyFromErrorCallback(void *arg)
 		if (cstate->cur_attname)
 			errcontext("COPY %s, line %s, column %s",
 					   cstate->cur_relname,
-					   linenumber_atoi(buffer, cstate->cur_lineno),
+					   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 					   cstate->cur_attname);
 		else
 			errcontext("COPY %s, line %s",
 					   cstate->cur_relname,
-					   linenumber_atoi(buffer, cstate->cur_lineno));
+					   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno));
 	}
 	else
 	{
@@ -3299,7 +3291,7 @@ CopyFromErrorCallback(void *arg)
 			attval = limit_printout_length(cstate->cur_attval);
 			errcontext("COPY %s, line %s, column %s: \"%s\"",
 					   cstate->cur_relname,
-					   linenumber_atoi(buffer, cstate->cur_lineno),
+					   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 					   cstate->cur_attname, attval);
 			pfree(attval);
 		}
@@ -3308,7 +3300,7 @@ CopyFromErrorCallback(void *arg)
 			/* error is relevant to a particular column, value is NULL */
 			errcontext("COPY %s, line %s, column %s: null input",
 					   cstate->cur_relname,
-					   linenumber_atoi(buffer, cstate->cur_lineno),
+					   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 					   cstate->cur_attname);
 		}
 		else
@@ -3331,7 +3323,7 @@ CopyFromErrorCallback(void *arg)
 				lineval = limit_printout_length(cstate->line_buf.data);
 				errcontext("COPY %s, line %s: \"%s\"",
 						   cstate->cur_relname,
-						   linenumber_atoi(buffer, cstate->cur_lineno),
+						   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 						   lineval);
 				pfree(lineval);
 			}
@@ -3347,7 +3339,7 @@ CopyFromErrorCallback(void *arg)
 				 */
 				errcontext("COPY %s, line %s",
 						   cstate->cur_relname,
-						   linenumber_atoi(buffer, cstate->cur_lineno));
+						   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno));
 			}
 		}
 	}
@@ -3640,7 +3632,7 @@ CopyFrom(CopyState cstate)
 	if ((resultRelInfo->ri_TrigDesc != NULL &&
 		 (resultRelInfo->ri_TrigDesc->trig_insert_before_row ||
 		  resultRelInfo->ri_TrigDesc->trig_insert_instead_row)) ||
-		cstate->volatile_defexprs)
+		cstate->volatile_defexprs || cstate->oids)
 	{
 		useHeapMultiInsert = false;
 	}
@@ -3721,9 +3713,7 @@ CopyFrom(CopyState cstate)
 		 * - dispatch the modified COPY command to all segment databases.
 		 * - prepare cdbhash for hashing on row values.
 		 */
-		cdbCopy = makeCdbCopy(true);
-
-		((volatile CopyState) cstate)->cdbCopy = cdbCopy;
+		cdbCopy = makeCdbCopy(cstate, true);
 
 		/*
 		 * Dispatch the COPY command.
@@ -3878,7 +3868,7 @@ CopyFrom(CopyState cstate)
 				MemSet(partNulls, true, relnatts * sizeof(bool));
 
 				reconstructTupleValues(map, baseValues, baseNulls, (int) num_phys_attrs,
-									   partValues, partNulls, (int) attr_count);
+									   partValues, partNulls, relnatts);
 				ExecStoreVirtualTuple(slot);
 			}
 			else
@@ -5701,7 +5691,7 @@ EndCopyFrom(CopyState cstate)
  * by newline.  The terminating newline or EOF marker is not included
  * in the final value of line_buf.
  */
-bool
+static bool
 CopyReadLine(CopyState cstate)
 {
 	bool		result;
@@ -7179,29 +7169,6 @@ setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable)
 		/* no conversion function (both encodings are probably the same) */
 		cstate->enc_conversion_proc = NULL;
 	}
-}
-
-static void
-CopyEolStrToType(CopyState cstate)
-{
-	if (pg_strcasecmp(cstate->eol_str, "lf") == 0)
-	{
-		cstate->eol_type = EOL_NL;
-	}
-	else if (pg_strcasecmp(cstate->eol_str, "cr") == 0)
-	{
-		cstate->eol_type = EOL_CR;
-	}
-	else if (pg_strcasecmp(cstate->eol_str, "crlf") == 0)
-	{
-		cstate->eol_type = EOL_CRNL;
-		
-	}
-	else /* error. must have been validated in CopyValidateControlChars() ! */
-		ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("internal error in CopySetEolType. Trying to set NEWLINE %s", 
-						 cstate->eol_str)));
 }
 
 static GpDistributionData *

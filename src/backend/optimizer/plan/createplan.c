@@ -776,6 +776,18 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 	if (partition_selector_created)
 		((Join *) plan)->prefetch_inner = true;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->outerjoinpath &&
+		best_path->outerjoinpath->motionHazard)
+		((Join *) plan)->prefetch_joinqual = true;
+
 	plan->flow = cdbpathtoplan_create_flow(root,
 			best_path->path.locus,
 			best_path->path.parent ? best_path->path.parent->relids
@@ -1017,6 +1029,7 @@ create_material_plan(PlannerInfo *root, MaterialPath *best_path)
 	plan = make_material(subplan);
 
 	plan->cdb_strict = best_path->cdb_strict;
+	plan->cdb_shield_child_from_rescans = best_path->cdb_shield_child_from_rescans;
 
 	copy_path_costsize(root, &plan->plan, (Path *) best_path);
 
@@ -1498,7 +1511,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 	}
 
 	/* get the total valid primary segdb count */
-	db_info = cdbcomponent_getCdbComponents(true);
+	db_info = cdbcomponent_getCdbComponents();
 	total_primaries = 0;
 	for (i = 0; i < db_info->total_segment_dbs; i++)
 	{
@@ -1577,7 +1590,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs && !found_match; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int segind = p->segindex;
+				int segind = p->config->segindex;
 
 				/*
 				 * Assign mapping of external file to this segdb only if:
@@ -1594,7 +1607,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 				{
 					if (uri->protocol == URI_FILE)
 					{
-						if (pg_strcasecmp(uri->hostname, p->hostname) != 0 && pg_strcasecmp(uri->hostname, p->address) != 0)
+						if (pg_strcasecmp(uri->hostname, p->config->hostname) != 0 && pg_strcasecmp(uri->hostname, p->config->address) != 0)
 							continue;
 					}
 
@@ -1788,7 +1801,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 				for (i = 0; i < db_info->total_segment_dbs && !found_match; i++)
 				{
 					CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-					int			segind = p->segindex;
+					int			segind = p->config->segindex;
 
 					/*
 					 * Assign mapping of external file to this segdb only if:
@@ -1877,7 +1890,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 					segdb_file_map[segind] = pstrdup(prefixed_command);
@@ -1894,7 +1907,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 				{
@@ -1904,7 +1917,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 					{
 						const char *hostname = strVal(lfirst(lc));
 
-						if (pg_strcasecmp(hostname, p->hostname) == 0)
+						if (pg_strcasecmp(hostname, p->config->hostname) == 0)
 						{
 							host_taken = true;
 							break;
@@ -1920,7 +1933,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 					{
 						segdb_file_map[segind] = pstrdup(prefixed_command);
 						visited_hosts = lappend(visited_hosts,
-										   makeString(pstrdup(p->hostname)));
+										   makeString(pstrdup(p->config->hostname)));
 					}
 				}
 			}
@@ -1934,10 +1947,10 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p) &&
-					pg_strcasecmp(hostname, p->hostname) == 0)
+					pg_strcasecmp(hostname, p->config->hostname) == 0)
 				{
 					segdb_file_map[segind] = pstrdup(prefixed_command);
 					match_found = true;
@@ -1961,7 +1974,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p) && segind == target_segid)
 				{
@@ -1996,7 +2009,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 				{
@@ -3188,6 +3201,18 @@ create_nestloop_plan(PlannerInfo *root,
 	if (prefetch)
 		join_plan->join.prefetch_inner = true;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->outerjoinpath &&
+		best_path->outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+
 	return join_plan;
 }
 
@@ -3513,6 +3538,25 @@ create_mergejoin_plan(PlannerInfo *root,
 
 	join_plan->join.prefetch_inner = prefetch;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+	/*
+	 * If inner motion is not under a Material or Sort node then there could
+	 * also be motion deadlock between inner and joinqual in mergejoin.
+	 */
+	if (best_path->jpath.innerjoinpath &&
+		best_path->jpath.innerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+
 	/* Costs of sort and material steps are included in path cost already */
 	copy_path_costsize(root, &join_plan->join.plan, &best_path->jpath.path);
 
@@ -3666,6 +3710,18 @@ create_hashjoin_plan(PlannerInfo *root,
 	{
 		join_plan->join.prefetch_inner = true;
 	}
+
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
 
 	copy_path_costsize(root, &join_plan->join.plan, &best_path->jpath.path);
 
@@ -6367,7 +6423,6 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 	bool		all_subplans_entry = true,
 				all_subplans_replicated = true;
 	int			numsegments = -1;
-	Query		*qry = root->parse;
 
 	if (node->operation == CMD_INSERT)
 	{
@@ -6560,9 +6615,7 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 				 * e.g. because the input was eliminated by constraint
 				 * exclusion, we can skip it.
 				 */
-				if ((is_split_update ||
-					 (targetPolicy->nattrs == 0 && qry->needReshuffle)) &&
-					 !is_dummy_plan(subplan))
+				if (is_split_update && !is_dummy_plan(subplan))
 				{
 					List	   *hashExprs;
 					List	   *hashOpfamilies;
@@ -6578,36 +6631,24 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 								 errmsg("cannot update distribution key columns in utility mode")));
 					}
 
-					new_subplan = (Plan *) make_splitupdate(root, (ModifyTable *) node, subplan, rte, !qry->needReshuffle);
+					new_subplan = (Plan *) make_splitupdate(root, (ModifyTable *) node, subplan, rte);
 
-					/*
-					 * if need reshuffle, add the Reshuffle node onto the
-					 * SplitUpdate node and Specify the explicit motion
-					 */
-					if(qry->needReshuffle)
+					hashExprs = getExprListFromTargetList(new_subplan->targetlist,
+														  targetPolicy->nattrs,
+														  targetPolicy->attrs,
+														  false);
+					hashOpfamilies = NIL;
+					for (i = 0; i < targetPolicy->nattrs; i++)
 					{
-						new_subplan = (Plan *) make_reshuffle(root, new_subplan, rte, rti);
-						request_explicit_motion(new_subplan, rti, root->glob->finalrtable);
+						hashOpfamilies = lappend_oid(hashOpfamilies,
+													 get_opclass_family(targetPolicy->opclasses[i]));
 					}
-					else
-					{
-						/* Only update hash keys and do not need reshuffle */
-						hashExprs = getExprListFromTargetList(new_subplan->targetlist,
-															  targetPolicy->nattrs,
-															  targetPolicy->attrs,
-															  false);
-						hashOpfamilies = NIL;
-						for (i = 0; i < targetPolicy->nattrs; i++)
-						{
-							hashOpfamilies = lappend_oid(hashOpfamilies,
-														 get_opclass_family(targetPolicy->opclasses[i]));
-						}
-						if (!repartitionPlan(new_subplan, false, false,
-											 hashExprs, hashOpfamilies,
-											 targetPolicy->numsegments))
-							ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
-											errmsg("Cannot parallelize that UPDATE yet")));
-					}
+					if (!repartitionPlan(new_subplan, false, false,
+										 hashExprs, hashOpfamilies,
+										 targetPolicy->numsegments))
+						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
+										errmsg("Cannot parallelize that UPDATE yet")));
+
 					lcp->data.ptr_value = new_subplan;
 				}
 				else
@@ -6660,21 +6701,6 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 			}
 			else if (targetPolicyType == POLICYTYPE_REPLICATED)
 			{
-				if (node->operation == CMD_UPDATE &&
-					qry->needReshuffle)
-				{
-					Plan	*new_subplan;
-
-					new_subplan = (Plan *) make_splitupdate(root, (ModifyTable *) node, subplan, rte, !qry->needReshuffle);
-					new_subplan = (Plan *) make_reshuffle(root, new_subplan, rte, rti);
-					request_explicit_motion(new_subplan, rti, root->glob->finalrtable);
-
-					lcp->data.ptr_value = new_subplan;
-
-					all_subplans_replicated = false;
-
-					continue;
-				}
 				node->action_col_idxes = lappend_int(node->action_col_idxes, -1);
 				node->ctid_col_idxes = lappend_int(node->ctid_col_idxes, -1);
 				node->oid_col_idxes = lappend_int(node->oid_col_idxes, 0);
@@ -6701,10 +6727,7 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 	if (all_subplans_entry)
 	{
 		mark_plan_entry((Plan *) node);
-		if(!qry->needReshuffle)
-		{
-			((Plan *) node)->flow->numsegments = numsegments;
-		}
+		((Plan *) node)->flow->numsegments = numsegments;
 	}
 	else if (all_subplans_replicated)
 	{
@@ -6712,10 +6735,7 @@ adjust_modifytable_flow(PlannerInfo *root, ModifyTable *node, List *is_split_upd
 	}
 	else
 	{
-		if(!qry->needReshuffle)
-			mark_plan_strewn((Plan *) node, numsegments);
-		else
-			mark_plan_strewn((Plan *) node, getgpsegmentCount());
+		mark_plan_strewn((Plan *) node, numsegments);
 
 		if (list_length(node->plans) == 1)
 		{
@@ -7073,19 +7093,6 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
                                                 ? subpath->parent->relids
                                                 : NULL,
                                               subplan);
-
-	/**
-	 * If plan has a flow node, and its child is projection capable,
-	 * then ensure all entries of hashExpr are in the targetlist.
-	 */
-	if (subplan->flow &&
-		subplan->flow->hashExprs &&
-		is_projection_capable_plan(subplan))
-	{
-		subplan->targetlist = add_to_flat_tlist_junk(subplan->targetlist,
-													 subplan->flow->hashExprs,
-													 true /* resjunk */);
-	}
 
 	return motion;
 }								/* cdbpathtoplan_create_motion_plan */

@@ -45,6 +45,7 @@
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/gdd.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -470,8 +471,8 @@ InitializeSessionUserIdStandalone(void)
 	 */
 	AssertState(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker
 				|| am_startup
-				|| (am_ftshandler && am_mirror)
-				|| am_global_deadlock_detector);
+				|| (IsFaultHandler && am_mirror)
+				|| (am_ftshandler && am_mirror));
 
 	/* call only once */
 	AssertState(!OidIsValid(AuthenticatedUserId));
@@ -1394,9 +1395,11 @@ void
 process_shared_preload_libraries(void)
 {
 	process_shared_preload_libraries_in_progress = true;
+
 	load_libraries(shared_preload_libraries_string,
 				   "shared_preload_libraries",
 				   false);
+
 	process_shared_preload_libraries_in_progress = false;
 }
 

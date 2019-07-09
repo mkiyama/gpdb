@@ -539,7 +539,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 				SetupInterconnect(estate);
 				UpdateMotionExpectedReceivers(estate->motionlayer_context, estate->es_sliceTable);
 
-				SIMPLE_FAULT_INJECTOR(QEGotSnapshotAndInterconnect);
+				SIMPLE_FAULT_INJECTOR("qe_got_snapshot_and_interconnect");
 				Assert(estate->interconnect_context);
 			}
 			PG_CATCH();
@@ -652,8 +652,8 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * work for this query.
 			 */
 			needDtxTwoPhase = ExecutorSaysTransactionDoesWrites();
-			dtmPreCommand("ExecutorStart", "(none)", queryDesc->plannedstmt,
-						  needDtxTwoPhase, true /* wantSnapshot */, queryDesc->extended_query );
+			if (needDtxTwoPhase)
+				setupTwoPhaseTransaction();
 
 			if (queryDesc->ddesc != NULL)
 			{
@@ -1020,7 +1020,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	if (estate->es_processed >= 10000 && estate->es_processed <= 1000000)
 	//if (estate->es_processed >= 10000)
 	{
-		if (FaultInjector_InjectFaultIfSet(ExecutorRunHighProcessed,
+		if (FaultInjector_InjectFaultIfSet("executor_run_high_processed",
 										   DDLNotSpecified,
 										   "" /* databaseName */,
 										   "" /* tableName */) == FaultInjectorTypeSkip)
@@ -1135,6 +1135,9 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 {
 	EState	   *estate;
 	MemoryContext oldcontext;
+	
+	/* GPDB: whether this is a inner query for extension usage */
+	bool		isInnerQuery;
 
 	/* sanity checks */
 	Assert(queryDesc != NULL);
@@ -1144,6 +1147,9 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 	Assert(estate != NULL);
 
 	Assert(NULL != queryDesc->plannedstmt && MEMORY_OWNER_TYPE_Undefined != queryDesc->memoryAccountId);
+
+	/* GPDB: Save SPI flag first in case the memory context of plannedstmt is cleaned up*/
+	isInnerQuery = estate->es_plannedstmt->metricsQueryType > TOP_LEVEL_QUERY;
 
 	START_MEMORY_ACCOUNT(queryDesc->memoryAccountId);
 
@@ -1262,7 +1268,7 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 
 	/* GPDB hook for collecting query info */
 	if (query_info_collect_hook)
-		(*query_info_collect_hook)(METRICS_QUERY_DONE, queryDesc);
+		(*query_info_collect_hook)(isInnerQuery ? METRICS_INNER_QUERY_DONE : METRICS_QUERY_DONE, queryDesc);
 
 	/* Reset queryDesc fields that no longer point to anything */
 	queryDesc->tupDesc = NULL;
@@ -1529,7 +1535,8 @@ static void
 ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 {
 	ListCell   *l;
-    int         rti;
+	int         rti;
+	char		relstorage;
 
 	/*
 	 * CREATE TABLE AS or SELECT INTO?
@@ -1558,6 +1565,14 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 			continue;
 
 		if ((rte->requiredPerms & (~ACL_SELECT)) == 0)
+			continue;
+
+		/*
+		 * External and foreign tables don't need two phase commit which is for
+		 * local mpp tables
+		 */
+		relstorage = get_rel_relstorage(rte->relid);
+		if (relstorage == RELSTORAGE_EXTERNAL || relstorage == RELSTORAGE_FOREIGN)
 			continue;
 
 		if (isTempNamespace(get_rel_namespace(rte->relid)))
@@ -1714,7 +1729,6 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 		}
 		estate->es_result_relations = resultRelInfos;
 		estate->es_num_result_relations = numResultRelations;
-
 		/* es_result_relation_info is NULL except when within ModifyTable */
 		estate->es_result_relation_info = NULL;
 
@@ -1731,22 +1745,75 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 		}
 		else
 		{
-			List	   *resultRelations = plannedstmt->resultRelations;
-			int			numResultRelations = list_length(resultRelations);
-			List	   *all_relids;
-			Oid		 relid = getrelid(linitial_int(plannedstmt->resultRelations), rangeTable);
+			List          *resultRelations = plannedstmt->resultRelations;
+			int            numResultRelations = list_length(resultRelations);
+			List          *all_relids = NIL;
+			Oid            relid = getrelid(linitial_int(resultRelations), rangeTable);
+			bool           containRoot = false;
 
 			if (rel_is_child_partition(relid))
-			{
 				relid = rel_partition_get_master(relid);
+			else
+			{
+				/*
+				 * If root partition is in result_partitions, it must be
+				 * the first element.
+				 */
+				containRoot = true;
 			}
 
 			estate->es_result_partitions = BuildPartitionNodeFromRoot(relid);
 
 			/*
-			 * list all the relids that may take part in this insert operation
+			 * List all the relids that may take part in this insert operation.
+			 * The logic here is that:
+			 *   - If root partition is in the resultRelations, all_relids
+			 *     contains the root and all its all_inheritors
+			 *   - Otherwise, all_relids is a map of result_partitions to
+			 *     get each element's relation oid.
 			 */
-			all_relids = find_all_inheritors(relid, NoLock, NULL);
+			if (containRoot)
+			{
+				/*
+				 * For partition table, INSERT plan only contains the root table
+				 * in the result relations, whereas DELETE and UPDATE contain
+				 * both root table and the partition tables.
+				 *
+				 * Without locking the partition relations on QD when INSERT
+				 * the following dead lock scenario may happen between INSERT and
+				 * AppendOnly VACUUM drop phase on the partition table:
+				 *
+				 * 1. AO VACUUM drop on QD: acquired AccessExclusiveLock
+				 * 2. INSERT on QE: acquired RowExclusiveLock
+				 * 3. AO VACUUM drop on QE: waiting for AccessExclusiveLock
+				 * 4. INSERT on QD: waiting for AccessShareLock at ExecutorEnd()
+				 *
+				 * 2 blocks 3, 1 blocks 4, 1 and 2 will not release their locks
+				 * until 3 and 4 proceed. Hence INSERT needs to Lock the partition
+				 * tables on QD here (before 2) to prevent this dead lock.
+				 *
+				 * FIXME: Ideally we may want to
+				 * 1) Lock the partition table during the parse stage just as when
+				 *    we lock the root oid
+				 * 2) Only lock the particular partition table that we are
+				 *    inserting into, right now we don't have that info here.
+				 */
+				lockmode = (operation == CMD_INSERT && rel_is_partitioned(relid)) ?
+					RowExclusiveLock : NoLock;
+				all_relids = find_all_inheritors(relid, lockmode, NULL);
+			}
+			else
+			{
+				ListCell *lc;
+				int       idx;
+
+				foreach(lc, resultRelations)
+				{
+					idx = lfirst_int(lc);
+					all_relids = lappend_oid(all_relids,
+											 getrelid(idx, rangeTable));
+				}
+			}
 
 			/*
 			 * We also assign a segno for a deletion operation.
@@ -1809,10 +1876,13 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 		Oid			relid;
 		Relation	relation;
 		ExecRowMark *erm;
+		LOCKMODE    lm;
 
 		/* ignore "parent" rowmarks; they are irrelevant at runtime */
 		if (rc->isParent)
 			continue;
+
+		lm = rc->canOptSelectLockingClause ? RowShareLock : ExclusiveLock;
 
 		/*
 		 * If you change the conditions under which rel locks are acquired
@@ -1820,24 +1890,27 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 		 */
 		switch (rc->markType)
 		{
-			case ROW_MARK_TABLE_EXCLUSIVE:
-				relid = getrelid(rc->rti, rangeTable);
-				relation = heap_open(relid, ExclusiveLock);
-				break;
-			case ROW_MARK_TABLE_SHARE:
-				relid = getrelid(rc->rti, rangeTable);
-				relation = heap_open(relid, RowShareLock);
-				break;
+			/*
+			 * Greenplum specific behavior:
+			 * The implementation of select statement with locking clause
+			 * (for update | no key update | share | key share) in postgres
+			 * is to hold RowShareLock on tables during parsing stage, and
+			 * generate a LockRows plan node for executor to lock the tuples.
+			 * It is not easy to lock tuples in Greenplum database, since
+			 * tuples may be fetched through motion nodes.
+			 *
+			 * But when Global Deadlock Detector is enabled, and the select
+			 * statement with locking clause contains only one table, we are
+			 * sure that there are no motions. For such simple cases, we could
+			 * make the behavior just the same as Postgres.
+			 */
 			case ROW_MARK_EXCLUSIVE:
 			case ROW_MARK_NOKEYEXCLUSIVE:
 			case ROW_MARK_SHARE:
 			case ROW_MARK_KEYSHARE:
-				relid = getrelid(rc->rti, rangeTable);
-				relation = heap_open(relid, RowShareLock);
-				break;
 			case ROW_MARK_REFERENCE:
 				relid = getrelid(rc->rti, rangeTable);
-				relation = heap_open(relid, AccessShareLock);
+				relation = heap_open(relid, lm);
 				break;
 			case ROW_MARK_COPY:
 				/* there's no real table here ... */
@@ -2359,6 +2432,7 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_FdwState = NULL;
 	resultRelInfo->ri_ConstraintExprs = NULL;
 	resultRelInfo->ri_junkFilter = NULL;
+	resultRelInfo->ri_segid_attno = InvalidAttrNumber;
 	resultRelInfo->ri_projectReturning = NULL;
 	resultRelInfo->ri_aoInsertDesc = NULL;
 	resultRelInfo->ri_aocsInsertDesc = NULL;
@@ -2935,7 +3009,7 @@ ExecutePlan(EState *estate,
 			 */
 			if (estate->es_processed >= 10000 && estate->es_processed <= 1000000)
 			{
-				if (FaultInjector_InjectFaultIfSet(ExecutorRunHighProcessed,
+				if (FaultInjector_InjectFaultIfSet("executor_run_high_processed",
 												   DDLNotSpecified,
 												   "" /* databaseName */,
 												   "" /* tableName */) == FaultInjectorTypeSkip)
@@ -3119,28 +3193,6 @@ ExecWithCheckOptions(ResultRelInfo *resultRelInfo,
 	{
 		WithCheckOption *wco = (WithCheckOption *) lfirst(l1);
 		ExprState  *wcoExpr = (ExprState *) lfirst(l2);
-
-		/*
-		 * GPDB_94_MERGE_FIXME
-		 * When we update the view, we need to check if the updated tuple belongs
-		 * to the view. Sometimes we need to execute a subplan to help check.
-		 * The subplan is executed under the update or delete node on segment.
-		 * But we can't correctly execute a mpp subplan in the segment. So let's
-		 * disable the check first.
-		 */
-		ListCell *l;
-		bool is_subplan = false;
-		foreach(l, (List*)wcoExpr)
-		{
-			ExprState  *clause = (ExprState *) lfirst(l);
-			if (*(clause->evalfunc) == (ExprStateEvalFunc)ExecAlternativeSubPlan)
-			{
-				is_subplan = true;
-				break;
-			}
-		}
-		if (is_subplan)
-			continue;
 
 		/*
 		 * WITH CHECK OPTION checks are intended to ensure that the new tuple
@@ -4900,7 +4952,7 @@ FillSliceTable(EState *estate, PlannedStmt *stmt)
 			 * segments, the catalog changes must be dispatched to all the
 			 * segments, so a full gang is required.
 			 */
-			numsegments = GP_POLICY_ALL_NUMSEGMENTS;
+			numsegments = getgpsegmentCount();
 		else
 			/* FIXME: ->lefttree or planTree? */
 			numsegments = stmt->planTree->flow->numsegments;

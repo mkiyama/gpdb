@@ -24,6 +24,7 @@
 #include <sys/select.h>
 #endif
 
+#include "access/genam.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_auth_time_constraint.h"
@@ -97,7 +98,7 @@ static int	auth_peer(hbaPort *port);
 
 static int	CheckPAMAuth(Port *port, char *user, char *password);
 static int pam_passwd_conv_proc(int num_msg, const struct pam_message ** msg,
-                     struct pam_response ** resp, void *appdata_ptr);
+					 struct pam_response ** resp, void *appdata_ptr);
 
 static struct pam_conv pam_passw_conv = {
 	&pam_passwd_conv_proc,
@@ -413,7 +414,8 @@ is_internal_gpdb_conn(Port *port)
 	 * This is an internal connection if major version is three and we've set
 	 * the upper bits to 7.
 	 */
-	if (PG_PROTOCOL_MAJOR(port->proto) == 3 && port->proto >> 28 == 7)
+	if (PG_PROTOCOL_MAJOR(port->proto) == 3 &&
+			IS_GPDB_INTERNAL_PROTOCOL(port->proto))
 		return true;
 	else
 		return false;

@@ -131,7 +131,7 @@ installdirs-tests: installdirs
 
 # Get some extra C modules from contrib/spi and contrib/dummy_seclabel...
 
-all: refint$(DLSUFFIX) autoinc$(DLSUFFIX) dummy_seclabel$(DLSUFFIX) tablespace-setup includecheck hooktest query_info_hook_test
+all: refint$(DLSUFFIX) autoinc$(DLSUFFIX) dummy_seclabel$(DLSUFFIX) tablespace-setup hooktest query_info_hook_test
 
 refint$(DLSUFFIX): $(top_builddir)/contrib/spi/refint$(DLSUFFIX)
 	cp $< $@
@@ -160,13 +160,20 @@ submake-contrib-dummy_seclabel:
 
 .PHONY: tablespace-setup
 tablespace-setup:
-	rm -rf ./testtablespace ./testtablespace_otherloc ./testtablespace_unlogged
-	mkdir ./testtablespace ./testtablespace_otherloc ./testtablespace_unlogged
-
-# Check for include files that are not being shipped
-.PHONY: includecheck
-includecheck:
-	$(srcdir)/checkinc.py
+	rm -rf ./testtablespace ./testtablespace_*
+	mkdir -p ./testtablespace ./testtablespace_otherloc ./testtablespace_unlogged \
+	./testtablespace_existing_version_dir/1/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/2/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/3/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/4/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/5/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/6/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/7/GPDB_99_399999991/ \
+	./testtablespace_existing_version_dir/8/GPDB_99_399999991/ \
+        ./testtablespace_1111111111222222222233333333334444444444555555555566666666667777777777888888888899999999990000000000/ \
+	./testtablespace_default_tablespace \
+	./testtablespace_temp_tablespace \
+	./testtablespace_database_tablespace
 
 .PHONY: hooktest
 hooktest:
@@ -180,7 +187,7 @@ query_info_hook_test:
 ## Run tests
 ##
 
-REGRESS_OPTS = --dlpath=. --init-file=$(srcdir)/init_file $(EXTRA_REGRESS_OPTS)
+REGRESS_OPTS = --dlpath=. --init-file=$(srcdir)/init_file $(EXTRA_REGRESS_OPTS) --load-extension=gp_inject_fault
 
 check: all tablespace-setup
 	$(pg_regress_check) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(MAXCONNOPT) $(TEMP_CONF) $(EXTRA_TESTS)
@@ -193,7 +200,7 @@ check-tests: all tablespace-setup
 installcheck: installcheck-good
 
 installcheck-good: all twophase_pqexecparams hooktest query_info_hook_test
-	$(pg_regress_installcheck) $(REGRESS_OPTS)  --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --exclude-tests=$(EXCLUDE_TESTS) --ao-dir=uao $(EXTRA_TESTS)
+	$(pg_regress_installcheck) $(REGRESS_OPTS)  --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --ao-dir=uao $(EXTRA_TESTS)
 
 installcheck-parallel: all tablespace-setup
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(MAXCONNOPT) $(EXTRA_TESTS)
@@ -247,8 +254,7 @@ clean distclean maintainer-clean: clean-lib
 	rm -f pg_regress_main.o pg_regress.o pg_regress$(X)
 # things created by various check targets
 	rm -f $(output_files) $(input_files)
-	rm -rf testtablespace
-	rm -rf testtablespace_otherloc
+	rm -rf ./testtablespace ./testtablespace_*
 	rm -rf $(pg_regress_clean_files)
 	rm -f data/pg_class32.data
 	rm -f gmon.out

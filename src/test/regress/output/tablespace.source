@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/WARNING:  tablespace symlink path is too long for TAR/
+-- m/DETAIL:  The symlinked path \".*\" will be truncated to 100 characters when sending a TAR to the utilities \(e.g. pg_basebackup\)/
+-- end_matchignore
 -- create a tablespace using WITH clause
 CREATE TABLESPACE testspacewith LOCATION '@testtablespace@' WITH (some_nonexistent_parameter = true); -- fail
 ERROR:  unrecognized parameter "some_nonexistent_parameter"
@@ -78,6 +82,8 @@ Tablespace: "testspace"
 SET default_tablespace TO testspace;
 -- tablespace should not change if no rewrite
 ALTER TABLE testschema.test_default_tab ALTER id TYPE bigint;
+ERROR:  cannot alter indexed column
+HINT:  DROP the index first, and recreate it after the ALTER
 \d testschema.test_index1
 Index "testschema.test_index1"
  Column |  Type  | Definition 
@@ -102,18 +108,20 @@ SELECT * FROM testschema.test_default_tab;
 
 -- tablespace should not change even if there is an index rewrite
 ALTER TABLE testschema.test_default_tab ALTER id TYPE int;
+ERROR:  cannot alter indexed column
+HINT:  DROP the index first, and recreate it after the ALTER
 \d testschema.test_index1
 Index "testschema.test_index1"
- Column |  Type   | Definition 
---------+---------+------------
- id     | integer | id
+ Column |  Type  | Definition 
+--------+--------+------------
+ id     | bigint | id
 btree, for table "testschema.test_default_tab"
 
 \d testschema.test_index2
 Index "testschema.test_index2"
- Column |  Type   | Definition 
---------+---------+------------
- id     | integer | id
+ Column |  Type  | Definition 
+--------+--------+------------
+ id     | bigint | id
 btree, for table "testschema.test_default_tab"
 Tablespace: "testspace"
 
@@ -128,23 +136,27 @@ SELECT * FROM testschema.test_default_tab;
 SET default_tablespace TO '';
 -- tablespace should not change if no rewrite
 ALTER TABLE testschema.test_default_tab ALTER id TYPE int;
+ERROR:  cannot alter indexed column
+HINT:  DROP the index first, and recreate it after the ALTER
 \d testschema.test_index1
 Index "testschema.test_index1"
- Column |  Type   | Definition 
---------+---------+------------
- id     | integer | id
+ Column |  Type  | Definition 
+--------+--------+------------
+ id     | bigint | id
 btree, for table "testschema.test_default_tab"
 
 \d testschema.test_index2
 Index "testschema.test_index2"
- Column |  Type   | Definition 
---------+---------+------------
- id     | integer | id
+ Column |  Type  | Definition 
+--------+--------+------------
+ id     | bigint | id
 btree, for table "testschema.test_default_tab"
 Tablespace: "testspace"
 
 -- tablespace should not change even if there is an index rewrite
 ALTER TABLE testschema.test_default_tab ALTER id TYPE bigint;
+ERROR:  cannot alter indexed column
+HINT:  DROP the index first, and recreate it after the ALTER
 \d testschema.test_index1
 Index "testschema.test_index1"
  Column |  Type  | Definition 
@@ -197,11 +209,41 @@ ALTER TABLE testschema.tablespace_acl OWNER TO tablespace_testuser2;
 SET SESSION ROLE tablespace_testuser2;
 CREATE TABLE tablespace_table (i int) TABLESPACE testspace; -- fail
 ERROR:  permission denied for tablespace testspace
---start_ignore
 ALTER TABLE testschema.tablespace_acl ALTER c TYPE bigint;
---end_ignore
+ERROR:  cannot alter indexed column
+HINT:  DROP the index first, and recreate it after the ALTER
 RESET ROLE;
 ALTER TABLESPACE testspace RENAME TO testspace_renamed;
+-- Test that default_tablespace GUC is honored even after gang reset.
+CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
+AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+SET default_tablespace TO testspace_renamed;
+-- Destroy the QD-QE libpq connections.
+select cleanupAllGangs();
+ cleanupallgangs 
+-----------------
+ t
+(1 row)
+
+-- New gang will be setup to dispatch this DDL and default_tablespace
+-- should be set to testspace_renamed on QEs.
+CREATE TABLE tablespace_table1(a int, b int) DISTRIBUTED BY (a);
+SELECT spcname FROM pg_class c, pg_tablespace t
+WHERE c.reltablespace = t.oid and c.relname = 'tablespace_table1';
+      spcname      
+-------------------
+ testspace_renamed
+(1 row)
+
+SELECT spcname FROM gp_dist_random('pg_class') c, pg_tablespace t
+WHERE c.reltablespace = t.oid and c.relname = 'tablespace_table1';
+      spcname      
+-------------------
+ testspace_renamed
+ testspace_renamed
+ testspace_renamed
+(3 rows)
+
 ALTER TABLE ALL IN TABLESPACE testspace_renamed SET TABLESPACE pg_default;
 ALTER INDEX ALL IN TABLESPACE testspace_renamed SET TABLESPACE pg_default;
 -- Should show notice that nothing was done

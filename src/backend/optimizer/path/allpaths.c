@@ -113,7 +113,8 @@ static void check_output_expressions(Query *subquery,
 						 pushdown_safety_info *safetyInfo);
 static void compare_tlist_datatypes(List *tlist, List *colTypes,
 						pushdown_safety_info *safetyInfo);
-static bool qual_is_pushdown_safe(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual,
+static bool targetIsInAllPartitionLists(TargetEntry *tle, Query *query);
+static bool qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 					  pushdown_safety_info *safetyInfo);
 static void subquery_push_qual(Query *subquery,
 				   RangeTblEntry *rte, Index rti, Node *qual);
@@ -2103,7 +2104,7 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
 			Node	   *clause = (Node *) rinfo->clause;
 
 			if (!rinfo->pseudoconstant &&
-				qual_is_pushdown_safe(subquery, rte, rti, clause, &safetyInfo))
+				qual_is_pushdown_safe(subquery, rti, clause, &safetyInfo))
 			{
 				/* Push it down */
 				subquery_push_qual(subquery, rte, rti, clause);
@@ -2134,19 +2135,22 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
  * 1. If the subquery has a LIMIT clause, we must not push down any quals,
  * since that could change the set of rows returned.
  *
- * 2. If the subquery contains any window functions, we can't push quals
- * into it, because that could change the results.
- *
- * 3. If the subquery contains EXCEPT or EXCEPT ALL set ops we cannot push
+ * 2. If the subquery contains EXCEPT or EXCEPT ALL set ops we cannot push
  * quals into it, because that could change the results.
  *
- * 4. If the subquery uses DISTINCT, we cannot push volatile quals into it.
+ * 3. If the subquery uses DISTINCT, we cannot push volatile quals into it.
  * This is because upper-level quals should semantically be evaluated only
  * once per distinct row, not once per original row, and if the qual is
  * volatile then extra evaluations could change the results.  (This issue
  * does not apply to other forms of aggregation such as GROUP BY, because
  * when those are present we push into HAVING not WHERE, so that the quals
  * are still applied after aggregation.)
+ *
+ * 4. If the subquery contains window functions, we cannot push volatile quals
+ * into it.  The issue here is a bit different from DISTINCT: a volatile qual
+ * might succeed for some rows of a window partition and fail for others,
+ * thereby changing the partition contents and thus the window functions'
+ * results for rows that remain.
  *
  * 5. Do not push down quals if the subquery is a grouping extension
  * query, since this may change the meaning of the query.
@@ -2172,6 +2176,18 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
  * more than we save by eliminating rows before the DISTINCT step.  But it
  * would be very hard to estimate that at this stage, and in practice pushdown
  * seldom seems to make things worse, so we ignore that problem too.
+ *
+ * Note: likewise, pushing quals into a subquery with window functions is a
+ * bit dubious: the quals might remove some rows of a window partition while
+ * leaving others, causing changes in the window functions' results for the
+ * surviving rows.  We insist that such a qual reference only partitioning
+ * columns, but again that only protects us if the qual does not distinguish
+ * values that the partitioning equality operator sees as equal.  The risks
+ * here are perhaps larger than for DISTINCT, since no de-duplication of rows
+ * occurs and thus there is no theoretical problem with such a qual.  But
+ * we'll do this anyway because the potential performance benefits are very
+ * large, and we've seen no field complaints about the longstanding comparable
+ * behavior with DISTINCT.
  */
 static bool
 subquery_is_pushdown_safe(Query *subquery, Query *topquery,
@@ -2183,18 +2199,14 @@ subquery_is_pushdown_safe(Query *subquery, Query *topquery,
 	if (subquery->limitOffset != NULL || subquery->limitCount != NULL)
 		return false;
 
-	/* Targetlist must not contain SRF */
-	if (expression_returns_set((Node *) subquery->targetList))
-		return false;
+	/* Check points 3 and 4 */
+	if (subquery->distinctClause || subquery->hasWindowFuncs)
+		safetyInfo->unsafeVolatile = true;
 
-	/* See point 5. */
+	/* Check point 5 */
 	if (subquery->groupClause != NULL &&
 		contain_extended_grouping(subquery->groupClause))
 		return false;
-
-	/* Check point 4 */
-	if (subquery->distinctClause)
-		safetyInfo->unsafeVolatile = true;
 
 	/*
 	 * If we're at a leaf query, check for unsafe expressions in its target
@@ -2249,7 +2261,7 @@ recurse_pushdown_safe(Node *setOp, Query *topquery,
 	{
 		SetOperationStmt *op = (SetOperationStmt *) setOp;
 
-		/* EXCEPT is no good (point 3 for subquery_is_pushdown_safe) */
+		/* EXCEPT is no good (point 2 for subquery_is_pushdown_safe) */
 		if (op->op == SETOP_EXCEPT)
 			return false;
 		/* Else recurse */
@@ -2289,6 +2301,15 @@ recurse_pushdown_safe(Node *setOp, Query *topquery,
  * there are no non-DISTINCT output columns, so we needn't check.  Note that
  * subquery_is_pushdown_safe already reported that we can't use volatile
  * quals if there's DISTINCT or DISTINCT ON.)
+ *
+ * 4. If the subquery has any window functions, we must not push down quals
+ * that reference any output columns that are not listed in all the subquery's
+ * window PARTITION BY clauses.  We can push down quals that use only
+ * partitioning columns because they should succeed or fail identically for
+ * every row of any one window partition, and totally excluding some
+ * partitions will not change a window function's results for remaining
+ * partitions.  (Again, this also requires nonvolatile quals, but
+ * subquery_is_pushdown_safe handles that.)
  */
 static void
 check_output_expressions(Query *subquery, pushdown_safety_info *safetyInfo)
@@ -2329,37 +2350,20 @@ check_output_expressions(Query *subquery, pushdown_safety_info *safetyInfo)
 			continue;
 		}
 
+		/* If subquery uses window functions, check point 4 */
+		if (subquery->hasWindowFuncs &&
+			!targetIsInAllPartitionLists(tle, subquery))
+		{
+			/* not present in all PARTITION BY clauses, so mark it unsafe */
+			safetyInfo->unsafeColumns[tle->resno] = true;
+			continue;
+		}
 
 		/* Refuse subplans */
 		if (contain_subplans((Node *) tle->expr))
 		{
 			safetyInfo->unsafeColumns[tle->resno] = true;
-			break;
-		}
-
-		/* MPP-19244:
-		 * if subquery has WINDOW clause, it is safe to push-down quals that
-		 * use columns included in the Partition-By clauses of every OVER
-		 * clause in the subquery
-		 */
-		if (subquery->windowClause != NIL)
-		{
-			ListCell   *lc;
-
-			foreach(lc, subquery->windowClause)
-			{
-				WindowClause *wc = (WindowClause *) lfirst(lc);
-
-				if (!targetIsInSortList(tle, InvalidOid, wc->partitionClause))
-				{
-					/*
-					 * qual's columns are not included in Partition-By clause,
-					 * so fail
-					 */
-					safetyInfo->unsafeColumns[tle->resno] = true;
-					break;
-				}
-			}
+			continue;
 		}
 	}
 }
@@ -2405,80 +2409,29 @@ compare_tlist_datatypes(List *tlist, List *colTypes,
 }
 
 /*
- * does qual include a reference to window function node?
+ * targetIsInAllPartitionLists
+ *		True if the TargetEntry is listed in the PARTITION BY clause
+ *		of every window defined in the query.
+ *
+ * It would be safe to ignore windows not actually used by any window
+ * function, but it's not easy to get that info at this stage; and it's
+ * unlikely to be useful to spend any extra cycles getting it, since
+ * unreferenced window definitions are probably infrequent in practice.
  */
 static bool
-qual_contains_window_function(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
+targetIsInAllPartitionLists(TargetEntry *tle, Query *query)
 {
-	bool result = false;
-	if (NULL != subquery && NIL != subquery->windowClause)
+	ListCell   *lc;
+
+	foreach(lc, query->windowClause)
 	{
-		/*
-		 * qual needs to be resolved first to map qual columns
-		 * to the underlying set of produced columns,
-		 * e.g., if we work on a setop child
-		 */
-		Node	   *qualNew;
+		WindowClause *wc = (WindowClause *) lfirst(lc);
 
-		qualNew = ReplaceVarsFromTargetList(qual, rti, 0, rte,
-											subquery->targetList,
-											REPLACEVARS_REPORT_ERROR, 0,
-											NULL);
-
-		result = contain_window_function(qualNew);
-		pfree(qualNew);
+		if (!targetIsInSortList(tle, InvalidOid, wc->partitionClause))
+			return false;
 	}
-
-	return result;
-}
-
-
-/*
- * is a particular qual safe to push down under set operation?
- * if the qual contains references to windowref node, its not
- * safe to push it down.
- */
-static bool
-qual_is_pushdown_safe_set_operation(Query *query, RangeTblEntry *rte, Index rti, Node *qual)
-{
-
-	Query *subquery = NULL;
-	/*
-	 * In case of CTE, cte->query is passed in as query, so the vars
-	 * should be resolved via the input query
-	 */
-	if (rte->rtekind == RTE_CTE)
-		subquery = query;
-	else
-		subquery = rte->subquery;
-	Assert(subquery);
-
-	SetOperationStmt *setop = (SetOperationStmt *)subquery->setOperations;
-	Assert(setop);
-
-	/*
-	 * for queries of the form:
-	 *   SELECT * from (SELECT max(i) over () as w from X Union Select 1 as w) as foo where w > 0
-	 * the qual (w > 0) is not push_down_safe since it uses a window ref
-	 *
-	 * we check if this is the case for either left or right set operation inputs.
-	 * The check for window function is only at the top level of the set
-	 * operation inputs. It does not recurse deep inside the set operation
-	 * child for resolving the qual reference for queries of the form:
-	 *  SELECT w FROM ( (SELECT w FROM Y, Z, (SELECT max(i) over () as w from X) AS bar) UNION SELECT 1 AS w) AS foo WHERE w > 0;
-	 *
-	 */
-	RangeTblEntry *rteLeft = rt_fetch(((RangeTblRef *)setop->larg)->rtindex, subquery->rtable);
-	RangeTblEntry *rteRight = rt_fetch(((RangeTblRef *)setop->rarg)->rtindex, subquery->rtable);
-	if (qual_contains_window_function(rteLeft->subquery, rte, rti, qual) ||
-		qual_contains_window_function(rteRight->subquery, rte, rti, qual))
-	{
-		return false;
-	}
-
 	return true;
 }
-
 
 /*
  * qual_is_pushdown_safe - is a particular qual safe to push down?
@@ -2504,7 +2457,7 @@ qual_is_pushdown_safe_set_operation(Query *query, RangeTblEntry *rte, Index rti,
  * found to be unsafe to reference by subquery_is_pushdown_safe().
  */
 static bool
-qual_is_pushdown_safe(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual,
+qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 					  pushdown_safety_info *safetyInfo)
 {
 	bool		safe = true;
@@ -2530,11 +2483,7 @@ qual_is_pushdown_safe(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual
 	 * the moment we could never see any in a qual anyhow.  (The same applies
 	 * to aggregates, which we check for in pull_var_clause below.)
 	 */
-	if (NULL != subquery->setOperations &&
-		!qual_is_pushdown_safe_set_operation(subquery, rte, rti, qual))
-	{
-		return false;
-	}
+	Assert(!contain_window_function(qual));
 
 	/*
 	 * Examine all Vars used in clause; since it's a restriction clause, all

@@ -1066,14 +1066,14 @@ make_one_stage_agg_plan(PlannerInfo *root,
 			result_plan = (Plan *) make_motion_gather_to_QE(root, result_plan, current_pathkeys);
 			result_plan->total_cost +=
 				incremental_motion_cost(result_plan->plan_rows,
-										result_plan->plan_rows * root->config->cdbpath_segments);
+										result_plan->plan_rows * result_plan->flow->numsegments);
 			break;
 
 		case MPP_GRP_PREP_FOCUS_QD:
 			result_plan = (Plan *) make_motion_gather_to_QD(root, result_plan, current_pathkeys);
 			result_plan->total_cost +=
 				incremental_motion_cost(result_plan->plan_rows,
-										result_plan->plan_rows * root->config->cdbpath_segments);
+										result_plan->plan_rows * result_plan->flow->numsegments);
 			break;
 
 		case MPP_GRP_PREP_HASH_DISTINCT:
@@ -1500,7 +1500,7 @@ make_two_stage_agg_plan(PlannerInfo *root,
 			result_plan = (Plan *) make_motion_gather_to_QE(root, result_plan, NULL);
 			result_plan->total_cost +=
 				incremental_motion_cost(result_plan->plan_rows,
-										result_plan->plan_rows * root->config->cdbpath_segments);
+										result_plan->plan_rows * result_plan->flow->numsegments);
 			break;
 
 		case MPP_GRP_TYPE_NONE:
@@ -2303,7 +2303,7 @@ make_plan_for_one_dqa(PlannerInfo *root, MppGroupContext *ctx, int dqa_index,
 		result_plan = (Plan *) make_motion_gather_to_QE(root, result_plan, NULL);
 		result_plan->total_cost +=
 			incremental_motion_cost(result_plan->plan_rows,
-									result_plan->plan_rows * root->config->cdbpath_segments);
+									result_plan->plan_rows * result_plan->flow->numsegments);
 	}
 
 	result_plan = add_second_stage_agg(root,
@@ -4753,7 +4753,7 @@ reconstruct_pathkeys(PlannerInfo *root, List *pathkeys, int *resno_map,
 				 */
 				new_eclass = get_eclass_for_sort_expr(root,
 													  new_tle->expr,
-													  NULL, /* GPDB_94_MERGE_FIXME: required_outer. Is NULL ok? */
+													  em->em_nullable_relids,
 													  pathkey->pk_eclass->ec_opfamilies,
 													  em->em_datatype,
 													  exprCollation((Node *) tle->expr),
@@ -4852,8 +4852,8 @@ cost_1phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 		case MPP_GRP_PREP_FOCUS_QD:
 			input_dummy.total_cost +=
 				incremental_motion_cost(input_dummy.plan_rows,
-										input_dummy.plan_rows * root->config->cdbpath_segments);
-			input_dummy.plan_rows = input_dummy.plan_rows * root->config->cdbpath_segments;
+										input_dummy.plan_rows * CdbPathLocus_NumSegments(info->input_path->locus));
+			input_dummy.plan_rows = input_dummy.plan_rows * CdbPathLocus_NumSegments(info->input_path->locus);
 			break;
 		default:
 			break;
@@ -5058,7 +5058,7 @@ cost_2phase_aggregation(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *in
 		case MPP_GRP_TYPE_PLAIN_2STAGE: /* Gather */
 			input_dummy.total_cost +=
 				incremental_motion_cost(input_dummy.plan_rows,
-										input_dummy.plan_rows * root->config->cdbpath_segments);
+										input_dummy.plan_rows * CdbPathLocus_NumSegments(info->input_path->locus));
 			break;
 		default:
 			ereport(ERROR,
@@ -5369,7 +5369,7 @@ initAggPlanInfo(AggPlanInfo *info, Path *input_path, Plan *input_plan)
 	if (input_path != NULL)
 		info->input_locus = input_path->locus;
 	else
-		CdbPathLocus_MakeNull(&info->input_locus, __GP_POLICY_EVIL_NUMSEGMENTS);
+		CdbPathLocus_MakeNull(&info->input_locus, GP_POLICY_INVALID_NUMSEGMENTS());
 
 	info->group_type = MPP_GRP_TYPE_BASEPLAN;
 	info->group_prep = MPP_GRP_PREP_NONE;

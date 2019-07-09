@@ -33,7 +33,7 @@ More information can be found on the [project website](https://greenplum.org/).
 ## Building Greenplum Database with GPORCA
 GPORCA is a cost-based optimizer which is used by Greenplum Database in
 conjunction with the PostgreSQL planner.  It is also known as just ORCA,
-and Pivotal Query Optimizer (PQO). The code for GPORCA resides in a
+and Pivotal Optimizer. The code for GPORCA resides in a
 separate repository, below are steps outlining how to build Greenplum with
 GPORCA enabled.
 
@@ -100,7 +100,7 @@ Once build and started, run `psql` and check the GPOPT (e.g. GPORCA) version:
 select gp_opt_version();
 ```
 
-To turn GPORCA off and use legacy planner for query optimization:
+To turn GPORCA off and use Postgres planner for query optimization:
 ```
 set optimizer=off;
 ```
@@ -158,7 +158,7 @@ make distclean
 ### Building GPDB with PXF
 
 PXF is an extension framework for GPDB to enable fast access to external hadoop datasets.
-Refer to [PXF extension](gpAux/extensions/pxf/README.md) for more information.
+Refer to [PXF extension](gpcontrib/pxf/README.md) for more information.
 
 Currently, GPDB is built with PXF by default (--enable-pxf is on).
 In order to build GPDB without pxf, simply invoke `./configure` with additional option `--disable-pxf`.
@@ -179,6 +179,11 @@ gpperfmon is dependent on several libraries like apr, apu, and libsigar
 GPDB supports Python3 with plpython3u UDF
 
 See [how to enable Python3](src/pl/plpython/README.md) for details.
+
+
+### Building GPDB client tools on Windows
+
+See [Building GPDB client tools on Windows](README.windows.md) for details.
 
 ## Development with Docker
 
@@ -352,12 +357,18 @@ Feel free to ask on the mailing list to learn more about the Greenplum release p
 
 Once you are ready to share your work with the Greenplum core team and the rest of
 the Greenplum community, you should push all the commits to a branch in your own
-repository forked from the official Greenplum and [send us a pull request](https://help.github.com/articles/about-pull-requests/).
+repository forked from the official Greenplum and
+[send us a pull request](https://help.github.com/articles/about-pull-requests/).
 
-For now, we require all pull requests to be submitted against the main master
-branch, but over time, once there are many supported open source releases of Greenplum
-in the wild, you may decide to submit your pull requests against an active
-release branch if the change is only applicable to a given release.
+We welcome submissions which are work in-progress in order to get feedback early
+in the development process.  When opening the pull request, select "Draft" in
+the dropdown menu when creating the PR to clearly mark the intent of the pull
+request. Prefixing the title with "WIP:" is also good practice.
+
+All new features should be submitted against the main master branch. Bugfixes
+should too be submitted against master unless they only exist in a supported
+back-branch. If the bug exists in both master and back-branches, explain this
+in the PR description.
 
 ### Validation checks and CI
 

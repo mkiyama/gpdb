@@ -26,6 +26,7 @@
 #include "pgstat.h"
 #include "access/transam.h"
 #include "access/xact.h"
+#include "catalog/catalog.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_type.h"
 #include "cdb/memquota.h"
@@ -2099,4 +2100,31 @@ broken_int4out(PG_FUNCTION_ARGS)
 				 errdetail("The trigger value was 1234")));
 
 	return DirectFunctionCall1(int4out, Int32GetDatum(arg));
+}
+
+PG_FUNCTION_INFO_V1(insert_noop_xlog_record);
+Datum
+insert_noop_xlog_record(PG_FUNCTION_ARGS)
+{
+	char *no_op_string = "no-op";
+
+	XLogRecData rdata = {};
+	/* Xlog records of length = 0 are disallowed and cause a panic. Thus,
+	 * supplying a dummy non-zero length
+	 */
+	rdata.data = no_op_string;
+	rdata.len = strlen(no_op_string);
+	rdata.buffer = InvalidBuffer;
+	rdata.next = NULL;
+
+	XLogFlush(XLogInsert(RM_XLOG_ID, XLOG_NOOP, &rdata));
+
+	PG_RETURN_VOID();
+}
+
+PG_FUNCTION_INFO_V1(get_tablespace_version_directory_name);
+Datum
+get_tablespace_version_directory_name(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_TEXT_P(CStringGetTextDatum(GP_TABLESPACE_VERSION_DIRECTORY));
 }

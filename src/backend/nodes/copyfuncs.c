@@ -132,6 +132,7 @@ _copyPlannedStmt(const PlannedStmt *from)
 
 	COPY_NODE_FIELD(intoClause);
 	COPY_NODE_FIELD(copyIntoClause);
+	COPY_SCALAR_FIELD(metricsQueryType);
 
 	return newnode;
 }
@@ -870,6 +871,7 @@ CopyJoinFields(const Join *from, Join *newnode)
 	CopyPlanFields((const Plan *) from, (Plan *) newnode);
 
     COPY_SCALAR_FIELD(prefetch_inner);
+	COPY_SCALAR_FIELD(prefetch_joinqual);
 
 	COPY_SCALAR_FIELD(jointype);
 	COPY_NODE_FIELD(joinqual);
@@ -1000,7 +1002,8 @@ _copyMaterial(const Material *from)
 	 * copy node superclass fields
 	 */
 	CopyPlanFields((const Plan *) from, (Plan *) newnode);
-    COPY_SCALAR_FIELD(cdb_strict);
+	COPY_SCALAR_FIELD(cdb_strict);
+	COPY_SCALAR_FIELD(cdb_shield_child_from_rescans);
 	COPY_SCALAR_FIELD(share_type);
 	COPY_SCALAR_FIELD(share_id);
 	COPY_SCALAR_FIELD(driver_slice);
@@ -1256,6 +1259,7 @@ _copyPlanRowMark(const PlanRowMark *from)
 	COPY_SCALAR_FIELD(markType);
 	COPY_SCALAR_FIELD(noWait);
 	COPY_SCALAR_FIELD(isParent);
+	COPY_SCALAR_FIELD(canOptSelectLockingClause);
 
 	return newnode;
 }
@@ -1348,28 +1352,6 @@ _copySplitUpdate(const SplitUpdate *from)
 	COPY_NODE_FIELD(insertColIdx);
 	COPY_NODE_FIELD(deleteColIdx);
 
-	return newnode;
-}
-
-/*
- * _copyReshuffle
- */
-static Reshuffle *
-_copyReshuffle(const Reshuffle *from)
-{
-	Reshuffle *newnode = makeNode(Reshuffle);
-
-	/*
-	 * copy node superclass fields
-	 */
-	CopyPlanFields((Plan *) from, (Plan *) newnode);
-
-	COPY_SCALAR_FIELD(tupleSegIdx);
-	COPY_SCALAR_FIELD(numPolicyAttrs);
-	COPY_NODE_FIELD(policyAttrs);
-	COPY_POINTER_FIELD(policyHashFuncs, from->numPolicyAttrs * sizeof(Oid));
-	COPY_SCALAR_FIELD(oldSegs);
-	COPY_SCALAR_FIELD(ptype);
 	return newnode;
 }
 
@@ -3170,6 +3152,7 @@ _copyQuery(const Query *from)
 	COPY_SCALAR_FIELD(hasRecursive);
 	COPY_SCALAR_FIELD(hasModifyingCTE);
 	COPY_SCALAR_FIELD(hasForUpdate);
+	COPY_SCALAR_FIELD(canOptSelectLockingClause);
 	COPY_NODE_FIELD(cteList);
 	COPY_NODE_FIELD(rtable);
 	COPY_NODE_FIELD(jointree);
@@ -3190,7 +3173,6 @@ _copyQuery(const Query *from)
 	COPY_NODE_FIELD(constraintDeps);
 	COPY_NODE_FIELD(intoPolicy);
 	COPY_SCALAR_FIELD(parentStmtType);
-	COPY_SCALAR_FIELD(needReshuffle);
 
 	return newnode;
 }
@@ -3234,7 +3216,6 @@ _copyUpdateStmt(const UpdateStmt *from)
 	COPY_NODE_FIELD(fromClause);
 	COPY_NODE_FIELD(returningList);
 	COPY_NODE_FIELD(withClause);
-	COPY_SCALAR_FIELD(needReshuffle);
 
 	return newnode;
 }
@@ -3618,11 +3599,6 @@ _copyExpandStmtSpec(const ExpandStmtSpec *from)
 {
 	ExpandStmtSpec *newnode = makeNode(ExpandStmtSpec);
 
-	COPY_SCALAR_FIELD(method);
-	COPY_BITMAPSET_FIELD(ps_none);
-	COPY_BITMAPSET_FIELD(ps_root);
-	COPY_BITMAPSET_FIELD(ps_interior);
-	COPY_BITMAPSET_FIELD(ps_leaf);
 	COPY_SCALAR_FIELD(backendId);
 
 	return newnode;
@@ -3879,8 +3855,9 @@ _copyIndexStmt(const IndexStmt *from)
 	COPY_SCALAR_FIELD(deferrable);
 	COPY_SCALAR_FIELD(initdeferred);
 	COPY_SCALAR_FIELD(concurrent);
-	COPY_STRING_FIELD(altconname);
 	COPY_SCALAR_FIELD(is_split_part);
+	COPY_SCALAR_FIELD(parentIndexId);
+	COPY_SCALAR_FIELD(parentConstraintId);
 
 	return newnode;
 }
@@ -5034,19 +5011,6 @@ _copyDistributedBy(const DistributedBy *from)
 	return newnode;
 }
 
-
-static ReshuffleExpr *
-_copyReshuffleExpr(const ReshuffleExpr *from)
-{
-	ReshuffleExpr *newnode = makeNode(ReshuffleExpr);
-	newnode->newSegs = from->newSegs;
-	newnode->oldSegs = from->oldSegs;
-	COPY_NODE_FIELD(hashKeys);
-	COPY_NODE_FIELD(hashFuncs);
-	newnode->ptype = from->ptype;
-	return newnode;
-}
-
 /* ****************************************************************
  *					pg_list.h copy functions
  * ****************************************************************
@@ -5299,9 +5263,6 @@ copyObject(const void *from)
 			break;
 		case T_SplitUpdate:
 			retval = _copySplitUpdate(from);
-			break;
-		case T_Reshuffle:
-			retval = _copyReshuffle(from);
 			break;
 		case T_RowTrigger:
 			retval = _copyRowTrigger(from);
@@ -6071,9 +6032,6 @@ copyObject(const void *from)
 
 		case T_DistributedBy:
 			retval = _copyDistributedBy(from);
-			break;
-		case T_ReshuffleExpr:
-			retval = _copyReshuffleExpr(from);
 			break;
 
 		default:

@@ -152,6 +152,7 @@ typedef struct Query
 	bool		hasRecursive;	/* WITH RECURSIVE was specified */
 	bool		hasModifyingCTE;	/* has INSERT/UPDATE/DELETE in WITH */
 	bool		hasForUpdate;	/* FOR [KEY] UPDATE/SHARE was specified */
+	bool        canOptSelectLockingClause; /* Whether can do some optimization on select with locking clause */
 
 	List	   *cteList;		/* WITH list (of CommonTableExpr's) */
 
@@ -212,14 +213,6 @@ typedef struct Query
 	 * would always be dispatched in parallel.
 	 */
 	ParentStmtType	parentStmtType;
-
-	/*
-	 *  Do we need to reshuffle data, we use an UpdateStmt
-	 *  to reshuffle table data, so we should to know if the
-	 *  UpdateStmt is used to reshuffle or to update.
-	 */
-	bool	   needReshuffle;
-
 } Query;
 
 /****************************************************************************
@@ -1212,12 +1205,6 @@ typedef struct UpdateStmt
 	List	   *fromClause;		/* optional from clause for more tables */
 	List	   *returningList;	/* list of expressions to return */
 	WithClause *withClause;		/* WITH clause */
-
-	/*
-	 *  Do we need to reshuffle data, we should to know if the
-	 *  UpdateStmt is used to reshuffle or to update.
-	 */
-	bool	    needReshuffle;
 } UpdateStmt;
 
 /* ----------------------
@@ -1521,7 +1508,8 @@ typedef enum AlterTableType
 	AT_PartSetTemplate,			/* Set Subpartition Template */
 	AT_PartSplit,				/* Split */
 	AT_PartTruncate,			/* Truncate */
-	AT_PartAddInternal			/* CREATE TABLE time partition addition */
+	AT_PartAddInternal,			/* CREATE TABLE time partition addition */
+	AT_PartAttachIndex			/* ALTER INDEX ATTACH PARTITION (not exposed to user) */
 } AlterTableType;
 
 typedef struct ReplicaIdentityStmt
@@ -1569,7 +1557,8 @@ typedef enum AlterPartitionIdType
 	AT_AP_ID_oid,				/* IDentifier by oid (for internal use only) */
 	AT_AP_IDList,				/* List of IDentifier(for internal use only) */
 	AT_AP_IDRule,				/* partition rule (for internal use only) */
-	AT_AP_IDDefault				/* IDentify DEFAULT partition */
+	AT_AP_IDDefault,			/* IDentify DEFAULT partition */
+	AT_AP_IDRangeVar			/* IDentify Partition by RangeVar */
 } AlterPartitionIdType;
 
 typedef struct AlterPartitionId /* Identify a partition by name, val, pos */
@@ -2114,27 +2103,9 @@ typedef struct PartitionSpec			/* a Partition Specification */
 	int					location;		/* token location, or -1 if unknown */
 } PartitionSpec;
 
-typedef enum ExpandMethod
-{
-	EXPANDMETHOD_NONE = 0,
-	EXPANDMETHOD_CTAS,
-	EXPANDMETHOD_RESHUFFLE
-} ExpandMethod;
-
 typedef struct ExpandStmtSpec
 {
 	NodeTag				type;
-	/* method to move data internal */
-	ExpandMethod		method;
-	/*
-	 * QEs has empty pg_partition and pg_partitions
-	 * so we need to pass necessary partition related
-	 * info to QEs.
-	 */
-	Bitmapset			*ps_none;
-	Bitmapset			*ps_root;
-	Bitmapset			*ps_interior;
-	Bitmapset			*ps_leaf;
 	/* for ctas method */
 	Oid					backendId;
 } ExpandStmtSpec;
@@ -2745,9 +2716,9 @@ typedef struct IndexStmt
 	bool		deferrable;		/* is the constraint DEFERRABLE? */
 	bool		initdeferred;	/* is the constraint INITIALLY DEFERRED? */
 	bool		concurrent;		/* should this be a concurrent index build? */
-	char	   *altconname;		/* constraint name, if desired name differs
-								 * from idxname and isconstraint, else NULL. */
 	bool		is_split_part;	/* Is this for SPLIT PARTITION command? */
+	Oid			parentIndexId;	/* attach to a parent index if set */
+	Oid			parentConstraintId;		/* attach to a parent constraint if set */
 } IndexStmt;
 
 /* ----------------------

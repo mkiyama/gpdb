@@ -213,7 +213,7 @@ alter table pg_toast_stud_emp rename to stud_emp;
 
 -- renaming index should rename constraint as well
 ALTER TABLE onek ADD CONSTRAINT onek_unique1_constraint UNIQUE (unique1);
-ALTER INDEX onek_unique1_key RENAME TO onek_unique1_constraint_foo;
+ALTER INDEX onek_unique1_constraint RENAME TO onek_unique1_constraint_foo;
 ALTER TABLE onek DROP CONSTRAINT onek_unique1_constraint_foo;
 
 -- renaming constraint
@@ -223,7 +223,7 @@ ALTER TABLE onek DROP CONSTRAINT onek_check_constraint_foo;
 
 -- renaming constraint should rename index as well
 ALTER TABLE onek ADD CONSTRAINT onek_unique1_constraint UNIQUE (unique1);
-DROP INDEX onek_unique1_key;  -- to see whether it's there
+DROP INDEX onek_unique1_constraint;  -- to see whether it's there
 ALTER TABLE onek RENAME CONSTRAINT onek_unique1_constraint TO onek_unique1_constraint_foo;
 DROP INDEX onek_unique1_constraint_foo;  -- to see whether it's there
 ALTER TABLE onek DROP CONSTRAINT onek_unique1_constraint_foo;
@@ -607,6 +607,8 @@ insert into atacc1 select i from generate_series(3,10)i;
 -- try adding a unique oid constraint
 alter table atacc1 add constraint atacc_oid1 unique(oid);
 -- try to create duplicates via alter table using - should fail
+-- this errors out in Greenplum for a different reason: we don't support
+-- SET DATA TYPE on an indexed column yet
 alter table atacc1 alter column test type integer using 0;
 drop table atacc1;
 

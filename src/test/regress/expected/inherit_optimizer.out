@@ -610,6 +610,7 @@ insert into d values('test','one','two','three');
 ERROR:  invalid input syntax for integer: "test"
 LINE 1: insert into d values('test','one','two','three');
                              ^
+alter table z drop constraint z_pkey;
 alter table a alter column aa type integer using bit_length(aa);
 select * from d;
  dummy | aa | bb | cc | dd 
@@ -1093,6 +1094,8 @@ Distributed by: (val1, val2)
 
 DROP TABLE test_constraints_inh;
 DROP TABLE test_constraints;
+-- start_ignore
+-- GPDB does not support exclusion constraints, so no need to run this test
 CREATE TABLE test_ex_constraints (
     c circle,
     EXCLUDE USING gist (c WITH &&)
@@ -1127,6 +1130,7 @@ Distributed randomly
 
 DROP TABLE test_ex_constraints_inh;
 DROP TABLE test_ex_constraints;
+-- end_ignore
 -- Test non-inheritable foreign key contraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
 CREATE TABLE test_foreign_constraints(id1 int REFERENCES test_primary_constraints(id));
@@ -1276,7 +1280,7 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
                                  ->  Limit
                                        ->  Seq Scan on int4_tbl
                                              Filter: ((f1 < 10) AND (f1 > (-10)))
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (16 rows)
 
 select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 limit 1) ss on id = f1;
@@ -1307,7 +1311,7 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
                                  ->  Limit
                                        ->  Seq Scan on int4_tbl
                                              Filter: ((f1 < 10) AND (f1 > (-10)))
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (16 rows)
 
 select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 limit 1) ss on id = f1;
@@ -1365,7 +1369,7 @@ explain (verbose, costs off) select * from matest0 order by 1-id;
                            Output: matest2.id, matest2.name
                      ->  Seq Scan on public.matest3
                            Output: matest3.id, matest3.name
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, optimizer=on
 (19 rows)
 
@@ -1398,7 +1402,7 @@ explain (verbose, costs off) select min(1-id) from matest0;
                            Output: matest2.id
                      ->  Seq Scan on public.matest3
                            Output: matest3.id
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, optimizer=off
 (17 rows)
 
@@ -1433,7 +1437,7 @@ explain (verbose, costs off) select * from matest0 order by 1-id;
                      Output: matest2.id, matest2.name, (1 - matest2.id)
          ->  Index Scan using matest3i on public.matest3
                Output: matest3.id, matest3.name, (1 - matest3.id)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
  Settings: enable_bitmapscan=off, enable_seqscan=off, optimizer=on
 (18 rows)
 
@@ -1478,7 +1482,7 @@ explain (verbose, costs off) select min(1-id) from matest0;
                              ->  Index Scan using matest3i on public.matest3
                                    Output: matest3.id, (1 - matest3.id)
                                    Index Cond: ((1 - matest3.id) IS NOT NULL)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
  Settings: enable_bitmapscan=off, enable_seqscan=off, optimizer=off
 (29 rows)
 
@@ -1528,7 +1532,7 @@ order by t1.b limit 10;
                                                    Filter: (c = d)
                                              ->  Seq Scan on matest1 t2_1
                                                    Filter: (c = d)
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (19 rows)
 
 reset enable_nestloop;
@@ -1555,7 +1559,7 @@ ORDER BY thousand, tenthous;
          ->  Append
                ->  Seq Scan on tenk1
                ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (8 rows)
 
 explain (costs off)
@@ -1574,7 +1578,7 @@ ORDER BY thousand, tenthous;
                      ->  Seq Scan on tenk1
                ->  Result
                      ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (10 rows)
 
 explain (costs off)
@@ -1592,7 +1596,7 @@ ORDER BY thousand, tenthous;
                ->  Seq Scan on tenk1
                ->  Result
                      ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (9 rows)
 
 -- Check min/max aggregate optimization
@@ -1611,7 +1615,7 @@ SELECT min(x) FROM
                ->  Append
                      ->  Seq Scan on tenk1
                      ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (7 rows)
 
 explain (costs off)
@@ -1628,7 +1632,7 @@ SELECT min(y) FROM
                      ->  Result
                            ->  Seq Scan on tenk1
                      ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (8 rows)
 
 -- XXX planner doesn't recognize that index on unique2 is sufficiently sorted
@@ -1647,7 +1651,7 @@ ORDER BY x, y;
          ->  Append
                ->  Seq Scan on tenk1
                ->  Seq Scan on tenk1 tenk1_1
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (8 rows)
 
 -- exercise rescan code path via a repeatedly-evaluated subquery
@@ -1674,7 +1678,7 @@ FROM generate_series(1, 3) g(i);
                        ->  Sort
                              Sort Key: ((d_1.d + g.i))
                              ->  Function Scan on generate_series d_1
- Optimizer: legacy query optimizer
+ Optimizer: Postgres query optimizer
 (13 rows)
 
 SELECT

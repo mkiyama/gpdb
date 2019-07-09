@@ -96,6 +96,7 @@ char	   *outputdir = ".";
 char	   *prehook = "";
 char	   *psqldir = PGBINDIR;
 char	   *launcher = NULL;
+bool        print_failure_diffs_is_enabled = false;
 bool 		optimizer_enabled = false;
 bool 		resgroup_enabled = false;
 static _stringlist *loadlanguage = NULL;
@@ -119,7 +120,6 @@ static _stringlist *extraroles = NULL;
 static _stringlist *extra_install = NULL;
 static char *initfile = NULL;
 static char *aodir = NULL;
-static char *resgroupdir = NULL;
 static char *config_auth_datadir = NULL;
 static bool  ignore_plans = false;
 
@@ -822,6 +822,7 @@ convert_sourcefiles_in(char *source_subdir, char *dest_dir, char *dest_subdir, c
 				   *outfile;
 		char		line[1024];
 		bool		has_tokens = false;
+		struct stat fst;
 
 		if (aodir && strncmp(*name, aodir, strlen(aodir)) == 0 &&
 			(strlen(*name) < 8 || strcmp(*name + strlen(*name) - 7, ".source") != 0))
@@ -832,8 +833,16 @@ convert_sourcefiles_in(char *source_subdir, char *dest_dir, char *dest_subdir, c
 			continue;
 		}
 
-		if (resgroupdir && strncmp(*name, resgroupdir, strlen(resgroupdir)) == 0 &&
-			(strlen(*name) < 8 || strcmp(*name + strlen(*name) - 7, ".source") != 0))
+		snprintf(srcfile, MAXPGPATH, "%s/%s",  indir, *name);
+		if (stat(srcfile, &fst) < 0)
+		{
+			fprintf(stderr, _("\n%s: stat failed for \"%s\"\n"),
+					progname, srcfile);
+			exit(2);
+		}
+
+		/* recurse if it's a directory */
+		if (S_ISDIR(fst.st_mode))
 		{
 			snprintf(srcfile, MAXPGPATH, "%s/%s", source_subdir, *name);
 			snprintf(destfile, MAXPGPATH, "%s/%s", dest_subdir, *name);
@@ -1738,6 +1747,32 @@ file_line_count(const char *file)
 	}
 	fclose(f);
 	return l;
+}
+
+static FILE *
+open_file_for_reading(const char *filename) {
+	FILE *file = fopen(filename, "r");
+
+	if (!file)
+	{
+		fprintf(stderr, _("%s: could not open file \"%s\" for reading: %s\n"),
+				progname, filename, strerror(errno));
+		exit(1);
+	}
+
+	return file;
+}
+
+static void
+print_contents_of_file(const char* filename) {
+	FILE *file;
+	char string[1024];
+
+	file = open_file_for_reading(filename);
+	while (fgets(string, sizeof(string), file))
+		fprintf(stdout, "%s", string);
+
+	fclose(file);
 }
 
 bool
@@ -2708,13 +2743,13 @@ help(void)
 	printf(_("                            (can be used multiple times to concatenate)\n"));
 	printf(_("  --temp-install=DIR        create a temporary installation in DIR\n"));
 	printf(_("  --use-existing            use an existing installation\n"));
-	/* Please put GPDB speicifc options at the end. */
+	/* Please put GPDB specific options at the end */
 	printf(_("  --exclude-tests=TEST      command or space delimited tests to exclude from running\n"));
     printf(_(" --init-file=GPD_INIT_FILE  init file to be used for gpdiff\n"));
 	printf(_("  --ao-dir=DIR              directory name prefix containing generic\n"));
 	printf(_("                            UAO row and column tests\n"));
-	printf(_("  --resgroup-dir=DIR        directory name prefix containing resgroup tests\n"));
 	printf(_("  --ignore-plans            ignore any explain plan diffs\n"));
+	printf(_("  --print-failure-diffs     Print the diff file to standard out after a failure\n"));
 	printf(_("\n"));
 	printf(_("Options for \"temp-install\" mode:\n"));
 	printf(_("  --extra-install=DIR       additional directory to install (e.g., contrib)\n"));
@@ -2764,12 +2799,12 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
 		{"load-extension", required_argument, NULL, 22},
 		{"extra-install", required_argument, NULL, 23},
 		{"config-auth", required_argument, NULL, 24},
-        {"init-file", required_argument, NULL, 25},
-        {"ao-dir", required_argument, NULL, 26},
-        {"resgroup-dir", required_argument, NULL, 27},
-        {"exclude-tests", required_argument, NULL, 28},
-		{"ignore-plans", no_argument, NULL, 29},
-		{"prehook", required_argument, NULL, 30},
+		{"init-file", required_argument, NULL, 25},
+		{"ao-dir", required_argument, NULL, 26},
+		{"exclude-tests", required_argument, NULL, 27},
+		{"ignore-plans", no_argument, NULL, 28},
+		{"prehook", required_argument, NULL, 29},
+		{"print-failure-diffs", no_argument, NULL, 30},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -2894,16 +2929,16 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
                 aodir = strdup(optarg);
                 break;
             case 27:
-                resgroupdir = strdup(optarg);
-                break;
-            case 28:
                 split_to_stringlist(strdup(optarg), ", ", &exclude_tests);
                 break;
-			case 29:
+			case 28:
 				ignore_plans = true;
 				break;
-			case 30:
+			case 29:
 				prehook = strdup(optarg);
+				break;
+			case 30:
+				print_failure_diffs_is_enabled = true;
 				break;
 			default:
 				/* getopt_long already emitted a complaint */
@@ -3353,6 +3388,9 @@ regression_main(int argc, char *argv[], init_function ifunc, test_function tfunc
 
 	if (file_size(difffilename) > 0)
 	{
+		if (print_failure_diffs_is_enabled)
+			print_contents_of_file(difffilename);
+
 		printf(_("The differences that caused some tests to fail can be viewed in the\n"
 				 "file \"%s\".  A copy of the test summary that you see\n"
 				 "above is saved in the file \"%s\".\n\n"),

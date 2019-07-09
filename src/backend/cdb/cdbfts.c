@@ -45,6 +45,8 @@
 volatile FtsProbeInfo *ftsProbeInfo = NULL;	/* Probe process updates this structure */
 static LWLockId ftsControlLock;
 
+extern volatile bool *pm_launch_walreceiver;
+
 /*
  * get fts share memory size
  */
@@ -73,6 +75,7 @@ FtsShmemInit(void)
 	/* Initialize locks and shared memory area */
 	ftsControlLock = shared->ControlLock;
 	ftsProbeInfo = &shared->fts_probe_info;
+	pm_launch_walreceiver = &shared->pm_launch_walreceiver;
 
 	if (!IsUnderPostmaster)
 	{
@@ -80,6 +83,7 @@ FtsShmemInit(void)
 		ftsControlLock = shared->ControlLock;
 
 		shared->fts_probe_info.fts_statusVersion = 0;
+		shared->pm_launch_walreceiver = false;
 	}
 }
 
@@ -120,10 +124,10 @@ bool
 FtsIsSegmentDown(CdbComponentDatabaseInfo *dBInfo)
 {
 	/* master is always reported as alive */
-	if (dBInfo->segindex == MASTER_SEGMENT_ID)
+	if (dBInfo->config->segindex == MASTER_SEGMENT_ID)
 		return false;
 
-	return FTS_STATUS_IS_DOWN(ftsProbeInfo->fts_status[dBInfo->dbid]);
+	return FTS_STATUS_IS_DOWN(ftsProbeInfo->fts_status[dBInfo->config->dbid]);
 }
 
 /*
@@ -140,12 +144,12 @@ FtsTestSegmentDBIsDown(SegmentDatabaseDescriptor **segdbDesc, int size)
 	{
 		CdbComponentDatabaseInfo *segInfo = segdbDesc[i]->segment_database_info;
 
-		elog(DEBUG2, "FtsTestSegmentDBIsDown: looking for real fault on segment dbid %d", (int) segInfo->dbid);
+		elog(DEBUG2, "FtsTestSegmentDBIsDown: looking for real fault on segment dbid %d", (int) segInfo->config->dbid);
 
 		if (FtsIsSegmentDown(segInfo))
 		{
 			ereport(LOG, (errmsg_internal("FTS: found fault with segment dbid %d. "
-										  "Reconfiguration is in progress", (int) segInfo->dbid)));
+										  "Reconfiguration is in progress", (int) segInfo->config->dbid)));
 			return true;
 		}
 	}

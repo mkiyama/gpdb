@@ -56,6 +56,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "access/xlog_internal.h"
+#include "access/xlogutils.h"
 
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
@@ -252,7 +253,7 @@ InitWalSender(void)
 	/* Set up resource owner */
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "walsender top-level resource owner");
 
-	SIMPLE_FAULT_INJECTOR(InitializeWalSender);
+	SIMPLE_FAULT_INJECTOR("initialize_wal_sender");
 
 	/*
 	 * Let postmaster know that we're a WAL sender. Once we've declared us as
@@ -787,6 +788,12 @@ logical_read_xlog_page(XLogReaderState *state, XLogRecPtr targetPagePtr, int req
 	XLogRecPtr	flushptr;
 	int			count;
 
+	XLogReadDetermineTimeline(state, targetPagePtr, reqLen);
+	sendTimeLineIsHistoric = (state->currTLI != ThisTimeLineID);
+	sendTimeLine = state->currTLI;
+	sendTimeLineValidUpto = state->currTLIValidUntil;
+	sendTimeLineNextTLI = state->nextTLI;
+
 	/* make sure we have enough WAL available */
 	flushptr = WalSndWaitForWal(targetPagePtr + reqLen);
 
@@ -1003,10 +1010,6 @@ StartLogicalReplication(StartReplicationCmd *cmd)
 	pq_sendint(&buf, 0, 2);
 	pq_endmessage(&buf);
 	pq_flush();
-
-	/* setup state for XLogReadPage */
-	sendTimeLineIsHistoric = false;
-	sendTimeLine = ThisTimeLineID;
 
 	/*
 	 * Initialize position to the last ack'ed one, then the xlog records begin
@@ -1895,7 +1898,7 @@ WalSndLoop(WalSndSendDataCallback send_data)
 	 */
 	for (;;)
 	{
-		SIMPLE_FAULT_INJECTOR(WalSenderLoop);
+		SIMPLE_FAULT_INJECTOR("wal_sender_loop");
 
 		/*
 		 * Emergency bailout if postmaster has died.  This is to avoid the
@@ -1952,6 +1955,8 @@ WalSndLoop(WalSndSendDataCallback send_data)
 		/* Try to flush pending output to the client */
 		if (pq_flush_if_writable() != 0)
 			WalSndShutdown();
+
+		SIMPLE_FAULT_INJECTOR("wal_sender_after_caughtup_within_range");
 
 		/* If nothing remains to be sent right now ... */
 		if (WalSndCaughtUp && !pq_is_send_pending())
@@ -2066,7 +2071,6 @@ InitWalSenderSlot(void)
 			walsnd->apply = InvalidXLogRecPtr;
 			walsnd->state = WALSNDSTATE_STARTUP;
 			/* Will be decided in hand-shake */
-			walsnd->synchronous = false;
 			walsnd->xlogCleanUpTo = InvalidXLogRecPtr;
 			walsnd->caughtup_within_range = false;
 			SpinLockRelease(&walsnd->mutex);
@@ -2114,8 +2118,6 @@ WalSndKill(int code, Datum arg)
 			SyncRepWakeQueue(true, SYNC_REP_WAIT_FLUSH);
 
 			SpinLockAcquire(&MyWalSnd->mutex);
-
-			MyWalSnd->synchronous = false;
 
 			/* xlog can get freed without the WAL sender worry */
 			MyWalSnd->xlogCleanUpTo = InvalidXLogRecPtr;

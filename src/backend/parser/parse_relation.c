@@ -594,7 +594,7 @@ scanRTEForColumn(ParseState *pstate, RangeTblEntry *rte, char *colname,
 	{
 		/* In GPDB, system columns like gp_segment_id, ctid, xmin/xmax seem to be
 		 * ambiguous for replicated table, replica in each segment has different
-		 * value of those columns, between sessions, different replicas are choosen
+		 * value of those columns, between sessions, different replicas are chosen
 		 * to provide data, so it's weird for users to see different system columns
 		 * between sessions. So for replicated table, we don't expose system columns
 		 * unless it's GP_ROLE_UTILITY for debug purpose.
@@ -1061,30 +1061,38 @@ addRangeTableEntry(ParseState *pstate,
 	rte->rtekind = RTE_RELATION;
 
 	/*
-	 * CDB: lock promotion around the locking clause is a little different
-	 * from postgres to allow for required lock promotion for distributed
-	 * AO tables.
-	 * select for update should lock the whole table, we do it here.
+	 * Greenplum specific behavior:
+	 * The implementation of select statement with locking clause
+	 * (for update | no key update | share | key share) in postgres
+	 * is to hold RowShareLock on tables during parsing stage, and
+	 * generate a LockRows plan node for executor to lock the tuples.
+	 * It is not easy to lock tuples in Greenplum database, since
+	 * tuples may be fetched through motion nodes.
+	 *
+	 * But when Global Deadlock Detector is enabled, and the select
+	 * statement with locking clause contains only one table, we are
+	 * sure that there are no motions. For such simple cases, we could
+	 * make the behavior just the same as Postgres.
 	 */
 	locking = getLockedRefname(pstate, refname);
 	if (locking)
 	{
-		if (locking->strength >= LCS_FORNOKEYUPDATE)
-		{
-			Oid relid;
-			
-			relid = RangeVarGetRelid(relation, lockmode, false);
-			
-			rel = try_heap_open(relid, NoLock, true);
-			if (!rel)
-				elog(ERROR, "open relation(%u) fail", relid);
-			lockmode = IsSystemRelation(rel) ? RowExclusiveLock : ExclusiveLock;
-			heap_close(rel, NoLock);
-		}
-		else
-		{
-			lockmode = RowShareLock;
-		}
+		Oid relid;
+
+		relid = RangeVarGetRelid(relation, lockmode, false);
+
+		rel = try_heap_open(relid, NoLock, true);
+		if (!rel)
+			elog(ERROR, "open relation(%u) fail", relid);
+
+		if (rel->rd_rel->relkind != RELKIND_RELATION ||
+			GpPolicyIsReplicated(rel->rd_cdbpolicy) ||
+			RelationIsAppendOptimized(rel))
+			pstate->p_canOptSelectLockingClause = false;
+
+		lockmode = pstate->p_canOptSelectLockingClause ? RowShareLock : ExclusiveLock;
+
+		heap_close(rel, NoLock);
 		nowait = locking->noWait;
 	}
 
@@ -1956,7 +1964,7 @@ isSimplyUpdatableRelation(Oid relid, bool noerror)
 		if (!noerror)
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("Invalid oid: %d is not simply updatable", relid)));
+					 errmsg("invalid oid: %d is not simply updatable", relid)));
 		return false;
 	}
 

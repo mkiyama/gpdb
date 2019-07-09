@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-	<topicref href="../../600/homenav.html" scope="external" navtitle="Greenplum Database® 6.0 Documentation"
+	<topicref href="../../6-0/homenav.html" scope="external" navtitle="Greenplum Database® 6.0 Documentation"
 		format="html" otherprops="oss-only"/>
-	<topicref href="../../600/homenav.html" scope="external" navtitle="Pivotal Greenplum® 6.0 Documentation"
+	<topicref href="../../6-0/homenav.html" scope="external" navtitle="Pivotal Greenplum® 6.0 Documentation"
 		format="html" otherprops="pivotal"/>
 	<topicref href="ref_guide.xml" navtitle="Reference Guide">
 		<topicref href="sql_commands/sql_ref.xml">
 			<topicref href="GPReferenceSQLSummaryLOP.xml"/>
 			<topicref href="sql_commands/ABORT.xml"/>
 			<topicref href="sql_commands/ALTER_AGGREGATE.xml"/>
+      <topicref href="sql_commands/ALTER_COLLATION.xml"/>
 			<topicref href="sql_commands/ALTER_CONVERSION.xml"/>
 			<topicref href="sql_commands/ALTER_DATABASE.xml"/>
 			<topicref href="sql_commands/ALTER_DEFAULT_PRIVILEGES.xml"/>
@@ -53,6 +54,7 @@
 			<topicref href="sql_commands/COPY.xml"/>
 			<topicref href="sql_commands/CREATE_AGGREGATE.xml"/>
 			<topicref href="sql_commands/CREATE_CAST.xml"/>
+      <topicref href="sql_commands/CREATE_COLLATION.xml"/>
 			<topicref href="sql_commands/CREATE_CONVERSION.xml"/>
 			<topicref href="sql_commands/CREATE_DATABASE.xml"/>
 			<topicref href="sql_commands/CREATE_DOMAIN.xml"/>
@@ -94,6 +96,7 @@
 			<topicref href="sql_commands/DO.xml"/>
 			<topicref href="sql_commands/DROP_AGGREGATE.xml"/>
 			<topicref href="sql_commands/DROP_CAST.xml"/>
+      <topicref href="sql_commands/DROP_COLLATION.xml"/>
 			<topicref href="sql_commands/DROP_CONVERSION.xml"/>
 			<topicref href="sql_commands/DROP_DATABASE.xml"/>
 			<topicref href="sql_commands/DROP_DOMAIN.xml"/>
@@ -149,6 +152,7 @@
 			<topicref href="sql_commands/SELECT.xml"/>
 			<topicref href="sql_commands/SELECT_INTO.xml"/>
 			<topicref href="sql_commands/SET.xml"/>
+			<topicref href="sql_commands/SET_CONSTRAINTS.xml"/>
 			<topicref href="sql_commands/SET_ROLE.xml"/>
 			<topicref href="sql_commands/SET_SESSION_AUTHORIZATION.xml"/>
 			<topicref href="sql_commands/SET_TRANSACTION.xml"/>
@@ -161,6 +165,7 @@
 		</topicref>
 		<topicref href="SQL2008_support.xml"/>
 		<topicref href="env_var_ref.xml" navtitle="Greenplum Environment Variables" id="env_var_ref"/>
+		<topicref href="sql-keywords.xml" navtitle="Reserved Identifiers and SQL Keywords" id="sql_keywords"/>
 		<topicref href="system_catalogs/catalog_ref.xml#topic1">
 			<topicref href="system_catalogs/catalog_ref-tables.xml#topic1"/>
 			<topicref href="system_catalogs/catalog_ref-views.xml#topic1"/>
@@ -183,6 +188,8 @@
 				<topicref href="system_catalogs/gp_pgdatabase.xml"/>
 				<topicref href="system_catalogs/gp_resgroup_config.xml"/>
 				<topicref href="system_catalogs/gp_resgroup_status.xml"/>
+				<topicref href="system_catalogs/gp_resgroup_status_per_host.xml"/>
+				<topicref href="system_catalogs/gp_resgroup_status_per_segment.xml"/>
 				<topicref href="system_catalogs/gp_resqueue_status.xml"/>
 				<topicref href="system_catalogs/gp_stat_replication.xml"/>
 				<topicref href="system_catalogs/gp_segment_configuration.xml"/>
@@ -268,6 +275,7 @@
 			<topicref href="datatype-datetime.xml"/>
 			<topicref href="datatype-pseudo.xml"/>
 			<topicref href="datatype-textsearch.xml"/>
+			<topicref href="datatype-range.xml"/>
 		</topicref>
 		<topicref href="character_sets.xml" navtitle="Character Set Support" id="character_sets"/>
 		<topicref href="config_params/guc_config.ditamap" navtitle="Server Configuration Parameters"
@@ -288,9 +296,9 @@
 			id="pl_perl"/>
 		<topicref href="extensions/madlib.xml" navtitle="Greenplum MADlib Extension for Analytics"
 			id="madlib"/>
+		<topicref href="modules/modules.ditamap" format="ditamap"/>
 		<topicref href="extensions/gppc.xml" navtitle="Greenplum Partner Connector API" id="gppc"/>
-		<topicref href="extensions/fuzzystrmatch.xml"
-			navtitle="Greenplum Fuzzy String Match Extension" id="fuzzystrmatch"/>
+		<topicref href="extensions/bgworker.xml"/>
 		<topicref href="feature_summary.xml" navtitle="Summary of Greenplum Features"
 			id="feature_summary"/>
 	</topicref>

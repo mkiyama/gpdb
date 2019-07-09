@@ -19,6 +19,7 @@
 #include "fmgr.h"
 #include "storage/block.h"
 #include "storage/relfilenode.h"
+#include "storage/dbdirnode.h"
 
 
 /*
@@ -138,12 +139,29 @@ extern void RememberFsyncRequest(RelFileNode rnode, ForkNumber forknum,
 					 BlockNumber segno);
 extern void ForgetRelationFsyncRequests(RelFileNode rnode, ForkNumber forknum);
 extern void ForgetDatabaseFsyncRequests(Oid dbid);
-extern void DropRelationFiles(RelFileNodeWithStorageType *delrels, int ndelrels, bool isRedo);
+extern void DropRelationFiles(RelFileNodePendingDelete *delrels, int ndelrels, bool isRedo);
 
 /* smgrtype.c */
 extern Datum smgrout(PG_FUNCTION_ARGS);
 extern Datum smgrin(PG_FUNCTION_ARGS);
 extern Datum smgreq(PG_FUNCTION_ARGS);
 extern Datum smgrne(PG_FUNCTION_ARGS);
+
+/*
+ * Hook for plugins to collect statistics from storage functions
+ * For example, disk quota extension will use these hooks to
+ * detect active tables.
+ */
+typedef void (*file_create_hook_type)(RelFileNodeBackend rnode);
+extern PGDLLIMPORT file_create_hook_type file_create_hook;
+
+typedef void (*file_extend_hook_type)(RelFileNodeBackend rnode);
+extern PGDLLIMPORT file_extend_hook_type file_extend_hook;
+
+typedef void (*file_truncate_hook_type)(RelFileNodeBackend rnode);
+extern PGDLLIMPORT file_truncate_hook_type file_truncate_hook;
+
+typedef void (*file_unlink_hook_type)(RelFileNodeBackend rnode);
+extern PGDLLIMPORT file_unlink_hook_type file_unlink_hook;
 
 #endif   /* SMGR_H */

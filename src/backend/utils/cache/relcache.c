@@ -341,7 +341,9 @@ ScanPgRelation(Oid targetRelId, bool indexOK, bool force_non_historic)
 	 * relfilenode of non mapped system relations during decoding.
 	 */
 	if (force_non_historic)
-		snapshot = GetNonHistoricCatalogSnapshot(RelationRelationId);
+		snapshot = GetNonHistoricCatalogSnapshot(
+			RelationRelationId,
+			DistributedTransactionContext);
 	else
 		snapshot = GetCatalogSnapshot(RelationRelationId);
 
@@ -706,7 +708,6 @@ RelationBuildRuleLock(Relation relation)
 	 */
 	rewrite_desc = heap_open(RewriteRelationId, AccessShareLock);
 	rewrite_tupdesc = RelationGetDescr(rewrite_desc);
-
 	rewrite_scan = systable_beginscan(rewrite_desc,
 									  RewriteRelRulenameIndexId,
 									  true, NULL,
@@ -915,7 +916,6 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	relation->rd_isnailed = false;
 	relation->rd_createSubid = InvalidSubTransactionId;
 	relation->rd_newRelfilenodeSubid = InvalidSubTransactionId;
-
 	switch (relation->rd_rel->relpersistence)
 	{
 		case RELPERSISTENCE_UNLOGGED:
@@ -1018,8 +1018,6 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 		relation->rd_cdbpolicy = GpPolicyFetch(targetRelId);
 		MemoryContextSwitchTo(oldcontext);
 	}
-
-    relation->rd_cdbDefaultStatsWarningIssued = false;
 
 	/*
 	 * now we can free the memory allocated for pg_class_tuple
@@ -1733,17 +1731,7 @@ RelationIdGetRelation(Oid relationId)
 	Relation	rd;
 
 	/* Make sure we're in an xact, even if this ends up being a cache hit */
-	/* GPDB_94_MERGE_FIXME: We get here in abort processing, when we
-	 * call getCdbComponentDatabases() to figure out how to reconnect or
-	 * something. Temporarily disable this assertion during abort processing.
-	 * But we really should stop doing cataloglookups outside a transaction.
-	 */
-	/* GPDB_94_MERGE_FIXME: We also get here in commit processing, when we
-	 * call getCdbComponentDatabases() to figure out how to reconnect or
-	 * something. Temporarily disable this assertion during commit processing.
-	 * But we really should stop doing cataloglookups outside a transaction.
-	 */
-	Assert(IsTransactionState() || IsAbortInProgress() || IsCommitInProgress());
+	Assert(IsTransactionState());
 
 	/*
 	 * first try to find reldesc in the cache
@@ -1786,7 +1774,6 @@ RelationIdGetRelation(Oid relationId)
 	rd = RelationBuildDesc(relationId, true);
 	if (RelationIsValid(rd))
 		RelationIncrementReferenceCount(rd);
-
 	return rd;
 }
 
@@ -2278,15 +2265,16 @@ RelationClearRelation(Relation relation, bool rebuild)
 		 * structures won't move while they are working with an open relcache
 		 * entry.  (Note: the refcount mechanism for tupledescs might someday
 		 * allow us to remove this hack for the tupledesc.)
- 		 *
- 		 * Note that this process does not touch CurrentResourceOwner; which
- 		 * is good because whatever ref counts the entry may have do not
- 		 * necessarily belong to that resource owner.
+		 *
+		 * Note that this process does not touch CurrentResourceOwner; which
+		 * is good because whatever ref counts the entry may have do not
+		 * necessarily belong to that resource owner.
  		 */
 		Relation	newrel;
- 		Oid			save_relid = RelationGetRelid(relation);
+		Oid			save_relid = RelationGetRelid(relation);
 		bool		keep_tupdesc;
 		bool		keep_rules;
+		bool		keep_policy;
 
 		/* Build temporary entry, but don't link it into hashtable */
 		newrel = RelationBuildDesc(save_relid, false);
@@ -2316,6 +2304,7 @@ RelationClearRelation(Relation relation, bool rebuild)
 
 		keep_tupdesc = equalTupleDescs(relation->rd_att, newrel->rd_att, true);
 		keep_rules = equalRuleLocks(relation->rd_rules, newrel->rd_rules);
+		keep_policy = GpPolicyEqual(relation->rd_cdbpolicy, newrel->rd_cdbpolicy);
 
 		/*
 		 * Perform swapping of the relcache entry contents.  Within this
@@ -2335,7 +2324,7 @@ RelationClearRelation(Relation relation, bool rebuild)
 		} while (0)
 
 		/* swap all Relation struct fields */
- 		{
+		{
 			RelationData tmpstruct;
 
 			memcpy(&tmpstruct, newrel, sizeof(RelationData));
@@ -2360,10 +2349,13 @@ RelationClearRelation(Relation relation, bool rebuild)
 		if (keep_tupdesc)
 			SWAPFIELD(TupleDesc, rd_att);
 		if (keep_rules)
- 		{
+		{
 			SWAPFIELD(RuleLock *, rd_rules);
 			SWAPFIELD(MemoryContext, rd_rulescxt);
- 		}
+		}
+		/* also preserve old policy if no logical change */
+		if (keep_policy)
+			SWAPFIELD(GpPolicy *, rd_cdbpolicy);
 		/* pgstat_info must be preserved */
 		SWAPFIELD(struct PgStat_TableStatus *, pgstat_info);
 
@@ -5067,7 +5059,6 @@ load_relcache_init_file(bool shared)
 		rel->rd_amcache = NULL;
 		MemSet(&rel->pgstat_info, 0, sizeof(rel->pgstat_info));
         rel->rd_cdbpolicy = NULL;
-        rel->rd_cdbDefaultStatsWarningIssued = false;
 
 		/*
 		 * Recompute lock and physical addressing info.  This is needed in
@@ -5444,7 +5435,7 @@ RelationCacheInitFileRemove(void)
 	const char *tblspcdir = "pg_tblspc";
 	DIR		   *dir;
 	struct dirent *de;
-	char		path[MAXPGPATH + 10 + strlen(tablespace_version_directory()) + 1];
+	char		path[MAXPGPATH + 11 + get_dbid_string_length() + 1 + sizeof(GP_TABLESPACE_VERSION_DIRECTORY)];
 
 	snprintf(path, sizeof(path), "global/%s",
 			 RELCACHE_INIT_FILENAME);
@@ -5468,7 +5459,7 @@ RelationCacheInitFileRemove(void)
 		{
 			/* Scan the tablespace dir for per-database dirs */
 			snprintf(path, sizeof(path), "%s/%s/%s",
-					 tblspcdir, de->d_name, tablespace_version_directory());
+					 tblspcdir, de->d_name, GP_TABLESPACE_VERSION_DIRECTORY);
 			RelationCacheInitFileRemoveInDir(path);
 		}
 	}

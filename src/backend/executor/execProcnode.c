@@ -103,7 +103,6 @@
 #include "executor/nodeModifyTable.h"
 #include "executor/nodeNestloop.h"
 #include "executor/nodeRecursiveunion.h"
-#include "executor/nodeReshuffle.h"
 #include "executor/nodeResult.h"
 #include "executor/nodeSeqscan.h"
 #include "executor/nodeSetOp.h"
@@ -816,16 +815,6 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 			}
 			END_MEMORY_ACCOUNT();
 			break;
-		case T_Reshuffle:
-			curMemoryAccountId = CREATE_EXECUTOR_MEMORY_ACCOUNT(isAlienPlanNode, node, Reshuffle);
-
-			START_MEMORY_ACCOUNT(curMemoryAccountId);
-			{
-				result = (PlanState *) ExecInitReshuffle((Reshuffle *) node,
-														 estate, eflags);
-			}
-			END_MEMORY_ACCOUNT();
-			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
 			result = NULL;		/* keep compiler quiet */
@@ -909,6 +898,14 @@ ExecSliceDependencyNode(PlanState *node)
 
 		for (; i < ss->numSubplans; ++i)
 			ExecSliceDependencyNode(ss->subplans[i]);
+	}
+	else if (nodeTag(node) == T_ModifyTableState)
+	{
+		int			i = 0;
+		ModifyTableState *mt = (ModifyTableState *) node;
+
+		for (; i < mt->mt_nplans; ++i)
+			ExecSliceDependencyNode(mt->mt_plans[i]);
 	}
 
 	ExecSliceDependencyNode(outerPlanState(node));
@@ -1096,6 +1093,10 @@ ExecProcNode(PlanState *node)
 			result = ExecAgg((AggState *) node);
 			break;
 
+		case T_WindowAggState:
+			result = ExecWindowAgg((WindowAggState *) node);
+			break;
+
 		case T_UniqueState:
 			result = ExecUnique((UniqueState *) node);
 			break;
@@ -1124,10 +1125,6 @@ ExecProcNode(PlanState *node)
 			result = ExecShareInputScan((ShareInputScanState *) node);
 			break;
 
-		case T_WindowAggState:
-			result = ExecWindowAgg((WindowAggState *) node);
-			break;
-
 		case T_RepeatState:
 			result = ExecRepeat((RepeatState *) node);
 			break;
@@ -1150,10 +1147,6 @@ ExecProcNode(PlanState *node)
 
 		case T_PartitionSelectorState:
 			result = ExecPartitionSelector((PartitionSelectorState *) node);
-			break;
-
-		case T_ReshuffleState:
-			result = ExecReshuffle((ReshuffleState *) node);
 			break;
 
 		default:
@@ -1204,6 +1197,14 @@ MultiExecProcNode(PlanState *node)
 	START_MEMORY_ACCOUNT(node->memoryAccountId);
 {
 	TRACE_POSTGRESQL_EXECPROCNODE_ENTER(GpIdentity.segindex, currentSliceId, nodeTag(node), node->plan->plan_node_id);
+	
+	if (!node->fHadSentNodeStart)
+	{
+		/* GPDB hook for collecting query info */
+		if (query_info_collect_hook)
+			(*query_info_collect_hook)(METRICS_PLAN_NODE_EXECUTING, node);
+		node->fHadSentNodeStart = true;
+	}
 
 	if (node->chgParam != NULL) /* something changed */
 		ExecReScan(node);		/* let ReScan handle this */
@@ -1513,10 +1514,6 @@ ExecEndNode(PlanState *node)
 			break;
 		case T_PartitionSelectorState:
 			ExecEndPartitionSelector((PartitionSelectorState *) node);
-			break;
-
-		case T_ReshuffleState:
-			ExecEndReshuffle((ReshuffleState *) node);
 			break;
 
 		default:

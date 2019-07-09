@@ -225,7 +225,7 @@ lazy_vacuum_rel(Relation onerel, VacuumStmt *vacstmt,
 	if (vacstmt->appendonly_phase == AOVAC_DROP)
 	{
 			FaultInjector_InjectFaultIfSet(
-				CompactionBeforeSegmentFileDropPhase,
+				"compaction_before_segmentfile_drop",
 				DDLNotSpecified,
 				"",	// databaseName
 				RelationGetRelationName(onerel)); // tableName
@@ -233,7 +233,7 @@ lazy_vacuum_rel(Relation onerel, VacuumStmt *vacstmt,
 	if (vacstmt->appendonly_phase == AOVAC_CLEANUP)
 	{
 			FaultInjector_InjectFaultIfSet(
-				CompactionBeforeCleanupPhase,
+				"compaction_before_cleanup_phase",
 				DDLNotSpecified,
 				"",	// databaseName
 				RelationGetRelationName(onerel)); // tableName
@@ -525,7 +525,8 @@ lazy_vacuum_aorel(Relation onerel, VacuumStmt *vacstmt)
 		vac_update_relstats(onerel,
 							vacrelstats->rel_pages,
 							vacrelstats->new_rel_tuples,
-							visibilitymap_count(onerel),
+							0, /* AO does not currently have an equivalent to
+							      Heap's 'all visible pages' */
 							vacrelstats->hasindex,
 							FreezeLimit,
 							MultiXactCutoff,

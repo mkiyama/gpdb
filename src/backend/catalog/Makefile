@@ -22,7 +22,9 @@ OBJS += pg_exttable.o pg_extprotocol.o \
        aoseg.o aoblkdir.o gp_fastsequence.o gp_segment_config.o \
        pg_attribute_encoding.o pg_compression.o aovisimap.o \
        pg_appendonly.o \
-       oid_dispatch.o aocatalog.o
+       oid_dispatch.o aocatalog.o storage_tablespace.o storage_database.o \
+       storage_tablespace_twophase.o storage_tablespace_xact.o
+
 
 BKIFILES = postgres.bki postgres.description postgres.shdescription
 
@@ -111,7 +113,6 @@ install-data: $(BKIFILES) installdirs
 	$(INSTALL_DATA) $(call vpathsearch,postgres.shdescription) '$(DESTDIR)$(datadir)/postgres.shdescription'
 	$(INSTALL_DATA) $(srcdir)/system_views.sql '$(DESTDIR)$(datadir)/system_views.sql'
 	$(INSTALL_DATA) $(srcdir)/information_schema.sql '$(DESTDIR)$(datadir)/information_schema.sql'
-	$(INSTALL_DATA) $(call vpathsearch,cdb_util.sql) '$(DESTDIR)$(datadir)/cdb_util.sql'
 	$(INSTALL_DATA) $(call vpathsearch,cdb_schema.sql) '$(DESTDIR)$(datadir)/cdb_init.d/cdb_schema.sql'
 	$(INSTALL_DATA) $(srcdir)/sql_features.txt '$(DESTDIR)$(datadir)/sql_features.txt'
 	$(INSTALL_DATA) $(call vpathsearch,gp_toolkit.sql) '$(DESTDIR)$(datadir)/cdb_init.d/gp_toolkit.sql'

@@ -455,9 +455,6 @@
                   <codeph>enable_tidscan</codeph>
                 </p>
                 <p>
-                  <codeph>gp_enable_adaptive_nestloop</codeph>
-                </p>
-                <p>
                   <codeph>gp_enable_agg_distinct</codeph>
                 </p>
               </stentry>
@@ -550,9 +547,6 @@
           <ul>
             <li id="kh158362">
               <codeph>default_statistics_target </codeph>
-            </li>
-            <li id="kh158369">
-              <codeph>gp_analyze_relative_error</codeph>
             </li>
           </ul>
         </body>
@@ -1082,9 +1076,6 @@
         <simpletable id="kh162083">
           <strow>
             <stentry>
-              <p>
-                <codeph>add_missing_from</codeph>
-              </p>
               <p>
                 <codeph>array_nulls</codeph>
               </p>

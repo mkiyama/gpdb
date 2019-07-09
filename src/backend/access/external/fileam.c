@@ -82,7 +82,7 @@ static void FunctionCallPrepareFormatter(FunctionCallInfoData *fcinfo,
 							 FmgrInfo *convFuncs,
 							 Oid *typioparams);
 
-static void open_external_readable_source(FileScanDesc scan, List* filter_quals);
+static void open_external_readable_source(FileScanDesc scan, ExternalSelectDesc desc);
 static void open_external_writable_source(ExternalInsertDesc extInsertDesc);
 static int	external_getdata_callback(void *outbuf, int datasize, void *extra);
 static int	external_getdata(URL_FILE *extfile, CopyState pstate, void *outbuf, int maxread);
@@ -476,6 +476,19 @@ external_stopscan(FileScanDesc scan)
 	}
 }
 
+/*	----------------
+ *		external_getnext_init - prepare ExternalSelectDesc struct before external_getnext
+ *	----------------
+ */
+ExternalSelectDesc
+external_getnext_init(PlanState *state)
+{
+	ExternalSelectDesc
+		desc = (ExternalSelectDesc) palloc0(sizeof(ExternalSelectDescData));
+	if (state != NULL)
+		desc->projInfo = state->ps_ProjInfo;
+	return desc;
+}
 
 /* ----------------------------------------------------------------
 *		external_getnext
@@ -484,7 +497,7 @@ external_stopscan(FileScanDesc scan)
 * ----------------------------------------------------------------
 */
 HeapTuple
-external_getnext(FileScanDesc scan, ScanDirection direction, List* filter_quals)
+external_getnext(FileScanDesc scan, ScanDirection direction, ExternalSelectDesc desc)
 {
 	HeapTuple	tuple;
 
@@ -504,7 +517,7 @@ external_getnext(FileScanDesc scan, ScanDirection direction, List* filter_quals)
 	 * only.
 	 */
 	if (!scan->fs_file)
-		open_external_readable_source(scan, filter_quals);
+		open_external_readable_source(scan, desc);
 
 	/* Note: no locking manipulations needed */
 	FILEDEBUG_1;
@@ -1069,7 +1082,7 @@ externalgettup_custom(FileScanDesc scan)
 */
 static HeapTuple
 externalgettup(FileScanDesc scan,
-			   ScanDirection dir __attribute__((unused)))
+               ScanDirection dir __attribute__((unused)))
 {
 	bool		custom = (scan->fs_custom_formatter_func != NULL);
 	HeapTuple	tup = NULL;
@@ -1305,7 +1318,7 @@ FunctionCallPrepareFormatter(FunctionCallInfoData *fcinfo,
  * 4) a command to execute
  */
 static void
-open_external_readable_source(FileScanDesc scan, List* filter_quals)
+open_external_readable_source(FileScanDesc scan, ExternalSelectDesc desc)
 {
 	extvar_t	extvar;
 
@@ -1326,7 +1339,7 @@ open_external_readable_source(FileScanDesc scan, List* filter_quals)
 							  false /* for read */ ,
 							  &extvar,
 							  scan->fs_pstate,
-							  filter_quals);
+							  desc);
 }
 
 /*
@@ -1460,7 +1473,7 @@ external_scan_error_callback(void *arg)
 
 		errcontext("External table %s, line %s of %s, column %s",
 				   cstate->cur_relname,
-				   linenumber_atoi(buffer, cstate->cur_lineno),
+				   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 				   scan->fs_uri,
 				   cstate->cur_attname);
 	}
@@ -1476,7 +1489,7 @@ external_scan_error_callback(void *arg)
 
 			errcontext("External table %s, line %s of %s: \"%s\"",
 					   cstate->cur_relname,
-					   linenumber_atoi(buffer, cstate->cur_lineno),
+					   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 					   scan->fs_uri, line_buf);
 			pfree(line_buf);
 		}
@@ -1497,7 +1510,7 @@ external_scan_error_callback(void *arg)
 			if (cstate->cur_lineno > 0)
 				errcontext("External table %s, line %s of file %s",
 						   cstate->cur_relname,
-						   linenumber_atoi(buffer, cstate->cur_lineno),
+						   linenumber_atoi(buffer, sizeof(buffer), cstate->cur_lineno),
 						   scan->fs_uri);
 			else
 				errcontext("External table %s, file %s",
@@ -1587,12 +1600,12 @@ justifyDatabuf(StringInfo buf)
 }
 
 char *
-linenumber_atoi(char buffer[20], int64 linenumber)
+linenumber_atoi(char *buffer, size_t bufsz, int64 linenumber)
 {
 	if (linenumber < 0)
-		return "N/A";
-
-	snprintf(buffer, 20, INT64_FORMAT, linenumber);
+		snprintf(buffer, bufsz, "%s", "N/A");
+	else
+		snprintf(buffer, bufsz, INT64_FORMAT, linenumber);
 
 	return buffer;
 }
@@ -2221,13 +2234,13 @@ external_set_env_vars_ext(extvar_t *extvar, char *uri, bool csv, char *escape, c
 		CdbComponentDatabaseInfo *qdinfo = 
 				cdbcomponent_getComponentInfo(MASTER_CONTENT_ID); 
 
-		pg_ltoa(qdinfo->port, result);
+		pg_ltoa(qdinfo->config->port, result);
 		extvar->GP_MASTER_PORT = result;
 
-		if (qdinfo->hostip != NULL)
-			extvar->GP_MASTER_HOST = pstrdup(qdinfo->hostip);
+		if (qdinfo->config->hostip != NULL)
+			extvar->GP_MASTER_HOST = pstrdup(qdinfo->config->hostip);
 		else
-			extvar->GP_MASTER_HOST = pstrdup(qdinfo->hostname);
+			extvar->GP_MASTER_HOST = pstrdup(qdinfo->config->hostname);
 	}
 
 	if (MyProcPort)
