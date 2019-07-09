@@ -1276,9 +1276,10 @@ explain SELECT  cc, sum(nn) over() FROM v1_mpp_20470;
          ->  Shared Scan (share slice:id 0:0)  (cost=4029.40..4154.80 rows=93400 width=28)
                ->  Materialize  (cost=3095.40..4029.40 rows=93400 width=28)
                      ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..3002.00 rows=93400 width=28)
-                           ->  Append  (cost=0.00..1134.00 rows=31134 width=28)
-                                 ->  Seq Scan on t_mpp_20470_ptr1 b  (cost=0.00..567.00 rows=15567 width=28)
-                                 ->  Seq Scan on t_mpp_20470_ptr2 b  (cost=0.00..567.00 rows=15567 width=28)
+                           ->  Result  (cost=0.00..1134.00 rows=31134 width=28)
+                                 ->  Append  (cost=0.00..1134.00 rows=31134 width=28)
+                                       ->  Seq Scan on t_mpp_20470_ptr1 b  (cost=0.00..567.00 rows=15567 width=28)
+                                       ->  Seq Scan on t_mpp_20470_ptr2 b  (cost=0.00..567.00 rows=15567 width=28)
    ->  Subquery Scan coplan  (cost=4029.40..5088.80 rows=93400 width=28)
          ->  Window  (cost=4029.40..4154.80 rows=93400 width=28)
                ->  Shared Scan (share slice:id 0:0)  (cost=4029.40..4154.80 rows=93400 width=28)
@@ -1765,7 +1766,31 @@ EXPLAIN SELECT * FROM dedup_test3, dedup_test1 WHERE c = 7 AND EXISTS (SELECT b 
  Optimizer status: legacy query optimizer
 (4 rows)
 
+-- A subplan whose targetlist might be expanded to make sure all entries of its
+-- hashExpr are in its targetlist, test the motion node above it also updated
+-- its targetlist, otherwise, a wrong answer or a crash happens.
+DROP TABLE IF EXISTS TEST_IN;
+NOTICE:  table "test_in" does not exist, skipping
+CREATE TABLE TEST_IN(
+    C01  FLOAT,
+    C02  NUMERIC(10,0)
+) DISTRIBUTED RANDOMLY;
+--insert repeatable records:
+INSERT INTO TEST_IN
+SELECT
+    ROUND(RANDOM()*1E1),ROUND(RANDOM()*1E1)
+FROM GENERATE_SERIES(1,1E4::BIGINT) I;
+ANALYZE TEST_IN;
+SELECT COUNT(*) FROM
+TEST_IN A
+WHERE A.C01 IN(SELECT C02 FROM TEST_IN);
+ count 
+-------
+ 10000
+(1 row)
+
 -- start_ignore
+DROP TABLE IF EXISTS TEST_IN;
 DROP TABLE IF EXISTS dedup_test1;
 DROP TABLE IF EXISTS dedup_test2;
 DROP TABLE IF EXISTS dedup_test3;

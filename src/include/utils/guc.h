@@ -159,7 +159,6 @@ extern bool Debug_appendonly_print_scan;
 extern bool Debug_appendonly_print_scan_tuple;
 extern bool Debug_appendonly_print_delete;
 extern bool Debug_appendonly_print_storage_headers;
-extern bool Debug_appendonly_print_verify_write_block;
 extern bool Debug_appendonly_use_no_toast;
 extern bool Debug_appendonly_print_blockdirectory;
 extern bool Debug_appendonly_print_read_block;
@@ -449,6 +448,7 @@ extern bool optimizer_enable_hashjoin;
 extern bool optimizer_enable_dynamictablescan;
 extern bool optimizer_enable_indexscan;
 extern bool optimizer_enable_tablescan;
+extern bool optimizer_enable_full_join;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;

@@ -56,13 +56,13 @@
         <b>Partitioned Append-Optimized Tables</b>
         <p>For a partitioned, append-optimized table, <cmdname>analyzedb</cmdname> checks the
           partitioned table root partition and leaf partitions. If needed, the utility updates
-          statistics for non-current partitions and the root partition. </p>
-        <p dir="ltr">The root partition statistics is required by GPORCA. By default, the
-            <cmdname>analyzedb</cmdname> utility collects statistics on the root partition of a
-          partitioned table if the statistics do not exist. If any of the leaf partitions have stale
-          statistics, <cmdname>analyzedb</cmdname> also refreshes the root partition statistics. The
-          cost of refreshing the root level statistics is comparable to analyzing one leaf
-          partition. You can specify the option <codeph>--skip_root_stats</codeph> to disable
+          statistics for non-current partitions and the root partition. </p><p dir="ltr">The root
+          partition statistics is required by GPORCA. By default, the <cmdname>analyzedb</cmdname>
+          utility collects statistics on the root partition of a partitioned table if the statistics
+          do not exist. If any of the leaf partitions have stale statistics,
+            <cmdname>analyzedb</cmdname> also refreshes the root partition statistics. The cost of
+          refreshing the root level statistics is comparable to analyzing one leaf partition.
+          You can specify the option <codeph>--skip_root_stats</codeph> to disable
           collection of statistics on the root partition of a partitioned table.</p>
       </sectiondiv>
     </section>

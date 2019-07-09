@@ -435,10 +435,6 @@
                 <xref href="guc-list.xml#enable_tidscan" type="section">enable_tidscan</xref>
               </p>
               <p>
-                <xref href="guc-list.xml#gp_enable_adaptive_nestloop" type="section"
-                  >gp_enable_adaptive_nestloop</xref>
-              </p>
-              <p>
                 <xref href="guc-list.xml#gp_enable_agg_distinct" type="section"
                   >gp_enable_agg_distinct</xref>
               </p>
@@ -1253,7 +1249,13 @@
                 >gp_vmem_protect_segworker_cache_limit</xref>
             </p>
             <p>
+              <xref href="guc-list.xml#max_statement_mem" type="section">max_statement_mem</xref>
+            </p>
+            <p>
               <xref href="guc-list.xml#memory_spill_ratio" type="section">memory_spill_ratio</xref>
+            </p>
+            <p>
+              <xref href="guc-list.xml#statement_mem" type="section">statement_mem</xref>
             </p>
             <p><xref href="guc-list.xml#vmem_process_interrupt" type="section"
                 >vmem_process_interrupt</xref></p>

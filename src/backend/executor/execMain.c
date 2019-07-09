@@ -53,6 +53,7 @@
 #include "catalog/pg_attribute_encoding.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbpartition.h"
+#include "commands/copy.h"
 #include "commands/tablecmds.h" /* XXX: temp for get_parts() */
 #include "commands/tablespace.h"
 #include "commands/trigger.h"
@@ -261,8 +262,6 @@ ExecutorStart(QueryDesc *queryDesc, int eflags)
 	Assert(queryDesc->estate == NULL);
 	Assert(queryDesc->plannedstmt != NULL);
 	Assert(queryDesc->memoryAccountId == MEMORY_OWNER_TYPE_Undefined);
-
-	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
 
 	queryDesc->memoryAccountId = MemoryAccounting_CreateExecutorMemoryAccount();
 
@@ -984,6 +983,9 @@ ExecutorEnd(QueryDesc *queryDesc)
 	EState	   *estate;
 	MemoryContext oldcontext;
 
+	/* GPDB: whether this is a SPI inner query for extension usage */
+	bool 		isInnerQuery;
+
 	/* sanity checks */
 	Assert(queryDesc != NULL);
 
@@ -992,6 +994,9 @@ ExecutorEnd(QueryDesc *queryDesc)
 	Assert(estate != NULL);
 
 	Assert(NULL != queryDesc->plannedstmt && MEMORY_OWNER_TYPE_Undefined != queryDesc->memoryAccountId);
+
+	/* GPDB: Save SPI flag first in case the memory context of plannedstmt is cleaned up */
+	isInnerQuery = estate->es_plannedstmt->metricsQueryType > 0;
 
 	START_MEMORY_ACCOUNT(queryDesc->memoryAccountId);
 
@@ -1056,6 +1061,8 @@ ExecutorEnd(QueryDesc *queryDesc)
 		 */
 		FreeExecutorState(estate);
 
+		queryDesc->estate = NULL;
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1112,7 +1119,7 @@ ExecutorEnd(QueryDesc *queryDesc)
 
 	/* GPDB hook for collecting query info */
 	if (query_info_collect_hook)
-		(*query_info_collect_hook)(METRICS_QUERY_DONE, queryDesc);
+		(*query_info_collect_hook)(isInnerQuery ? METRICS_INNER_QUERY_DONE : METRICS_QUERY_DONE, queryDesc);
 
 	/* Reset queryDesc fields that no longer point to anything */
 	queryDesc->tupDesc = NULL;
@@ -1497,11 +1504,13 @@ InitializeResultRelations(PlannedStmt *plannedstmt, EState *estate, CmdType oper
 	else
 	{
 		List 	*all_relids = NIL;
-		Oid		 relid = getrelid(linitial_int(plannedstmt->resultRelations), rangeTable);
+		Oid		relid = getrelid(linitial_int(plannedstmt->resultRelations), rangeTable);
+		bool	containRoot = true;
 
 		if (rel_is_child_partition(relid))
 		{
 			relid = rel_partition_get_master(relid);
+			containRoot = false;
 		}
 
 		estate->es_result_partitions = BuildPartitionNodeFromRoot(relid);
@@ -1512,6 +1521,30 @@ InitializeResultRelations(PlannedStmt *plannedstmt, EState *estate, CmdType oper
 		all_relids = lappend_oid(all_relids, relid);
 		all_relids = list_concat(all_relids,
 								 all_partition_relids(estate->es_result_partitions));
+
+		/*
+		 * For partition table, INSERT plan only contains the root table
+		 * in the result relations, whereas DELETE and UPDATE contain
+		 * both root table and the partition tables.
+		 *
+		 * INSERT needs to explicitly lock the partition tables here on
+		 * QD, otherwise if AppendOnly VACUUM drop phase runs
+		 * concurrently and with perfect timing, AO VACUUM may finish
+		 * successfully on QD but skip the drop phase on QE because
+		 * INSERT is holding an RowExclusiveLock on the partition table
+		 * on QE. This leads to inconsistent segfile state between QD
+		 * and QE, and it will fail the next operation on the same
+		 * segfile. Hence locking the partition tables on QD as well to
+		 * prevent this edge case.
+		 */
+		if (operation == CMD_INSERT && containRoot)
+		{
+			foreach(l, all_relids)
+			{
+				Oid	relid = lfirst_oid(l);
+				LockRelationOid(relid, RowExclusiveLock);
+			}
+		}
 		
         /* 
          * We also assign a segno for a deletion operation.
@@ -2171,6 +2204,11 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	        (Gp_role != GP_ROLE_EXECUTE || Gp_is_writer) )
 		OpenIntoRel(queryDesc);
 
+	if(queryDesc->plannedstmt->copyIntoClause != NULL)
+	{
+		queryDesc->dest = CreateCopyDestReceiver();
+		((DR_copy*)queryDesc->dest)->queryDesc = queryDesc;
+	}
 
 	if (DEBUG1 >= log_min_messages)
 			{

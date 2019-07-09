@@ -78,7 +78,6 @@
             <topicref href="guc-list.xml#gp_email_smtp_server"/>
             <topicref href="guc-list.xml#gp_email_smtp_userid"/>
             <topicref href="guc-list.xml#gp_email_to"/>
-            <topicref href="guc-list.xml#gp_enable_adaptive_nestloop"/>
             <topicref href="guc-list.xml#gp_enable_agg_distinct"/>
             <topicref href="guc-list.xml#gp_enable_agg_distinct_pruning"/>
             <topicref href="guc-list.xml#gp_enable_direct_dispatch"/>
@@ -182,7 +181,6 @@
             <topicref href="guc-list.xml#keep_wal_segments"/>
             <topicref href="guc-list.xml#krb_caseins_users"/>
             <topicref href="guc-list.xml#krb_server_keyfile"/>
-            <topicref href="guc-list.xml#krb_srvname"/>
             <topicref href="guc-list.xml#lc_collate"/>
             <topicref href="guc-list.xml#lc_ctype"/>
             <topicref href="guc-list.xml#lc_messages"/>
