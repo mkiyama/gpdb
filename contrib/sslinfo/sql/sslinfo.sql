@@ -9,8 +9,8 @@
 CREATE EXTENSION sslinfo;
 
 SELECT ssl_is_used();
-SELECT ssl_version();
-SELECT ssl_cipher();
+SELECT ssl_version() IS NOT NULL AS version_ok;
+SELECT ssl_cipher() IS NOT NULL AS cipher_ok;
 SELECT ssl_client_cert_present();
 SELECT ssl_client_serial();
 SELECT ssl_client_dn();
