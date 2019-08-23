@@ -90,7 +90,7 @@
             </li>
             <li><xref href="#default_text_search_config" format="dita"/></li>
             <li>
-              <xref href="#default_transction_deferrable"/>
+              <xref href="#default_transaction_deferrable"/>
             </li>
             <li>
               <xref href="#default_transaction_isolation"/>
@@ -268,10 +268,12 @@
               <xref href="#gp_gpperfmon_send_interval"/>
             </li>
             <li>
-              <xref href="#gpperfmon_log_alert_level"/>
-            </li>
-            <li>
               <xref href="#gp_hashjoin_tuples_per_bucket"/>
+            </li>
+            <li><xref href="#gp_vmem_protect_limit"/></li>
+            <li><xref href="#gp_vmem_idle_resource_timeout"/></li>
+            <li>
+              <xref href="#gpperfmon_log_alert_level"/>
             </li>
             <li>
               <xref href="#gpperfmon_port"/>
@@ -1947,7 +1949,7 @@
     <body>
       <p>Adjusts the number of digits displayed for floating-point values, including float4, float8,
         and geometric data types. The parameter value is added to the standard number of digits. The
-        value can be set as high as 2, to include partially-significant digits; this is especially
+        value can be set as high as 3, to include partially-significant digits; this is especially
         useful for dumping float data that needs to be restored exactly. Or it can be set negative
         to suppress unwanted digits. </p>
       <table id="extra_float_digits_table">
@@ -3484,7 +3486,7 @@
             <row>
               <entry colname="col1">Any valid time expression (number and unit)</entry>
               <entry colname="col2">1sec</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
+              <entry colname="col3">master<p>system</p><p>restart</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>

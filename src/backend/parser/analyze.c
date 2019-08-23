@@ -500,12 +500,15 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasAggs = pstate->p_hasAggs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
-	if (pstate->p_hasAggs)
-		parseCheckAggregates(pstate, qry);
+
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
 
 	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs)
+		parseCheckAggregates(pstate, qry);
 
 	return qry;
 }
@@ -1775,8 +1778,6 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
 	qry->hasAggs = pstate->p_hasAggs;
-	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
-		parseCheckAggregates(pstate, qry);
 
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
@@ -1787,14 +1788,25 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 							   (LockingClause *) lfirst(l), false);
 	}
 
+	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
+		parseCheckAggregates(pstate, qry);
+
 	/*
 	 * If the query mixes window functions and aggregates, we need to
 	 * transform it such that the grouped query appears as a subquery
+	 *
+	 * This must be done after collations. Because it, specifically the
+	 * grouped_window_mutator() it called, will replace some expressions with
+	 * Var and set the varcollid with the replaced expressions' original
+	 * collations, which are from assign_query_collations().
+	 *
+	 * Note: assign_query_collations() doesn't handle Var's collation.
 	 */
 	if (qry->hasWindowFuncs && (qry->groupClause || qry->hasAggs))
 		transformGroupedWindows(pstate, qry);
-
-	assign_query_collations(pstate, qry);
 
 	return qry;
 }
@@ -2255,8 +2267,6 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
 	qry->hasAggs = pstate->p_hasAggs;
-	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
-		parseCheckAggregates(pstate, qry);
 
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
@@ -2268,6 +2278,10 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	}
 
 	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
+		parseCheckAggregates(pstate, qry);
 
 	return qry;
 }
@@ -3804,6 +3818,13 @@ checkCanOptSelectLockingClause(SelectStmt *stmt)
 		return false;
 
 	if (!gp_enable_global_deadlock_detector)
+		return false;
+
+	/*
+	 * TODO: if future ORCA can emit LockRows plannode,
+	 * we should remove such restriction here.
+	 */
+	if (optimizer)
 		return false;
 
 	if (stmt->op != SETOP_NONE)
