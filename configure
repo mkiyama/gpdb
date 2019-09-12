@@ -1537,8 +1537,8 @@ Optional Features:
   --disable-strong-random do not use a strong random number source
   --disable-gpfdist       do not use gpfdist
   --disable-pxf           do not build pxf
-  --enable-debug-extensions
-                          include debug extensions in gpcontrib
+  --disable-debug-extensions
+                          exclude debug extensions in gpcontrib
   --enable-orafce         build with Oracle compatibility functions
   --enable-gpperfmon      build with gpperfmon
   --enable-debug          build with debugging symbols (-g)
@@ -3603,7 +3603,7 @@ if test "${enable_debug_extensions+set}" = set; then :
   esac
 
 else
-  enable_debug_extensions=no
+  enable_debug_extensions=yes
 
 fi
 
@@ -8241,6 +8241,10 @@ fi
 
 if test "$with_libcurl" = "no" && test "$enable_gpcloud" = "yes"; then
   as_fn_error $? "libcurl is required by gpcloud" "$LINENO" 5
+fi
+
+if test "$with_libxml" = "no" && test "$enable_gpcloud" = "yes"; then
+  as_fn_error $? "libxml is required by gpcloud" "$LINENO" 5
 fi
 
 #
@@ -14127,7 +14131,7 @@ int
 main ()
 {
 
-return strncmp("3.67.", GPORCA_VERSION_STRING, 5);
+return strncmp("3.69.", GPORCA_VERSION_STRING, 5);
 
   ;
   return 0;
@@ -14137,7 +14141,7 @@ if ac_fn_cxx_try_run "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
 $as_echo "ok" >&6; }
 else
-  as_fn_error $? "Your ORCA version is expected to be 3.67.XXX" "$LINENO" 5
+  as_fn_error $? "Your ORCA version is expected to be 3.69.XXX" "$LINENO" 5
 
 fi
 rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
