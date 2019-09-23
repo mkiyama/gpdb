@@ -631,9 +631,6 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			{
 				motionstate = getMotionState(queryDesc->planstate, LocallyExecutingSliceIndex(estate));
 				Assert(motionstate != NULL && IsA(motionstate, MotionState));
-
-				/* Patch Motion node so it looks like a top node. */
-				motionstate->ps.plan->nMotionNodes = estate->es_sliceTable->nMotions;
 			}
 
 			if (Debug_print_slice_table)
@@ -752,18 +749,16 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 			Assert(IsA(motionState->ps.plan, Motion));
 
-			/* update the connection information, if needed */
-			if (((PlanState *) motionState)->plan->nMotionNodes > 0)
-			{
-				ExecUpdateTransportState((PlanState *)motionState,
-										 estate->interconnect_context);
-			}
+			ExecUpdateTransportState((PlanState *) motionState,
+									 estate->interconnect_context);
 		}
 		else if (exec_identity == GP_ROOT_SLICE)
 		{
 			/* Run a root slice. */
 			if (queryDesc->planstate != NULL &&
-				queryDesc->planstate->plan->nMotionNodes > 0 && !estate->es_interconnect_is_setup)
+				queryDesc->plannedstmt->planTree->dispatch == DISPATCH_PARALLEL &&
+				queryDesc->plannedstmt->nMotionNodes > 0 &&
+				!estate->es_interconnect_is_setup)
 			{
 				Assert(!estate->interconnect_context);
 				SetupInterconnect(estate);
@@ -2152,8 +2147,12 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	/* No more use for locallyExecutableSubplans */
 	bms_free(locallyExecutableSubplans);
 
-	/* Extract all precomputed parameters from init plans */
-	ExtractParamsFromInitPlans(plannedstmt, plannedstmt->planTree, estate);
+	/*
+	 * If this is a query that was dispatched from the QE, extract precomputed
+	 * parameters from all init plans
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE && queryDesc->ddesc)
+		ExtractParamsFromInitPlans(plannedstmt, plannedstmt->planTree, estate);
 
 	/*
 	 * Initialize the private state information for all the nodes in the query
@@ -3657,27 +3656,6 @@ EvalPlanQual(EState *estate, EPQState *epqstate,
 	HeapTuple	copyTuple;
 
 	Assert(rti > 0);
-
-	/*
-	 * If GDD is enabled, the lock of table may downgrade to RowExclusiveLock,
-	 * (see CdbTryOpenRelation function), then EPQ would be triggered, EPQ will
-	 * execute the subplan in the executor, so it will create a new EState,
-	 * but there are no slice tables in the new EState and we can not AssignGangs
-	 * on the QE. In this case, we raise an error.
-	 */
-	if (gp_enable_global_deadlock_detector)
-	{
-		Plan *subPlan = epqstate->plan;
-
-		Assert(subPlan != NULL);
-
-		if (subPlan->nMotionNodes > 0)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-					 errmsg("EvalPlanQual can not handle subPlan with Motion node")));
-		}
-	}
 
 	/*
 	 * Get and lock the updated version of the row; if fail, return NULL.

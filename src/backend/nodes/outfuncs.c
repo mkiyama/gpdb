@@ -373,9 +373,6 @@ _outPlanInfo(StringInfo str, const Plan *node)
 
 	WRITE_NODE_FIELD(flow);
 	WRITE_ENUM_FIELD(dispatch, DispatchMethod);
-	WRITE_INT_FIELD(nMotionNodes);
-	WRITE_INT_FIELD(nInitPlans);
-	WRITE_NODE_FIELD(sliceTable);
 
 	WRITE_NODE_FIELD(lefttree);
 	WRITE_NODE_FIELD(righttree);
@@ -1204,8 +1201,6 @@ _outMotion(StringInfo str, const Motion *node)
 	appendStringInfoLiteral(str, " :hashFuncs");
 	for (i = 0; i < list_length(node->hashExprs); i++)
 		appendStringInfo(str, " %u", node->hashFuncs[i]);
-
-	WRITE_INT_FIELD(isBroadcast);
 
 	WRITE_INT_FIELD(numSortCols);
 	appendStringInfoLiteral(str, " :sortColIdx");

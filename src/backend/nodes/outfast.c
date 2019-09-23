@@ -136,10 +136,10 @@
 
 	/* Read an integer array */
 #define WRITE_INT_ARRAY(fldname, count, Type) \
-	if ( count > 0 ) \
+	if ( (count) > 0 ) \
 	{ \
 		int i; \
-		for(i = 0; i < count; i++) \
+		for(i = 0; i < (count); i++) \
 		{ \
 			appendBinaryStringInfo(str, (const char *)&node->fldname[i], sizeof(Type)); \
 		} \
@@ -147,10 +147,10 @@
 
 /* Write a boolean array  */
 #define WRITE_BOOL_ARRAY(fldname, count) \
-	if ( count > 0 ) \
+	if ( (count) > 0 ) \
 	{ \
 		int i; \
-		for(i = 0; i < count; i++) \
+		for(i = 0; i < (count); i++) \
 		{ \
 			char b = node->fldname[i] ? 1 : 0;								\
 			appendBinaryStringInfo(str, (const char *)&b, 1); \
@@ -159,10 +159,10 @@
 
 /* Write an Trasnaction ID array  */
 #define WRITE_XID_ARRAY(fldname, count) \
-	if ( count > 0 ) \
+	if ( (count) > 0 ) \
 	{ \
 		int i; \
-		for(i = 0; i < count; i++) \
+		for(i = 0; i < (count); i++) \
 		{ \
 			appendBinaryStringInfo(str, (const char *)&node->fldname[i], sizeof(TransactionId)); \
 		} \
@@ -170,10 +170,10 @@
 
 /* Write an Oid array  */
 #define WRITE_OID_ARRAY(fldname, count) \
-	if ( count > 0 ) \
+	if ( (count) > 0 ) \
 	{ \
 		int i; \
-		for(i = 0; i < count; i++) \
+		for(i = 0; i < (count); i++) \
 		{ \
 			appendBinaryStringInfo(str, (const char *)&node->fldname[i], sizeof(Oid)); \
 		} \
@@ -313,11 +313,6 @@ _outPlanInfo(StringInfo str, const Plan *node)
 	WRITE_INT_FIELD(dispatch);
 	WRITE_BOOL_FIELD(directDispatch.isDirectDispatch);
 	WRITE_NODE_FIELD(directDispatch.contentIds);
-
-	WRITE_INT_FIELD(nMotionNodes);
-	WRITE_INT_FIELD(nInitPlans);
-
-	WRITE_NODE_FIELD(sliceTable);
 
     WRITE_NODE_FIELD(lefttree);
     WRITE_NODE_FIELD(righttree);
@@ -586,8 +581,6 @@ _outMotion(StringInfo str, Motion *node)
 
 	WRITE_NODE_FIELD(hashExprs);
 	WRITE_OID_ARRAY(hashFuncs, list_length(node->hashExprs));
-
-	WRITE_INT_FIELD(isBroadcast);
 
 	WRITE_INT_FIELD(numSortCols);
 	WRITE_INT_ARRAY(sortColIdx, node->numSortCols, AttrNumber);
