@@ -6,8 +6,9 @@
   <shortdesc>References for the command-line management utilities used to install and initialize a
     Greenplum Database system. </shortdesc>
   <body>
-    <p>For a full reference of all Greenplum Database utilities, see the <i>Greenplum Database
-        Utility Guide</i>.</p>
+    <p>For a full reference of all Greenplum Database utilities, see the <xref
+        href="../utility_guide/utility_guide.xml#topic_nz5_lnf_kp">Greenplum Database Utility
+        Guide</xref>.</p>
     <p>The following Greenplum Database management utilities are located in
         <codeph>$GPHOME/bin</codeph>.<simpletable id="jn163810">
         <strow>
@@ -30,15 +31,17 @@
               <li>
                 <p>
                   <codeph>
-                    <xref href="../utility_guide/admin_utilities/gpcheck.xml" type="topic"
-                      format="dita" scope="peer">gpcheck</xref></codeph> (deprecated)</p>
-              </li>
-              <li>
-                <p>
-                  <codeph>
                     <xref href="../utility_guide/admin_utilities/gpcheckperf.xml" type="topic"
                       format="dita" scope="peer">gpcheckperf</xref>
                   </codeph>
+                </p>
+              </li>
+              <li otherprops="pivotal">
+                <p>
+                  <codeph>
+                    <xref href="../utility_guide/admin_utilities/gpcopy.xml" type="topic"
+                      format="dita" scope="peer">gpcopy</xref>
+                  </codeph><!--Pivotal-->
                 </p>
               </li>
               <li>
@@ -57,6 +60,10 @@
                   </codeph>
                 </p>
               </li>
+            </ul>
+          </stentry>
+          <stentry>
+            <ul id="ul_zy5_fxn_r4">
               <li>
                 <p>
                   <codeph>
@@ -65,10 +72,6 @@
                   </codeph>
                 </p>
               </li>
-            </ul>
-          </stentry>
-          <stentry>
-            <ul id="ul_zy5_fxn_r4">
               <li>
                 <codeph>
                   <xref href="../utility_guide/admin_utilities/gppkg.xml" type="topic" format="dita"
@@ -80,14 +83,6 @@
                   <codeph>
                     <xref href="../utility_guide/admin_utilities/gpscp.xml" type="topic"
                       format="dita" scope="peer">gpscp</xref>
-                  </codeph>
-                </p>
-              </li>
-              <li>
-                <p>
-                  <codeph>
-                    <xref href="../utility_guide/admin_utilities/gpseginstall.xml" type="topic"
-                      format="dita" scope="peer">gpseginstall</xref>
                   </codeph>
                 </p>
               </li>
