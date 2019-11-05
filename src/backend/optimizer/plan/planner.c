@@ -2916,10 +2916,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 	if ((parse->distinctClause || parse->sortClause) &&
 		(root->config->honor_order_by || !root->parent_root) &&
 		parse->parentStmtType == PARENTSTMTTYPE_NONE &&
-		/*
-		 * GPDB_84_MERGE_FIXME: Does this do the right thing, if you have a
-		 * SELECT DISTINCT query as argument to a table function?
-		 */
 		!parse->isTableValueSelect &&
 		!parse->limitCount && !parse->limitOffset)
 	{
@@ -3297,7 +3293,26 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			(result_plan->flow->flotype == FLOW_PARTITIONED ||
 			 result_plan->flow->locustype == CdbLocusType_SegmentGeneral))
 		{
-			if (result_plan->flow->flotype == FLOW_PARTITIONED)
+			/*
+			 * If limit clause contains volatile functions, they should be
+			 * evaluated only once. For such cases, we should not push down
+			 * the limit.
+			 *
+			 * Words on multi-stage limit: current interconnect implementation
+			 * model is sender will send when buffer is full. Under such
+			 * condition, multi-stage limit might improve performance for
+			 * some cases.
+			 *
+			 * TODO: we might investigate that evaluating limit clause first,
+			 * and then doing pushdown it in future.
+			 */
+			bool        limit_contain_volatile_functions;
+
+			limit_contain_volatile_functions = (contain_volatile_functions(parse->limitCount)
+												|| contain_volatile_functions(parse->limitOffset));
+
+			if (result_plan->flow->flotype == FLOW_PARTITIONED &&
+				!limit_contain_volatile_functions)
 			{
 				/* pushdown the first phase of multi-phase limit (which takes offset into account) */
 				result_plan = pushdown_preliminary_limit(result_plan, parse->limitCount, count_est, parse->limitOffset, offset_est);
@@ -4956,8 +4971,9 @@ choose_hashed_grouping(PlannerInfo *root,
 	cost_agg(&hashed_p, root, AGG_HASHED, agg_costs,
 			 numGroupCols, dNumGroups / planner_segment_count(NULL),
 			 cheapest_path->startup_cost, cheapest_path->total_cost,
-			 path_rows, hash_info.workmem_per_entry,
-			 hash_info.nbatches, hash_info.hashentry_width, false);
+			 path_rows,
+			 &hash_info,
+			 false);
 	/* Result of hashed agg is always unsorted */
 	if (target_pathkeys)
 		cost_sort(&hashed_p, root, target_pathkeys, hashed_p.total_cost,
@@ -4988,7 +5004,7 @@ choose_hashed_grouping(PlannerInfo *root,
 		cost_agg(&sorted_p, root, AGG_SORTED, agg_costs,
 				 numGroupCols, dNumGroups / planner_segment_count(NULL),
 				 sorted_p.startup_cost, sorted_p.total_cost,
-				 path_rows, 0.0, 0.0, 0.0, false);
+				 path_rows, NULL, false);
 	else
 		cost_group(&sorted_p, root, numGroupCols, dNumGroups,
 				   sorted_p.startup_cost, sorted_p.total_cost,
@@ -5123,9 +5139,7 @@ choose_hashed_distinct(PlannerInfo *root,
 			 numDistinctCols, dNumDistinctRows / planner_segment_count(NULL),
 			 cheapest_startup_cost, cheapest_total_cost,
 			 path_rows,
-			 hash_info.workmem_per_entry,
-			 hash_info.nbatches,
-			 hash_info.hashentry_width,
+			 &hash_info,
 			 false /* hash_streaming */);
 
 	/*

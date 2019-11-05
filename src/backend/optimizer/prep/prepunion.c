@@ -121,7 +121,6 @@ static Relids adjust_relid_set(Relids relids, Index oldrelid, Index newrelid);
 static List *adjust_inherited_tlist(List *tlist,
 					   AppendRelInfo *context);
 
-
 /*
  * plan_set_operations
  *
@@ -447,6 +446,47 @@ generate_recursion_plan(SetOperationStmt *setOp, PlannerInfo *root,
 
 		/* Also convert to long int --- but 'ware overflow! */
 		numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
+	}
+
+	/*
+	 * When building worktable scan path, its locus is set
+	 * the same as the non-recursive plan's locus. But in
+	 * Greenplum, locus may change by motion if worktable
+	 * join with other relations. In `cdbpath_motion_for_join`,
+	 * paths contains worktable scan are set ok_replicated to false
+	 * and movable to false, so if lplan's locus does not equal to
+	 * rplan's, rplan's locus must be singleQE or entry. Then we just make
+	 * them the same locus.
+	 */
+	if (lplan->flow->locustype != rplan->flow->locustype &&
+		lplan->flow->flotype == FLOW_SINGLETON &&
+		rplan->flow->flotype == FLOW_SINGLETON)
+	{
+		if (rplan->flow->locustype != CdbLocusType_SingleQE &&
+			rplan->flow->locustype != CdbLocusType_Entry)
+		{
+			elog(ERROR,
+				 "expect rplan's locus to be singleQE or entry, "
+				 "but found %d", rplan->flow->locustype);
+		}
+
+		if (lplan->flow->locustype == CdbLocusType_General ||
+			lplan->flow->locustype == CdbLocusType_Entry)
+		{
+			/* do nothing, will set flow correct at the end of the function */
+		}
+		else if (lplan->flow->locustype == CdbLocusType_SegmentGeneral)
+			lplan = (Plan *) make_motion_gather(root, lplan, NIL);
+		else
+		{
+			elog(ERROR,
+				 "expect lplan's locus to be either general or segmentgeneral, "
+				 "but found %d", lplan->flow->locustype);
+		}
+		/* set lplan's flow same as rplan's */
+		lplan->flow->locustype = rplan->flow->locustype;
+		lplan->flow->segindex = rplan->flow->segindex;
+		lplan->flow->numsegments = rplan->flow->numsegments;
 	}
 
 	/*
@@ -924,6 +964,17 @@ choose_hashed_setop(PlannerInfo *root, List *groupClauses,
 	/*
 	 * Don't do it if it doesn't look like the hashtable will fit into
 	 * work_mem.
+	 *
+	 * GPDB: In other places where we are building a Hash Aggregate, we use
+	 * calcHashAggTableSizes(), which takes into account that in GPDB, a Hash
+	 * Aggregate can spill to disk. We must *not* do that here, because we
+	 * might be building a Hashed SetOp, not a Hash Aggregate. A Hashed SetOp
+	 * uses the upstream hash table implementation unmodified, and cannot
+	 * spill.
+	 * FIXME: It's a bit lame that Hashed SetOp cannot spill to disk. And it's
+	 * even more lame that we don't account the spilling correctly, if we are
+	 * in fact constructing a Hash Aggregate. A UNION is implemented with a
+	 * Hash Aggregate, only INTERSECT and EXCEPT use Hashed SetOp.
 	 */
 	hashentrysize = MAXALIGN(input_plan->plan_width) + MAXALIGN(SizeofMinimalTupleHeader);
 
@@ -945,9 +996,8 @@ choose_hashed_setop(PlannerInfo *root, List *groupClauses,
 			 numGroupCols, dNumGroups / planner_segment_count(NULL),
 			 input_plan->startup_cost, input_plan->total_cost,
 			 input_plan->plan_rows,
-			 hashentrysize, /* input_width */
-			 0, /* hash_batches - so spilling expected with TupleHashTable */
-			 hashentrysize, /* hashentry_width */
+			 NULL, /* GPDB: We are using the upstream hash table implementation,
+					* which does not spill. */
 			 false /* hash_streaming */);
 
 	/*

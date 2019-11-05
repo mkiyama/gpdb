@@ -404,6 +404,7 @@ bool		optimizer_enable_eageragg;
 /* Analyze related GUCs for Optimizer */
 bool		optimizer_analyze_root_partition;
 bool		optimizer_analyze_midlevel_partition;
+bool		optimizer_analyze_enable_merge_of_leaf_stats;
 
 /* GUCs for replicated table */
 bool		optimizer_replicated_table_insert;
@@ -2605,6 +2606,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_analyze_enable_merge_of_leaf_stats", PGC_USERSET, STATS_ANALYZE,
+			gettext_noop("Enable merging of leaf stats into the root stats during ANALYZE when analyzing partitions"),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_analyze_enable_merge_of_leaf_stats,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_enable_constant_expression_evaluation", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable constant expression evaluation in the optimizer"),
 			NULL,
@@ -3504,15 +3516,6 @@ struct config_int ConfigureNamesInt_gp[] =
 
 
 	{
-#ifdef USE_ASSERT_CHECKING
-		{"gp_debug_linger", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Number of seconds for QD/QE process to linger upon fatal internal error."),
-			gettext_noop("Allows an opportunity to debug the backend process before it terminates."),
-			GUC_NOT_IN_SAMPLE | GUC_NO_RESET_ALL | GUC_UNIT_S
-		},
-		&gp_debug_linger,
-		120, 0, 3600,
-#else
 		{"gp_debug_linger", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Number of seconds for QD/QE process to linger upon fatal internal error."),
 			gettext_noop("Allows an opportunity to debug the backend process before it terminates."),
@@ -3520,7 +3523,6 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_debug_linger,
 		0, 0, 3600,
-#endif
 		NULL, NULL, NULL
 	},
 
