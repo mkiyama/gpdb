@@ -18,7 +18,7 @@
         the prepared statement is planned and executed. This division of labor avoids repetitive
         parse analysis work, while allowing the execution plan to depend on the specific parameter
         values supplied.</p>
-      <p>Prepared statements can take parameters: values that are substituted into the statement
+      <p>Prepared statements can take parameters, values that are substituted into the statement
         when it is executed. When creating the prepared statement, refer to parameters by position,
         using <codeph>$1</codeph>, <codeph>$2</codeph>, etc. A corresponding list of parameter data
         types can optionally be specified. When a parameter's data type is not specified or is
@@ -124,9 +124,8 @@ EXECUTE usrrptplan(1, current_date);</codeblock>
     </section>
     <section id="section7">
       <title>Compatibility</title>
-      <p>The SQL standard includes a <codeph>PREPARE</codeph> statement, but it is only for use in
-        embedded SQL. This version of the <codeph>PREPARE</codeph> statement also uses a somewhat
-        different syntax.</p>
+      <p>The SQL standard includes a <codeph>PREPARE</codeph> statement, but it can only be used in
+        embedded SQL, and it uses a different syntax.</p>
     </section>
     <section id="section8">
       <title>See Also</title>
