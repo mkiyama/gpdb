@@ -108,7 +108,7 @@
       <body>
         <p>Run the <codeph>postgis_manager.sh</codeph> script specifying the database, an optional
           schema, and the <codeph>install</codeph> option to install PostGIS and PostGIS Raster. If
-          you do not specify a schema, the script installs PostGIS installs in the default
+          you do not specify a schema, the script installs PostGIS in the default
           schema.<codeblock>postgis_manager.sh &lt;dbname> [&lt;schema_name>] install </codeblock></p>
         <p>This example installs PostGIS and PostGIS Raster objects in the database
             <codeph>mydatabase</codeph> in the default
@@ -187,7 +187,7 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
           PostGIS.<codeblock>postgis_manager.sh &lt;dbname> [&lt;schema_name>] uninstall </codeblock></p>
         <p>This example removes PostGIS and PostGIS Raster support from the database
             <codeph>mydatabase</codeph> that was installed in the default
-          schema.<codeblock><codeph>postgis_manager.sh</codeph> mydatabase uninstall</codeblock></p>
+          schema.<codeblock>postgis_manager.sh mydatabase uninstall</codeblock></p>
         <p>The script runs both the PostGIS SQL scripts that remove PostGIS and PostGIS Raster from
           a database: <codeph>uninstall_rtpostgis.sql</codeph> and
             <codeph>uninstall_postgis.sql</codeph>.</p>
