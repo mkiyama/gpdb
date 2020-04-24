@@ -48,47 +48,47 @@
       <p>For information about GDAL, see <xref href="http://www.gdal.org" format="html"
           scope="external">http://www.gdal.org</xref>. </p>
     </body>
-    <topic id="topic3" xml:lang="en">
-      <title id="ij168742">Greenplum PostGIS Extension</title>
+  </topic>
+  <topic id="topic3" xml:lang="en">
+    <title id="ij168742">Greenplum PostGIS Extension</title>
+    <body>
+      <p><ph otherprops="pivotal">The Greenplum Database PostGIS extension package is available from
+            <xref href="https://network.pivotal.io/products/pivotal-gpdb" scope="external"
+            format="html">VMware Tanzu Network</xref>. </ph>You can install the package using the
+        Greenplum Package Manager (<codeph>gppkg</codeph>). For details, see <codeph>gppkg</codeph>
+        in the <cite>Greenplum Database Utility Guide</cite>.</p>
+      <p>Greenplum Database supports the PostGIS extension with these component versions.<ul
+          id="ul_csh_q3z_d1b">
+          <li>PostGIS 2.5.4</li>
+          <li>Proj 4.8.0 </li>
+          <li>Geos 3.4.2</li>
+          <li>GDAL 1.11.1</li>
+          <li>Json 0.12</li>
+          <li>Expat 2.1.0</li>
+        </ul></p>
+      <p otherprops="pivotal">For the information about supported extension packages and software
+        versions, see the <cite>Greenplum Database Release Notes</cite>.</p>
+      <p>There have been significant changes in PostGIS 2.5.4 compared with the previously supported
+        version of 2.1.5. For a list of new and enhanced functions in PostGIS 2.5, see the PostGIS
+        documentation <xref
+          href="http://postgis.net/docs/manual-2.5/PostGIS_Special_Functions_Index.html#NewFunctions_2_5"
+          format="html" scope="external">PostGIS Functions new or enhanced in 2.5</xref>.</p>
+      <p>For a comprehensive list of PostGIS changes in PostGIS 2.5.4 and earlier, see PostGIS 2.5
+        Appendix A <xref href="http://postgis.net/docs/manual-2.5/release_notes.html" format="html"
+          scope="external">Release 2.5.4</xref>.</p>
+    </body>
+    <topic id="topic4" xml:lang="en">
+      <title>Greenplum Database PostGIS Limitations</title>
       <body>
-        <p><ph otherprops="pivotal">The Greenplum Database PostGIS extension package is available
-            from <xref href="https://network.pivotal.io/products/pivotal-gpdb" scope="external"
-              format="html">VMware Tanzu Network</xref>. </ph>You can install the package using the
-          Greenplum Package Manager (<codeph>gppkg</codeph>). For details, see
-            <codeph>gppkg</codeph> in the <cite>Greenplum Database Utility Guide</cite>.</p>
-        <p>Greenplum Database supports the PostGIS extension with these component versions.<ul
-            id="ul_csh_q3z_d1b">
-            <li>PostGIS 2.5.4</li>
-            <li>Proj 4.8.0 </li>
-            <li>Geos 3.4.2</li>
-            <li>GDAL 1.11.1</li>
-            <li>Json 0.12</li>
-            <li>Expat 2.1.0</li>
-          </ul></p>
-        <p otherprops="pivotal">For the information about supported extension packages and software
-          versions, see the <cite>Greenplum Database Release Notes</cite>.</p>
-        <p>There have been significant changes in PostGIS 2.5.4 compared with the previously
-          supported version of 2.1.5. For a list of new and enhanced functions in PostGIS 2.5, see
-          the PostGIS documentation <xref
-            href="http://postgis.net/docs/manual-2.5/PostGIS_Special_Functions_Index.html#NewFunctions_2_5"
-            format="html" scope="external">PostGIS Functions new or enhanced in 2.5</xref>.</p>
-        <p>For a comprehensive list of PostGIS changes in PostGIS 2.5.4 and earlier, see PostGIS 2.5
-          Appendix A <xref href="http://postgis.net/docs/manual-2.5/release_notes.html"
-            format="html" scope="external">Release 2.5.4</xref>.</p>
+        <p>The Greenplum Database PostGIS extension does not support the following features:</p>
+        <ul id="ul_mm2_p42_4p">
+          <li id="ij169095">Topology</li>
+          <li id="ij166819">A small number of user defined functions and aggregates</li>
+          <li id="ij166822">PostGIS long transaction support</li>
+        </ul>
+        <p>For information about Greenplum Database PostGIS support, see <xref
+            href="#postgis_support" format="dita"/>.</p>
       </body>
-      <topic id="topic4" xml:lang="en">
-        <title>Greenplum Database PostGIS Limitations</title>
-        <body>
-          <p>The Greenplum Database PostGIS extension does not support the following features:</p>
-          <ul id="ul_mm2_p42_4p">
-            <li id="ij169095">Topology</li>
-            <li id="ij166819">A small number of user defined functions and aggregates</li>
-            <li id="ij166822">PostGIS long transaction support</li>
-          </ul>
-          <p>For information about Greenplum Database PostGIS support, see <xref
-              href="#postgis_support" format="dita"/>.</p>
-        </body>
-      </topic>
     </topic>
   </topic>
   <topic id="topic_b2l_hzw_q1b">
@@ -159,21 +159,23 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
           the <codeph>ST_GDALDrivers()</codeph> function. This <codeph>SELECT</codeph> command lists
           the enabled raster drivers.</p>
         <codeblock>SELECT short_name, long_name FROM ST_GDALDrivers();</codeblock>
-        <section>
-          <title>Enabling Out-of-Database Rasters</title>
-          <p>After installing PostGIS, the default setting
-              <codeph>POSTGIS_ENABLE_OUTDB_RASTERS=0</codeph> in the
-              <codeph>greenplum_path.sh</codeph> file disables support for to out-of-database
-            rasters. To enable this feature, you can set the value to true (a non-zero value) on all
-            hosts and restart the Greenplum Database system. </p>
-          <p>You can also enable or disable this feature for a Greenplum Database session. For
-            example, this <codeph>SET</codeph> command enables the feature for the current
-            session.</p>
-          <codeblock>SET postgis.enable_outdb_rasters = true;				</codeblock>
-          <note>When the feature is enabled, the server configuration parameter
-              <codeph>postgis.gdal_enabled_drivers</codeph> determines the accessible raster
-            formats.</note>
-        </section>
+      </body>
+    </topic>
+    <topic id="topic_fx2_fpx_llb">
+      <title>Enabling Out-of-Database Rasters</title>
+      <body>
+        <p>After installing PostGIS, the default setting
+            <codeph>POSTGIS_ENABLE_OUTDB_RASTERS=0</codeph> in the
+            <codeph>greenplum_path.sh</codeph> file disables support for to out-of-database rasters.
+          To enable this feature, you can set the value to true (a non-zero value) on all hosts and
+          restart the Greenplum Database system. </p>
+        <p>You can also enable or disable this feature for a Greenplum Database session. For
+          example, this <codeph>SET</codeph> command enables the feature for the current
+          session.</p>
+        <codeblock>SET postgis.enable_outdb_rasters = true;				</codeblock>
+        <note>When the feature is enabled, the server configuration parameter
+            <codeph>postgis.gdal_enabled_drivers</codeph> determines the accessible raster
+          formats.</note>
       </body>
     </topic>
     <topic id="topic_bgz_vcl_r1b">
