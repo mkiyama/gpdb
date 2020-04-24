@@ -38,15 +38,15 @@
         SQL functions (such as <codeph>ST_Intersects</codeph>) operating seamlessly on vector and
         raster geospatial data. PostGIS Raster uses the GDAL (Geospatial Data Abstraction Library)
         translator library for raster geospatial data formats that presents a <xref
-          href="http://www.gdal.org/gdal_datamodel.html" format="html" scope="external">single
+          href="https://gdal.org/user/raster_data_model.html" format="html" scope="external">single
           raster abstract data model</xref> to a calling application. </p>
       <p>For information about Greenplum Database PostGIS extension support, see <xref
           href="#postgis_support" format="dita"/>.</p>
-      <p>For information about PostGIS, see <xref href="http://postgis.refractions.net/"
-          scope="external" format="html"> http://postgis.refractions.net/</xref>
+      <p>For information about PostGIS, see <xref href="https://postgis.net/" scope="external"
+          format="html">https://postgis.net/</xref>
       </p>
-      <p>For information about GDAL, see <xref href="http://www.gdal.org" format="html"
-          scope="external">http://www.gdal.org</xref>. </p>
+      <p>For information about GDAL, see <xref href="https://gdal.org/" format="html"
+          scope="external">https://gdal.org/</xref>. </p>
     </body>
   </topic>
   <topic id="topic3" xml:lang="en">
@@ -71,10 +71,10 @@
       <p>There have been significant changes in PostGIS 2.5.4 compared with the previously supported
         version of 2.1.5. For a list of new and enhanced functions in PostGIS 2.5, see the PostGIS
         documentation <xref
-          href="http://postgis.net/docs/manual-2.5/PostGIS_Special_Functions_Index.html#NewFunctions_2_5"
+          href="https://postgis.net/docs/manual-2.5/PostGIS_Special_Functions_Index.html#NewFunctions_2_5"
           format="html" scope="external">PostGIS Functions new or enhanced in 2.5</xref>.</p>
       <p>For a comprehensive list of PostGIS changes in PostGIS 2.5.4 and earlier, see PostGIS 2.5
-        Appendix A <xref href="http://postgis.net/docs/manual-2.5/release_notes.html" format="html"
+        Appendix A <xref href="https://postgis.net/docs/manual-2.5/release_notes.html" format="html"
           scope="external">Release 2.5.4</xref>.</p>
     </body>
     <topic id="topic4" xml:lang="en">
@@ -145,9 +145,9 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
         <p>
           <codeblock>raster2pgsql -G </codeblock>
         </p>
-        <p>The command lists the driver long format name. The <cite>GDAL Raster Formats</cite> table
-          at <xref href="http://www.gdal.org/formats_list.html" format="html" scope="external"
-            >http://www.gdal.org/formats_list.html</xref> lists the long format names and the
+        <p>The command lists the driver long format name. The <cite>GDAL Raster</cite> table at
+            <xref href="https://gdal.org/drivers/raster/index.html" format="html" scope="external"
+            >https://gdal.org/drivers/raster/index.html</xref> lists the long format names and the
           corresponding codes that you specify as the value of the environment variable. For
           example, the code for the long name Portable Network Graphics is <codeph>PNG</codeph>.
           This example <codeph>export</codeph> line enables four GDAL raster drivers.</p>
@@ -280,7 +280,7 @@ SELECT name,ST_AsText(geopoint) FROM geotest;</codeblock>
           <li dir="ltr">geography</li>
         </ul>
         <p>For a list of PostGIS data types, operators, and functions, see the <xref
-            href="http://postgis.net/docs/manual-2.1/reference.html" format="html" scope="external"
+            href="https://postgis.net/docs/manual-2.5/reference.html" format="html" scope="external"
             >PostGIS reference documentation</xref>.</p>
       </body>
     </topic>
@@ -298,11 +298,11 @@ SELECT name,ST_AsText(geopoint) FROM geotest;</codeblock>
           <li dir="ltr">unionarg</li>
         </ul>
         <p>For information about PostGIS Raster data Management, queries, and applications, see
-            <xref href="http://postgis.net/docs/manual-2.5/using_raster_dataman.html" format="html"
+            <xref href="https://postgis.net/docs/manual-2.5/using_raster_dataman.html" format="html"
             scope="external"
-          >http://postgis.net/docs/manual-2.5/using_raster_dataman.html</xref>.</p>
+          >https://postgis.net/docs/manual-2.5/using_raster_dataman.html</xref>.</p>
         <p>For a list of PostGIS Raster data types, operators, and functions, see the <xref
-            href="http://postgis.net/docs/manual-2.5/RT_reference.html" format="html"
+            href="https://postgis.net/docs/manual-2.5/RT_reference.html" format="html"
             scope="external">PostGIS Raster reference documentation</xref>.</p>
       </body>
     </topic>
