@@ -184,7 +184,7 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
         <p>Run the <codeph>postgis_manager.sh</codeph> script specifying the database, a schema name
           (if necessary), and with the <codeph>uninstall</codeph> option to remove PostGIS and
           PostGIS Raster. You specify the schema if you specified a schema when you installed
-          PostGIS.<codeblock>postgis_manager.sh &lt;dbname> [&lt;schema_name>] uninstall </codeblock></p>
+          PostGIS.<codeblock>postgis_manager.sh &lt;dbname> [&lt;schema_name>] uninstall</codeblock></p>
         <p>This example removes PostGIS and PostGIS Raster support from the database
             <codeph>mydatabase</codeph> that was installed in the default
           schema.<codeblock>postgis_manager.sh mydatabase uninstall</codeblock></p>
