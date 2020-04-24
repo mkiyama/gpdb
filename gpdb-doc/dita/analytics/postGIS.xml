@@ -255,9 +255,10 @@ SELECT name,ST_AsText(geopoint) FROM geotest;</codeblock>
           <xref href="#topic_g2d_hkb_3p" format="dita"/>
         </li>
         <li>
+          <xref href="#topic_bl3_4vy_d1b" format="dita"/></li>
+        <li>
           <xref href="#topic_y5z_nkb_3p" format="dita"/>
         </li>
-        <li><xref href="#topic_bl3_4vy_d1b" format="dita"/></li>
         <li>
           <xref href="#topic_wy2_rkb_3p" format="dita"/>
         </li>
