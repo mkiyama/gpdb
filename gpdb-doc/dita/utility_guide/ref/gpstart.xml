@@ -52,7 +52,7 @@
                     <li>If the <codeph>-a</codeph> option (disable interactive mode prompts) is not
                         specified, <codeph>gpstart</codeph> displays and logs these
                             messages:<codeblock>Standby host is unreachable, cannot determine whether the standby is currently acting as the master. Received error: &lt;error>
-Continue only if you are certain that the standby is not acting as the master.</codeblock><p>And
+Continue only if you are certain that the standby is not acting as the master.</codeblock><p>It also
                             displays this prompt to continue
                             startup:<codeblock>Continue with startup Yy|Nn (default=N):</codeblock></p></li>
                     <li>If the <codeph>-a</codeph> option is specified, the utility does not start
