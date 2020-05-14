@@ -19,30 +19,30 @@
       <p>Database bloat is disk space that was used by a table or index and is available for reuse
         by the database but has not been reclaimed. Bloat is created when updating tables or
         indexes.</p>
-      <p>For example, Greenplum Database heap tables use the PostgreSQL Multiversion Concurrency
-        Control (MVCC) storage implementation. A deleted or updated row is logically deleted from
-        the database, but a non-visible image of the row remains in the table. These deleted rows,
-        also called expired rows, are tracked in a free space map. Running <codeph>VACUUM</codeph>
-        marks the expired rows as free space that is available for reuse by subsequent inserts. </p>
+      <p>Because Greenplum Database heap tables use the PostgreSQL Multiversion Concurrency Control
+        (MVCC) storage implementation, a deleted or updated row is logically deleted from the
+        database, but a non-visible image of the row remains in the table. These deleted rows, also
+        called expired rows, are tracked in a free space map. Running <codeph>VACUUM</codeph> marks
+        the expired rows as free space that is available for reuse by subsequent inserts. </p>
       <p>It is normal for tables that have frequent updates to have a small or moderate amount of
         expired rows and free space that will be reused as new data is added. But when the table is
         allowed to grow so large that active data occupies just a small fraction of the space, the
         table has become significantly bloated. Bloated tables require more disk storage and
         additional I/O that can slow down query execution.</p>
       <note type="important">
-        <p>It is very important to run <codeph>VACUUM</codeph> after large <codeph>UPDATE</codeph>
-          and <codeph>DELETE</codeph> operations to avoid the necessity of ever running
-            <codeph>VACUUM FULL</codeph>.</p>
+        <p>It is very important to run <codeph>VACUUM</codeph> on individual tables after large
+            <codeph>UPDATE</codeph> and <codeph>DELETE</codeph> operations to avoid the necessity of
+          ever running <codeph>VACUUM FULL</codeph>.</p>
       </note>
-      <p>Running the <codeph>VACUUM</codeph> command on tables regularly prevents them from growing
+      <p>Running the <codeph>VACUUM</codeph> command regularly on tables prevents them from growing
         too large. If the table does become significantly bloated, the <codeph>VACUUM FULL</codeph>
         command must be used to compact the table data. </p>
       <p>If the free space map is not large enough to accommodate all of the expired rows, the
           <codeph>VACUUM</codeph> command is unable to reclaim space for expired rows that
         overflowed the free space map. The disk space may only be recovered by running
-          <codeph>VACUUM FULL</codeph>, which locks the table, copies rows one-by-one to the
-        beginning of the file, and truncates the file. This is an expensive operation that can take
-        an exceptional amount of time to complete with a large table. If you attempt to kill a
+          <codeph>VACUUM FULL</codeph>, which locks the table, creates a new table, copies the table
+        data to the new table, and then drops old table. This is an expensive operation that can
+        take an exceptional amount of time to complete with a large table. If you attempt to kill a
           <codeph>VACUUM FULL</codeph> operation, the system can be disrupted. </p>
       <note type="warning"><codeph>VACUUM FULL</codeph> acquires an <codeph>ACCESS
           EXCLUSIVE</codeph> lock on tables. You should not run <codeph>VACUUM FULL
@@ -111,10 +111,10 @@
     <section id="bloat_ao_tables">
       <title>Removing Bloat from Append-Optimized Tables</title>
       <p>Append-optimized tables are handled much differently than heap tables. Although
-        append-optimized tables allow updates, inserts, and deletes, they are not optimized for
-        these operations and it is recommended to not use them with append-optimized tables. If you
-        heed this advice and use append-optimized for <i>load-once/read-many</i> workloads,
-          <codeph>VACUUM</codeph> on an append-optimized table runs almost instantaneously. </p>
+        append-optimized tables allow update, insert, and delete operations, these operations are
+        not optimized and are not recommended with append-optimized tables. If you heed this advice
+        and use append-optimized for <i>load-once/read-many</i> workloads, <codeph>VACUUM</codeph>
+        on an append-optimized table runs almost instantaneously. </p>
       <p>If you do run <codeph>UPDATE</codeph> or <codeph>DELETE</codeph> commands on an
         append-optimized table, expired rows are tracked in an auxiliary bitmap instead of the free
         space map. <codeph>VACUUM</codeph> is the only way to recover the space. Running
@@ -147,11 +147,12 @@
       <p>Bloat in the system catalogs increases the time require to scan the tables, for example,
         when creating explain plans. System catalogs are scanned frequently and if they become
         bloated, overall system performance is degraded. </p>
-      <p>It is recommended to run <codeph>VACUUM</codeph> on the system catalog nightly and at least
-        weekly. At the same time, running <codeph>REINDEX SYSTEM</codeph> removes bloat from the
-        indexes. Alternatively, you can reindex system tables using the <codeph>reindexdb</codeph>
-        utility with the <codeph>-s</codeph> (<codeph>--system</codeph>) option. After removing
-        catalog bloat, run <codeph>ANALYZE</codeph> to update catalog table statistics. </p>
+      <p>It is recommended to run <codeph>VACUUM</codeph> on system catalog tables nightly and at
+        least weekly. At the same time, running <codeph>REINDEX SYSTEM</codeph> removes bloat from
+        the indexes. Alternatively, you can reindex system tables using the
+          <codeph>reindexdb</codeph> utility with the <codeph>-s</codeph>
+        (<codeph>--system</codeph>) option. After removing catalog bloat, run
+          <codeph>ANALYZE</codeph> to update catalog table statistics. </p>
       <p>These are Greenplum Database system catalog maintenance steps.<ol id="ol_un5_p1l_f2b">
           <li>Perform a <codeph>REINDEX</codeph> on the system catalog tables to rebuild the system
             catalog indexes. This removes bloat in the indexes and improves <codeph>VACUUM</codeph>
@@ -164,8 +165,8 @@
           <li>Perform an <codeph>ANALYZE</codeph> on the system catalog tables to update the table
             statistics. </li>
         </ol></p>
-      <p>If you are performing catalog maintenance during a maintenance period and you need to stop
-        a process due to time constraints, run the Greenplum Database function
+      <p>If you are performing system catalog maintenance during a maintenance period and you need
+        to stop a process due to time constraints, run the Greenplum Database function
           <codeph>pg_cancel_backend(&lt;PID>)</codeph> to safely stop a Greenplum Database
         process.</p>
       <p>The following script runs <codeph>REINDEX</codeph>, <codeph>VACUUM</codeph>, and
@@ -181,8 +182,8 @@ analyzedb -s pg_catalog -d $DBNAME</pre></p>
       <p>If the system catalogs become significantly bloated, you must run <codeph>VACUUM
           FULL</codeph> during a scheduled downtime period. During this period, stop all catalog
         activity on the system; <codeph>VACUUM FULL</codeph> takes <codeph>ACCESS EXCLUSIVE</codeph>
-        locks against the system catalog. Running <codeph>VACUUM</codeph> regularly can prevent the
-        need for this more costly procedure.</p>
+        locks against the system catalog. Running <codeph>VACUUM</codeph> regularly on system
+        catalog tables can prevent the need for this more costly procedure.</p>
       <p>These are steps for intensive system catalog maintenance.<ol id="ol_trp_xqs_f2b">
           <li>Stop all catalog activity on the Greenplum Database system.</li>
           <li>Perform a <codeph>REINDEX</codeph> on the system catalog tables to rebuild the system
