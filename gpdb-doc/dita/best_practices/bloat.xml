@@ -42,8 +42,7 @@
         overflowed the free space map. The disk space may only be recovered by running
           <codeph>VACUUM FULL</codeph>, which locks the table, creates a new table, copies the table
         data to the new table, and then drops old table. This is an expensive operation that can
-        take an exceptional amount of time to complete with a large table. If you attempt to kill a
-          <codeph>VACUUM FULL</codeph> operation, the system can be disrupted. </p>
+        take an exceptional amount of time to complete with a large table. </p>
       <note type="warning"><codeph>VACUUM FULL</codeph> acquires an <codeph>ACCESS
           EXCLUSIVE</codeph> lock on tables. You should not run <codeph>VACUUM FULL
           &lt;database_name></codeph>. If you run <codeph>VACUUM FULL</codeph> on tables, run it
