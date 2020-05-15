@@ -27,14 +27,15 @@ CREATE [ [GLOBAL | LOCAL] {TEMPORARY | TEMP } | UNLOGGED] TABLE [IF NOT EXISTS]
        | DISTRIBUTED RANDOMLY | DISTRIBUTED REPLICATED ]
 
 { <b>--partitioned table using SUBPARTITION TEMPLATE</b>
-[ PARTITION BY <varname>partition_type</varname> (<varname>column</varname>) ]
+[ PARTITION BY <varname>partition_type</varname> (<varname>column</varname>) 
   {  [ SUBPARTITION BY <varname>partition_type</varname> (<varname>column1</varname>) 
        SUBPARTITION TEMPLATE ( <varname>template_spec</varname> ) ]
           [ SUBPARTITION BY partition_type (<varname>column2</varname>) 
             SUBPARTITION TEMPLATE ( <varname>template_spec</varname> ) ]
               [...]  }
-  ( <varname>partition_spec</varname> )
-} 
+  ( <varname>partition_spec</varname> ) ]
+} |
+
 { <b>-- partitioned table without SUBPARTITION TEMPLATE
 </b>[ PARTITION BY <varname>partition_type</varname> (<varname>column</varname>)
    [ SUBPARTITION BY <varname>partition_type</varname> (<varname>column1</varname>) ]
