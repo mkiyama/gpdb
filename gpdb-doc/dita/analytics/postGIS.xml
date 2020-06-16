@@ -29,12 +29,12 @@
         Information Systems) objects to be stored in the database. The Greenplum PostGIS extension
         includes support for GiST-based R-Tree spatial indexes and functions for analysis and
         processing of GIS objects. </p>
-      <p>The Greenplum PostGIS extension supports some PostGIS extensions including the optional
-        PostGIS <codeph>raster</codeph> data type. With the PostGIS Raster objects, PostGIS
-          <codeph>geometry</codeph> data type offers a single set of overlay SQL functions (such as
-          <codeph>ST_Intersects</codeph>) operating seamlessly on vector and raster geospatial data.
-        PostGIS Raster uses the GDAL (Geospatial Data Abstraction Library) translator library for
-        raster geospatial data formats that presents a <xref
+      <p>The Greenplum PostGIS extension supports some PostGIS optional extensions and includes
+        support for the PostGIS <codeph>raster</codeph> data type. With the PostGIS Raster objects,
+        PostGIS <codeph>geometry</codeph> data type offers a single set of overlay SQL functions
+        (such as <codeph>ST_Intersects</codeph>) operating seamlessly on vector and raster
+        geospatial data. PostGIS Raster uses the GDAL (Geospatial Data Abstraction Library)
+        translator library for raster geospatial data formats that presents a <xref
           href="https://gdal.org/user/raster_data_model.html" format="html" scope="external">single
           raster abstract data model</xref> to a calling application. </p>
       <p>For information about Greenplum Database PostGIS extension support, see <xref
@@ -75,10 +75,7 @@
           scope="external">Release 2.5.4</xref>.</p>
       <note>If you installed Greenplum PostGIS 2.1.5, you cannot upgrade from PostGIS 2.1.5 to
         2.5.4. You must uninstall PostGIS 2.1.5 and install PostGIS 2.5.4.</note>
-      <p>Greenplum PostGIS supports some PostGIS extensions. This table lists the Greenplum PostGIS
-        support for the PostGIS extensions. For information about the PostGIS extensions see the
-        PostGIS 2.5 documentation at <xref href="https://postgis.net/documentation/" format="html"
-          scope="external">https://postgis.net/documentation/</xref>.</p>
+      <p>This table lists the PostGIS extensions support by Greenplum PostGIS. </p>
       <table frame="all" rowsep="1" colsep="1" id="table_owt_4ml_xlb">
         <title>Greenplum PostGIS Extensions</title>
         <tgroup cols="2">
@@ -92,12 +89,10 @@
           </thead>
           <tbody>
             <row>
-              <entry><codeph>postgis</codeph><p dir="ltr">Base PostGIS extension</p></entry>
-              <entry>Supported. Enabled when Greenplum PostGIS is enabled.</entry>
-            </row>
-            <row>
-              <entry><codeph>postgis_raster</codeph><p>PostGIS Raster support</p></entry>
-              <entry>Supported. Enabled when Greenplum PostGIS is enabled.</entry>
+              <entry><codeph>postgis</codeph> and <codeph>postgis_raster</codeph><p dir="ltr"
+                  >PostGIS and PostGIS Raster support</p></entry>
+              <entry>Supported. Both PostGIS and PostGIS Raster are enabled when the Greenplum
+                  <codeph>postgis</codeph> extension is enabled.</entry>
             </row>
             <row>
               <entry><codeph>postgis_tiger_geocoder</codeph><p>The US TIGER geocoder</p></entry>
@@ -128,18 +123,15 @@
               <entry>Supported. This extension is bundled but not enabled with Greenplum
                   Database.<p>Required for the PostGIS TIGER geocoder.</p></entry>
             </row>
-            <row>
-              <entry><codeph>postgis_topology</codeph><p>PostGIS topology support</p></entry>
-              <entry>Not supported. Not included with Greenplum PostGIS.</entry>
-            </row>
-            <row>
-              <entry><codeph>postgis_sfcgal</codeph><p>PostGIS advanced 3D and other geoprocessing
-                  algorithms</p></entry>
-              <entry>Not supported. Not included with Greenplum PostGIS.</entry>
-            </row>
           </tbody>
         </tgroup>
       </table>
+      <note>The PostGIS topology extension <codeph>postgis_topology</codeph> and the PostGIS 3D and
+        geoprocessing extension <codeph>postgis_sfcgal</codeph> are not supported by Greenplum
+        PostGIS and are not included in the Greenplum PostGIS extension package.</note>
+      <p>For information about the PostGIS extensions, see the <xref
+          href="https://postgis.net/documentation/" format="html" scope="external">PostGIS 2.5
+          documentation</xref>.</p>
       <p>For information about Greenplum PostGIS feature support, see <xref href="#postgis_support"
           format="dita"/>.</p>
     </body>
@@ -155,7 +147,7 @@
           <li><xref href="#topic_bgz_vcl_r1b" format="dita"/></li>
         </ul>
       </p>
-      <p>The Greenplum postGIS package installation adds these lines to the
+      <p>The Greenplum PostGIS package installation adds these lines to the
           <codeph>greenplum_path.sh</codeph> file for PostGIS Raster support.</p>
       <codeblock>export GDAL_DATA=$GPHOME/share/gdal
 export POSTGIS_ENABLE_OUTDB_RASTERS=0
@@ -164,17 +156,17 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
     <topic id="topic_ln5_xcl_r1b">
       <title>Enabling PostGIS Support</title>
       <body>
-        <p>You enable supported PostGIS extensions with the <codeph>CREATE EXTENSION</codeph>
-          command.</p>
+        <p>You enable supported PostGIS extensions for a database with the <codeph>CREATE
+            EXTENSION</codeph> command.</p>
         <note>For Greenplum PostGIS 2.5.4, enabling PostGIS enables both PostGIS and PostGIS
           Raster.</note>
         <section id="enable_postgis_cmd">
           <title>Using the CREATE EXTENSION Command</title>
-          <p dir="ltr">You use the <codeph>CREATE EXTENSION</codeph> command to enable the PostGIS
-            extension and the extensions that are used with PostGIS.</p>
+          <p dir="ltr">These steps enable the PostGIS extension and the extensions that are used
+            with PostGIS.</p>
           <ol id="ol_mdh_z1k_zlb">
-            <li>To enable PostGIS and PostGIS Raster in a database, After logging into the database
-              run this command.<codeblock dir="ltr">CREATE EXTENSION postgis ;</codeblock><p>To
+            <li>To enable PostGIS and PostGIS Raster in a database, run this command after logging
+              into the database.<codeblock dir="ltr">CREATE EXTENSION postgis ;</codeblock><p>To
                 enable PostGIS and PostGIS Raster in a specific schema, create the schema, set the
                   <codeph>search_path</codeph> to the PostGIS schema, and then enable the
                   <codeph>postgis</codeph> extension with the <codeph>WITH SCHEMA</codeph> clause.
@@ -184,14 +176,14 @@ SET search_path TO &lt;schema_name> ;
 CREATE EXTENSION postgis WITH SCHEMA &lt;schema_name> ; </codeblock><p>After
                 enabling the extension, reset the <codeph>search_path</codeph> and include the
                 PostGIS schema in the <codeph>seach_path</codeph> if needed.</p></li>
-            <li>If needed, you can enable the PostGIS TIGER geocoder. <p>To enable the PostGIS TIGER
-                geocoder, you must enable the <codeph>fuzzystrmatch</codeph> extension before
-                enabling the <codeph>postgis_tiger_geocoder</codeph> extension. These two sample
-                  <codeph>psql</codeph> commands enable the
-              extensions.</p><codeblock dir="ltr">CREATE EXTENSION fuzzystrmatch ;
+            <li>If needed, enable the PostGIS TIGER geocoder after enabling the
+                <codeph>postgis</codeph> extension. <p>To enable the PostGIS TIGER geocoder, you
+                must enable the <codeph>fuzzystrmatch</codeph> extension before enabling
+                  <codeph>postgis_tiger_geocoder</codeph>. These two commands enable the
+                extensions.</p><codeblock dir="ltr">CREATE EXTENSION fuzzystrmatch ;
 CREATE EXTENSION postgis_tiger_geocoder ;</codeblock></li>
-            <li>If needed, you can enable the rules-based address standardizer and add rules tables
-              for the standardizer. These sample commands enable the
+            <li>If needed, enable the rules-based address standardizer and add rules tables for the
+              standardizer. These commands enable the
               extensions.<codeblock dir="ltr">CREATE EXTENSION address_standardizer ;
 CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
           </ol>
@@ -256,8 +248,8 @@ CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
       <body>
         <p dir="ltr">You use the <codeph>DROP EXTENSION</codeph> command to remove support for the
           PostGIS extension and the extensions that are used with PostGIS.</p>
-        <p>Removing PostGIS Support from a database does not remove these PostGIS Raster environment
-          variables the <codeph>greenplum_path.sh</codeph> file: <codeph>GDAL_DATA</codeph>,
+        <p>Removing PostGIS support from a database does not remove these PostGIS Raster environment
+          variables from the <codeph>greenplum_path.sh</codeph> file: <codeph>GDAL_DATA</codeph>,
             <codeph>POSTGIS_ENABLE_OUTDB_RASTERS</codeph>,
             <codeph>POSTGIS_GDAL_ENABLED_DRIVERS</codeph>. The environment variables are removed
           when you uninstall the PostGIS extension package.</p>
@@ -266,18 +258,18 @@ CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
           <p>Depending on the extensions you enabled for PostGIS, drop support for the extensions in
             the database.</p>
           <ol id="ol_ylb_cgk_zlb">
-            <li>If you enabled the address standardizer and sample rules tables, drop support for
-              those extensions. These commands drop support for those extensions from the current
+            <li>If you enabled the address standardizer and sample rules tables, these commands drop
+              support for those extensions from the current
               database.<codeblock dir="ltr">DROP EXTENSION address_standardizer_data_us IF EXISTS;
 DROP EXTENSION address_standardizer IF EXISTS ;</codeblock></li>
             <li>If you enabled the TIGER geocoder and the <codeph>fuzzystrmatch</codeph> extension
-              to use the TIGER geocoder. These commands drop support for those
+              to use the TIGER geocoder, these commands drop support for those
               extensions.<codeblock dir="ltr">DROP EXTENSION postgis_tiger_geocoder IF EXISTS ;
 DROP EXTENSION fuzzystrmatch IF EXISTS ;</codeblock></li>
-            <li>Drop support for PostGIS and PostGIS raster. This command drops support for those
+            <li>Drop support for PostGIS and PostGIS Raster. This command drops support for those
                 extensions.<codeblock>DROP EXTENSION postgis IF EXISTS ;</codeblock><p>If you
                 enabled support for PostGIS and specified a specific schema with the <codeph>CREATE
-                  EXTENSION</codeph> command, you can update the <codeph>search_path</codeph>and
+                  EXTENSION</codeph> command, you can update the <codeph>search_path</codeph> and
                 drop the PostGIS schema if required.</p></li>
           </ol>
         </section>
