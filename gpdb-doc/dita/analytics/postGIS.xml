@@ -89,8 +89,8 @@
           </thead>
           <tbody>
             <row>
-              <entry><codeph>postgis</codeph> and <codeph>postgis_raster</codeph><p dir="ltr"
-                  >PostGIS and PostGIS Raster support</p></entry>
+              <entry><codeph>postgis</codeph><p dir="ltr">PostGIS and PostGIS Raster
+                support</p></entry>
               <entry>Supported. Both PostGIS and PostGIS Raster are enabled when the Greenplum
                   <codeph>postgis</codeph> extension is enabled.</entry>
             </row>
