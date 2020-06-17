@@ -139,27 +139,36 @@
   <topic id="topic_b2l_hzw_q1b">
     <title>Enabling and Removing PostGIS Support</title>
     <body>
-      <p>
-        <ul id="ul_dnm_lzm_1mb">
+      <p>This section describes how to enable and remove PostGIS and the supported PostGIS
+        extensions, and how to configure PostGIS Raster.<ul id="ul_dnm_lzm_1mb">
           <li><xref href="#topic_ln5_xcl_r1b" format="dita"/></li>
           <li><xref href="#topic_ydr_q5l_ybb" format="dita"/></li>
           <li><xref href="#topic_fx2_fpx_llb" format="dita"/></li>
           <li><xref href="#topic_bgz_vcl_r1b" format="dita"/></li>
-        </ul>
-      </p>
-      <p>The Greenplum PostGIS package installation adds these lines to the
-          <codeph>greenplum_path.sh</codeph> file for PostGIS Raster support.</p>
-      <codeblock>export GDAL_DATA=$GPHOME/share/gdal
-export POSTGIS_ENABLE_OUTDB_RASTERS=0
-export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
+        </ul></p>
     </body>
     <topic id="topic_ln5_xcl_r1b">
       <title>Enabling PostGIS Support</title>
       <body>
-        <p>You enable supported PostGIS extensions for a database with the <codeph>CREATE
-            EXTENSION</codeph> command.</p>
-        <note>For Greenplum PostGIS 2.5.4, enabling PostGIS enables both PostGIS and PostGIS
-          Raster.</note>
+        <p>To enable PostGIS support, install the Greenplum PostGIS extension package into the
+          Greenplum Database system, and then use the <codeph>CREATE EXTENSION</codeph> command to
+          enable PostGIS support for an individual database.</p>
+        <section>
+          <title>Installing the Greenplum PostGIS Extension Package</title>
+          <p>Install Greenplum PostGIS extension package with the <codeph>gppkg</codeph> utility.
+            For example, this command installs the package for RHEL 7.
+            <codeblock>gppkg -i postgis-2.5.4+pivotal.2.build.1-gp6-rhel7-x86_64.gppkg</codeblock></p>
+          <p>After installing the package, source the <codeph>greenplum_path.sh</codeph> file and
+            restart Greenplum Database. This command restarts Greenplum Database.</p>
+          <codeblock>gpstop -ra</codeblock>
+          <p dir="ltr">Installing the Greenplum PostGIS extension package updates the Greenplum
+            Database system, including installing the supported PostGIS extensions to the system and
+            updating <codeph>greenplum_path.sh</codeph> file with these lines for PostGIS Raster
+            support.</p>
+          <codeblock>export GDAL_DATA=$GPHOME/share/gdal
+export POSTGIS_ENABLE_OUTDB_RASTERS=0
+export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
+        </section>
         <section id="enable_postgis_cmd">
           <title>Using the CREATE EXTENSION Command</title>
           <p dir="ltr">These steps enable the PostGIS extension and the extensions that are used
@@ -173,9 +182,9 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
                 </p><codeblock>SHOW search_path ; -- display the current search_path
 CREATE SCHEMA &lt;schema_name> ;
 SET search_path TO &lt;schema_name> ;
-CREATE EXTENSION postgis WITH SCHEMA &lt;schema_name> ; </codeblock><p>After
+CREATE EXTENSION postgis WITH SCHEMA &lt;schema_name> ;</codeblock><p>After
                 enabling the extension, reset the <codeph>search_path</codeph> and include the
-                PostGIS schema in the <codeph>seach_path</codeph> if needed.</p></li>
+                PostGIS schema in the <codeph>search_path</codeph> if needed.</p></li>
             <li>If needed, enable the PostGIS TIGER geocoder after enabling the
                 <codeph>postgis</codeph> extension. <p>To enable the PostGIS TIGER geocoder, you
                 must enable the <codeph>fuzzystrmatch</codeph> extension before enabling
@@ -254,7 +263,7 @@ CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
             <codeph>POSTGIS_GDAL_ENABLED_DRIVERS</codeph>. The environment variables are removed
           when you uninstall the PostGIS extension package.</p>
         <section id="drop_postgis_cmd">
-          <title>Using the DROP EXTENSION command</title>
+          <title>Using the DROP EXTENSION Command</title>
           <p>Depending on the extensions you enabled for PostGIS, drop support for the extensions in
             the database.</p>
           <ol id="ol_ylb_cgk_zlb">
@@ -279,13 +288,14 @@ DROP EXTENSION fuzzystrmatch IF EXISTS ;</codeblock></li>
             system, you can remove the PostGIS extension package. For example, this
               <codeph>gppkg</codeph> command removes the PostGIS extension package.
             <codeblock>gppkg -r postgis-2.5.4+pivotal.2</codeblock></p>
-          <p>Restart Greenplum Database after removing the package.</p>
-          <codeblock>gpstop -ra</codeblock>
-          <p dir="ltr">Ensure that these lines for PostGIS Raster support are removed from the
-              <codeph>greenplum_path.sh</codeph> file.</p>
+          <p dir="ltr">After removing the package, ensure that these lines for PostGIS Raster
+            support are removed from the <codeph>greenplum_path.sh</codeph> file.</p>
           <codeblock>export GDAL_DATA=$GPHOME/share/gdal
 export POSTGIS_ENABLE_OUTDB_RASTERS=0
 export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
+          <p>Source the <codeph>greenplum_path.sh</codeph> file and restart Greenplum Database. This
+            command restarts Greenplum Database.</p>
+          <codeblock>gpstop -ra</codeblock>
         </section>
       </body>
     </topic>
@@ -446,7 +456,7 @@ SELECT AddGeometryColumn('public', 'geometries', 'geom', 0, 'LINESTRING', 2);</c
           <li>The <codeph>&lt;-></codeph> operator (<codeph><varname>geometry</varname> &lt;->
                 <varname>geometry</varname></codeph>) returns the centroid/centroid distance for
             Greenplum Database 6.</li>
-          <li>The following PostGIS functions are not currently supported because Greenplun PostGIS
+          <li>The following PostGIS functions are not currently supported because Greenplum PostGIS
             is compiled with Geos 3.4.2:<ul id="ul_hdm_j4l_xlb">
               <li dir="ltr">ST_Subdivide</li>
               <li dir="ltr">​ST_ClipByBox2D</li>
