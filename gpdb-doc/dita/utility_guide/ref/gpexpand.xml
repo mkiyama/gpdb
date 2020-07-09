@@ -205,12 +205,15 @@
       <p>When exapnding a Greenplum Database system, you can specify either an hostname or IP
         address for the value. <ul id="ul_zsd_cmh_dmb">
           <li>If you specify a hostname, the resolution of the hostname to an IP address should done
-            locally. For example, you should use entries in a local <codeph>/etc/hosts</codeph> file
-            to map a hostname to an IP address. The resolution of a hostname to an IP address should
-            not performed by an external service such as a public DNS server. </li>
-          <li>If you specify an IP address, the address should not be changed. You should use
-            hostnames when expanding a Greenplum Database system unless you have a specific
-            requirement to IP addresses.</li>
+            locally for security. For example, you should use entries in a local
+              <codeph>/etc/hosts</codeph> file to map a hostname to an IP address. The resolution of
+            a hostname to an IP address should not performed by an external service such as a public
+            DNS server. </li>
+          <li>If you specify an IP address, the address should not be changed. When segment
+            mirroring is enabled, changing the IP address will cause replication from the primary
+            segment instance to mirror segment instance to fail. You should use hostnames when
+            expanding a Greenplum Database system unless you have a specific requirement to IP
+            addresses.</li>
         </ul></p>
       <p>When expanding a Greenplum system, <codeph>gpexpand</codeph> populates <codeph><xref
             href="../../ref_guide/system_catalogs/gp_segment_configuration.xml"
