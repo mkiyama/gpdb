@@ -509,12 +509,12 @@ sdw1~sdw1~50001~/gpdata/mirror2/gpseg3~9~3
                     <li>If you specify a hostname, the resolution of the hostname to an IP address
                         should done locally for securiy. For example, you should use entries in a
                         local <codeph>/etc/hosts</codeph> file to map a hostname to an IP address.
-                        The resolution of a hostname to an IP address should not performed by an
+                        The resolution of a hostname to an IP address should not be performed by an
                         external service such as a public DNS server. </li>
                     <li>If you specify an IP address, the address should not be changed. When
                         segment mirroring is enabled, changing the IP address will cause replication
                         from the primary segment instance to mirror segment instance to fail. You
-                        should use a hostname when initializing a Greenplum Databae system unless
+                        should use a hostname when initializing a Greenplum Database system unless
                         you have a specific requirement to use IP addresses.</li>
                 </ul></p>
             <p>When initializing the Greenplum Database system, <codeph>gpinitsystem</codeph> uses
@@ -557,42 +557,38 @@ mwd~mwd.local~6001~/data/primary1/gpseg0~2~0
 )
 declare -a MIRROR_ARRAY=(
 mwd~mwd.local~7001~/data/mirror1/gpseg0~3~0
-)</codeblock><p>Initialize
-                a Greenplum Database using an input configuration file (a file that defines the
-                Greenplum Database cluster) using <codeph>QD_PRIMARY_ARRAY</codeph> and
-                    <codeph>PRIMARY_ARRAY</codeph>
-                parameters:</p><codeblock>$ gpinitsystem -I cluster_init.config</codeblock><p>This
-                example uses a host system configured with mulitple NICs. If host systems are
-                configured with multiple NICs, you can initialize a Greenplum Database system to use
-                each NIC as a Greenplum host system. You must ensure the host systems are configured
-                with sufficient resources to support all the segment instances being added to the
-                host. Also, if high ability is enabled, you must ensure the Greenplum system
-                configuration supports failover if a host system fails.</p><p>This simple segment
-                instance configuration enables segment mirroring but does not support host failover.
-                The segment host <codeph>gp6s</codeph> is configured with two NICs
-                    <codeph>gp6s-1</codeph> and <codeph>gp6s-2</codeph>, you can configure a
-                Greenplum Database system to use each NIC as a host system. In the configuration,
-                the <codeph><xref href="#topic1/array_params" format="dita"
-                    >PRIMARY_ARRAY</xref></codeph> parameter defines a primary segment instance for
-                    <codeph>gp6s-1</codeph> and <codeph>gp6s-2</codeph>. The <codeph><xref
-                        href="#topic1/array_params" format="dita">MIRROR_ARRAY</xref></codeph>
-                parameter defines the corresponding mirror segment instances. Running
-                    <codeph>gpinitsystem</codeph> using the parameters creates all the segment
-                instances on the host system
-                <codeph>gp6s</codeph>.<codeblock>QD_PRIMARY_ARRAY=gp6m~gp6m-s1~5432~/data/master/gpseg-1~1~-1
+)</codeblock>
+            <p>Initialize a Greenplum Database using an input configuration file (a file that
+                defines the Greenplum Database cluster) using <codeph>QD_PRIMARY_ARRAY</codeph> and
+                    <codeph>PRIMARY_ARRAY</codeph> parameters:</p>
+            <codeblock>$ gpinitsystem -I cluster_init.config</codeblock>
+            <p>The following example uses a host system configured with mulitple NICs. If host
+                systems are configured with multiple NICs, you can initialize a Greenplum Database
+                system to use each NIC as a Greenplum host system. You must ensure the host systems
+                are configured with sufficient resources to support all the segment instances being
+                added to the host. Also, if high availability is enabled, you must ensure the
+                Greenplum system configuration supports failover if a host system fails. For
+                information about Greenplum Database mirroring schemes, see <xref
+                    href="../../best_practices/ha.xml#topic_ngz_qf4_tt"/>.</p>
+            <p>For this simple master and segment instance configuration, the host system
+                    <codeph>gp6m</codeph> is configured with two NICs <codeph>gp6m-1</codeph> and
+                    <codeph>gp6m-2</codeph>. In the configuration, the <codeph><xref
+                        href="#topic1/array_params" format="dita">QD_PRIMARY_ARRAY</xref></codeph>
+                parameter defines the master segment using <codeph>gp6m-1</codeph>. The
+                        <codeph><xref href="#topic1/array_params" format="dita"
+                    >PRIMARY_ARRAY</xref></codeph> and <codeph><xref href="#topic1/array_params"
+                        format="dita">MIRROR_ARRAY</xref></codeph> parameters use
+                    <codeph>gp6m-2</codeph> to define a primary and mirror segment instance.
+                <codeblock>QD_PRIMARY_ARRAY=gp6m~<b>gp6m-1</b>~5432~/data/master/gpseg-1~1~-1
 declare -a PRIMARY_ARRAY=(
-gp6s~gp6s-1~40000~/data/data1/gpseg0~2~0
-gp6s~gp6s-2~40001~/data/data2/gpseg1~3~1
+gp6m~<b>gp6m-2</b>~40000~/data/data1/gpseg0~2~0
+gp6s~gp6s~40000~/data/data1/gpseg1~3~1
 )
 declare -a MIRROR_ARRAY=(
-gp6s~gp6s-2~50000~/data/mirror1/gpseg0~4~0
-gp6s~gp6s-1~50001~/data/mirror2/gpseg1~5~1
-)</codeblock></p>While
-            the mirror segment instances are created, the primary segment instances cannot failover
-            if the host <codeph>gp6s</codeph> fails because the primary and corresponding mirror
-            segment instances are on the same host. For information about Greenplum Database
-            mirroring schemes, see <xref href="../../best_practices/ha.xml#topic_ngz_qf4_tt"
-            />.</section>
+gp6s~gp6s~50000~/data/mirror1/gpseg0~4~0
+gp6m~<b>gp6m-2</b>~50000~/data/mirror1/gpseg1~5~1
+)</codeblock></p>
+        </section>
         <section id="section7"><title>See Also</title><codeph><xref href="./gpssh-exkeys.xml#topic1"
                     type="topic" format="dita"/></codeph>, <codeph><xref
                     href="gpdeletesystem.xml#topic1" type="topic" format="dita"/></codeph>, <xref

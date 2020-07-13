@@ -204,11 +204,11 @@
       <title>Specifying Hosts using Hostnames or IP Addresses</title>
       <p>When exapnding a Greenplum Database system, you can specify either an hostname or IP
         address for the value. <ul id="ul_zsd_cmh_dmb">
-          <li>If you specify a hostname, the resolution of the hostname to an IP address should done
-            locally for security. For example, you should use entries in a local
+          <li>If you specify a hostname, the resolution of the hostname to an IP address should be
+            done locally for security. For example, you should use entries in a local
               <codeph>/etc/hosts</codeph> file to map a hostname to an IP address. The resolution of
-            a hostname to an IP address should not performed by an external service such as a public
-            DNS server. </li>
+            a hostname to an IP address should not be performed by an external service such as a
+            public DNS server. </li>
           <li>If you specify an IP address, the address should not be changed. When segment
             mirroring is enabled, changing the IP address will cause replication from the primary
             segment instance to mirror segment instance to fail. You should use hostnames when
@@ -224,25 +224,22 @@
         between segment instances, and for other internal communication.</p>
     </section>
     <section id="multi_nic">
-      <title>Using Hosts Systems with Multiple NICs</title>
-      <p>If hosts systems are configured with multiple NICs, you can expand a Greenplum Database
+      <title>Using Host Systems with Multiple NICs</title>
+      <p>If host systems are configured with multiple NICs, you can expand a Greenplum Database
         system to use each NIC as a Greenplum host system. You must ensure the host systems are
         configured with sufficient resources to support all the segment instances being added to the
         host. Also, if you enable segment mirroring, you must ensure that the expanded Greenplum
-        system configuration supports failover if a host system fails.</p>
+        system configuration supports failover if a host system fails. For information about
+        Greenplum Database mirroring schemes, see <xref
+          href="../../best_practices/ha.xml#topic_ngz_qf4_tt"/>.</p>
       <p>For example, this is a <codeph>gpexpand</codeph> configuration file for a simple Greenplum
-        system. The segment host <codeph>gp6s</codeph> is configured with two NICs,
-          <codeph>gp6s-s1</codeph> and <codeph>gp6-s2</codeph>, where the Greenplum Database system
-        uses each NIC as a host system. The file enables segment mirroring but does not support host
-        failover.</p>
-      <codeblock>gp6s-s1|gp6s-s1|40000|/data/data1/gpseg1|4|1|p
-gp6s-s2|gp6s-s2|50000|/data/mirror1/gpseg1|7|1|m
-gp6s-s2|gp6s-s2|40001|/data/data1/gpseg2|5|2|p
-gp6s-s1|gp6s-s1|50001|/data/mirror1/gpseg2|6|2|m</codeblock>
-      <p>While the mirror segment instances are created, the primary segment instances cannot
-        failover if the host <codeph>gp6s</codeph> fails because the primary and corresponding
-        mirror segment instances are on the same host. For information about Greenplum Database
-        mirroring schemes, see <xref href="../../best_practices/ha.xml#topic_ngz_qf4_tt"/>.</p>
+        system. The segment host <codeph>gp6s1</codeph> and <codeph>gp6s2</codeph> are configured
+        with two NICs, <codeph>-s1</codeph> and <codeph>-s2</codeph>, where the Greenplum Database
+        system uses each NIC as a host system. </p>
+      <codeblock>gp6s1-s2|gp6s1-s2|40001|/data/data1/gpseg2|6|2|p
+gp6s2-s1|gp6s2-s1|50000|/data/mirror1/gpseg2|9|2|m
+gp6s2-s1|gp6s2-s1|40000|/data/data1/gpseg3|7|3|p
+gp6s1-s2|gp6s1-s2|50001|/data/mirror1/gpseg3|8|3|m</codeblock>
     </section>
     <section id="section6">
       <title>Examples</title>

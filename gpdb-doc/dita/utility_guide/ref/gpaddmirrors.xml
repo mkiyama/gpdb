@@ -190,19 +190,18 @@ Enter mirror segment data directory location 2 of 2 &gt; /gpdb/m2</codeblock>
                 option <codeph>-i</codeph>, you can specify either an hostname or IP address for the
                 &lt;address> value. <ul id="ul_zsd_cmh_dmb">
                     <li>If you specify a hostname, the resolution of the hostname to an IP address
-                        should done locally for security. For example, you should use entries in a
-                        local <codeph>/etc/hosts</codeph> file to map the hostname to an IP address.
-                        The resolution of a hostname to an IP address should not performed by an
-                        external service such as a public DNS server. </li>
+                        should be done locally for security. For example, you should use entries in
+                        a local <codeph>/etc/hosts</codeph> file to map the hostname to an IP
+                        address. The resolution of a hostname to an IP address should not be
+                        performed by an external service such as a public DNS server. </li>
                     <li>If you specify an IP address, the address should not be changed. When
                         segment mirroring is enabled, changing the IP address will cause replication
                         from the primary segment instance to mirror segment instance to fail. You
-                        should use a hostname when enabling mirroring using the option
-                            <codeph>-i</codeph> option unless you have a specific requirement to use
-                        IP addresses.</li>
+                        should use a hostname when enabling mirroring using the <codeph>-i</codeph>
+                        option unless you have a specific requirement to use IP addresses.</li>
                 </ul></p>
             <p>When enabling a mirroring configuration that adds hosts to the Greenplum system,
-                    <codeph>gpaddmirrors</codeph> populates <codeph><xref
+                    <codeph>gpaddmirrors</codeph> populates the <codeph><xref
                         href="../../ref_guide/system_catalogs/gp_segment_configuration.xml"
                         >gp_segment_configuration</xref></codeph> catalog table with the mirror
                 segment instance information. Greenplum Database uses the <varname>address</varname>
@@ -212,32 +211,29 @@ Enter mirror segment data directory location 2 of 2 &gt; /gpdb/m2</codeblock>
                 communication.</p>
         </section>
         <section id="multi_nic">
-            <title>Using Hosts systems with Multiple NICs</title>
+            <title>Using Host Systems with Multiple NICs</title>
             <p>If hosts systems are configured with multiple NICs, you can initialize a Greenplum
                 Database system to use each NIC as a Greenplum host system. You must ensure the host
                 systems are configured with sufficient resources to support all the segment
                 instances being added to the host. Also, if you enable segment mirroring, you must
-                ensure the Greenplum system configuration supports failover if a host system
-                fails.</p>
-            <p>For example, this is a segment instance configuration for a simple Greenplum system.
-                The segment host <codeph>gp6s</codeph> is configured with two NICs,
-                    <codeph>gp6s-s1</codeph> and <codeph>gp6s-s2</codeph>, where the Greenplum
-                Database system uses each NIC as a host system. The system enables segment mirroring
-                but does not support host failover.</p>
-            <codeblock>select content, role, port, hostname, address from gp_segment_configuration ;
- content | role | port  | hostname        | address
----------+------+-------+-----------------+---------
-      -1 | p    |  5432 | gp6m            | gp6m
-       0 | p    | 40000 | gp6s            | gp6s-s1
-       0 | m    | 50000 | gp6s            | gp6s-s2
-       1 | p    | 40001 | gp6s            | gp6s-s2
-       1 | m    | 50001 | gp6s            | gp6s-s1
-(5 rows)</codeblock>
-            <p>While the mirror segment instances are created, the primary segment instances cannot
-                failover if the host <codeph>gp6s</codeph> fails because the primary and
-                corresponding mirror segment instances are on the same host. For information about
-                Greenplum Database mirroring schemes, see <xref
+                ensure the Greenplum system configuration supports failover if a host system fails.
+                For information about Greenplum Database mirroring schemes, see <xref
                     href="../../best_practices/ha.xml#topic_ngz_qf4_tt"/>.</p>
+            <p>For example, this is a segment instance configuration for a simple Greenplum system.
+                The segment host <codeph>gp6m</codeph> is configured with two NICs,
+                    <codeph>gp6m-1</codeph> and <codeph>gp6m-2</codeph>, where the Greenplum
+                Database system uses <codeph>gp6m-1</codeph> for the master segment and
+                    <codeph>gp6m-2</codeph> for segment instances. </p>
+            <codeblock>select content, role, port, hostname, address from gp_segment_configuration ;
+
+ content | role | port  | hostname | address
+---------+------+-------+----------+----------
+      -1 | p    |  5432 | gp6m     | gp6m-1
+       0 | p    | 40000 | gp6m     | gp6m-2
+       0 | m    | 50000 | gp6s     | gp6s
+       1 | p    | 40000 | gp6s     | gp6s
+       1 | m    | 50000 | gp6m     | gp6m-2
+(5 rows) </codeblock>
         </section>
         <section id="section5">
             <title>Examples</title>
