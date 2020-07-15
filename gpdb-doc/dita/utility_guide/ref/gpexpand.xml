@@ -202,18 +202,19 @@
     </section>
     <section id="host_ip">
       <title>Specifying Hosts using Hostnames or IP Addresses</title>
-      <p>When exapnding a Greenplum Database system, you can specify either an hostname or IP
+      <p>When expanding a Greenplum Database system, you can specify either a hostname or an IP
         address for the value. <ul id="ul_zsd_cmh_dmb">
           <li>If you specify a hostname, the resolution of the hostname to an IP address should be
             done locally for security. For example, you should use entries in a local
               <codeph>/etc/hosts</codeph> file to map a hostname to an IP address. The resolution of
             a hostname to an IP address should not be performed by an external service such as a
-            public DNS server. </li>
-          <li>If you specify an IP address, the address should not be changed. When segment
-            mirroring is enabled, changing the IP address will cause replication from the primary
-            segment instance to mirror segment instance to fail. You should use hostnames when
-            expanding a Greenplum Database system unless you have a specific requirement to IP
-            addresses.</li>
+            public DNS server. You must stop the Greenplum system before you change the mapping of a
+            hostname to a different IP address.</li>
+          <li>If you specify an IP address, the address should not be changed after the initial
+            configuration. When segment mirroring is enabled, replication from the primary to the
+            mirror segment will fail if the IP address changes from the configured value. For this
+            reason, you should use a hostname when expanding a Greenplum Database system unless you
+            have a specific requirement to use IP addresses.</li>
         </ul></p>
       <p>When expanding a Greenplum system, <codeph>gpexpand</codeph> populates <codeph><xref
             href="../../ref_guide/system_catalogs/gp_segment_configuration.xml"
@@ -226,7 +227,7 @@
     <section id="multi_nic">
       <title>Using Host Systems with Multiple NICs</title>
       <p>If host systems are configured with multiple NICs, you can expand a Greenplum Database
-        system to use each NIC as a Greenplum host system. You must ensure the host systems are
+        system to use each NIC as a Greenplum host system. You must ensure that the host systems are
         configured with sufficient resources to support all the segment instances being added to the
         host. Also, if you enable segment mirroring, you must ensure that the expanded Greenplum
         system configuration supports failover if a host system fails. For information about

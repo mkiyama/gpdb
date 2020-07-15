@@ -507,15 +507,18 @@ sdw1~sdw1~50001~/gpdata/mirror2/gpseg3~9~3
                 can use hostnames or IP addresses in the file specified with the <codeph>-h</codeph>
                     option.<ul id="ul_ijf_tvq_bmb">
                     <li>If you specify a hostname, the resolution of the hostname to an IP address
-                        should done locally for securiy. For example, you should use entries in a
-                        local <codeph>/etc/hosts</codeph> file to map a hostname to an IP address.
+                        should be done locally for security. For example, you should use entries in
+                        a local <codeph>/etc/hosts</codeph> file to map a hostname to an IP address.
                         The resolution of a hostname to an IP address should not be performed by an
-                        external service such as a public DNS server. </li>
-                    <li>If you specify an IP address, the address should not be changed. When
-                        segment mirroring is enabled, changing the IP address will cause replication
-                        from the primary segment instance to mirror segment instance to fail. You
-                        should use a hostname when initializing a Greenplum Database system unless
-                        you have a specific requirement to use IP addresses.</li>
+                        external service such as a public DNS server. You must stop the Greenplum
+                        system before you change the mapping of a hostname to a different IP
+                        address.</li>
+                    <li>If you specify an IP address, the address should not be changed after the
+                        initial configuration. When segment mirroring is enabled, replication from
+                        the primary to the mirror segment will fail if the IP address changes from
+                        the configured value. For this reason, you should use a hostname when
+                        initializing a Greenplum Database system unless you have a specific
+                        requirement to use IP addresses.</li>
                 </ul></p>
             <p>When initializing the Greenplum Database system, <codeph>gpinitsystem</codeph> uses
                 the initialization information to populate the <codeph><xref
@@ -531,20 +534,23 @@ sdw1~sdw1~50001~/gpdata/mirror2/gpseg3~9~3
                 segment instances and between segment instances, and for other internal
                 communication.</p>
         </section>
-        <section id="section6"><title>Examples</title><p>Initialize a Greenplum Database system by
-                supplying a cluster configuration file and a segment host address file, and set up a
-                spread mirroring (<codeph>--mirror-mode=spread</codeph>)
-                configuration:</p><codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem --mirror-mode=spread</codeblock><p>Initialize
-                a Greenplum Database system and set the superuser remote
-                password:</p><codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem --su-password=mypassword</codeblock><p>Initialize
-                a Greenplum Database system with an optional standby master
-                host:</p><codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem -s host09</codeblock><p>Initialize
-                a Greenplum Database system and write the provided configuration to an output file,
-                for example
-                <codeph>cluster_init.config</codeph>:</p><codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem -O cluster_init.config</codeblock><p>The
-                output file uses the <codeph>QD_PRIMARY_ARRAY</codeph> and
+        <section id="section6">
+            <title>Examples</title>
+            <p>Initialize a Greenplum Database system by supplying a cluster configuration file and
+                a segment host address file, and set up a spread mirroring
+                    (<codeph>--mirror-mode=spread</codeph>) configuration:</p>
+            <codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem --mirror-mode=spread</codeblock>
+            <p>Initialize a Greenplum Database system and set the superuser remote password:</p>
+            <codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem --su-password=mypassword</codeblock>
+            <p>Initialize a Greenplum Database system with an optional standby master host:</p>
+            <codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem -s host09</codeblock>
+            <p>Initialize a Greenplum Database system and write the provided configuration to an
+                output file, for example <codeph>cluster_init.config</codeph>:</p>
+            <codeblock>$ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem -O cluster_init.config</codeblock>
+            <p>The output file uses the <codeph>QD_PRIMARY_ARRAY</codeph> and
                     <codeph>PRIMARY_ARRAY</codeph> parameters to define master and segment
-                hosts:</p><codeblock>ARRAY_NAME="Greenplum Data Platform"
+                hosts:</p>
+            <codeblock>ARRAY_NAME="Greenplum Data Platform"
 TRUSTED_SHELL=ssh
 CHECK_POINT_SEGMENTS=8
 ENCODING=UNICODE
@@ -564,11 +570,11 @@ mwd~mwd.local~7001~/data/mirror1/gpseg0~3~0
             <codeblock>$ gpinitsystem -I cluster_init.config</codeblock>
             <p>The following example uses a host system configured with mulitple NICs. If host
                 systems are configured with multiple NICs, you can initialize a Greenplum Database
-                system to use each NIC as a Greenplum host system. You must ensure the host systems
-                are configured with sufficient resources to support all the segment instances being
-                added to the host. Also, if high availability is enabled, you must ensure the
-                Greenplum system configuration supports failover if a host system fails. For
-                information about Greenplum Database mirroring schemes, see <xref
+                system to use each NIC as a Greenplum host system. You must ensure that the host
+                systems are configured with sufficient resources to support all the segment
+                instances being added to the host. Also, if high availability is enabled, you must
+                ensure that the Greenplum system configuration supports failover if a host system
+                fails. For information about Greenplum Database mirroring schemes, see <xref
                     href="../../best_practices/ha.xml#topic_ngz_qf4_tt"/>.</p>
             <p>For this simple master and segment instance configuration, the host system
                     <codeph>gp6m</codeph> is configured with two NICs <codeph>gp6m-1</codeph> and
