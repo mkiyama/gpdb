@@ -21,6 +21,8 @@
         <xref href="#postgis_support" format="dita"/>
       </li>
     </ul>
+    <p>For information about upgrading PostGIS on Greenplum Database 6 systems, see <xref
+        href="postgis-upgrade.xml"/></p>
   </body>
   <topic id="topic2" xml:lang="en">
     <title id="ij166739">About PostGIS</title>
@@ -146,6 +148,8 @@
           <li><xref href="#topic_fx2_fpx_llb" format="dita"/></li>
           <li><xref href="#topic_bgz_vcl_r1b" format="dita"/></li>
         </ul></p>
+      <p>For information about upgrading PostGIS on Greenplum Database 6 systems, see <xref
+          href="postgis-upgrade.xml"/></p>
     </body>
     <topic id="topic_ln5_xcl_r1b">
       <title>Enabling PostGIS Support</title>
@@ -262,6 +266,10 @@ CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
             <codeph>POSTGIS_ENABLE_OUTDB_RASTERS</codeph>,
             <codeph>POSTGIS_GDAL_ENABLED_DRIVERS</codeph>. The environment variables are removed
           when you uninstall the PostGIS extension package.</p>
+        <note type="important">Before removing PostGIS support from a database, ensure that no users
+          are accessing the database. Removing PostGIS support from a database drops PostGIS
+          database objects from the database. Users accessing PostGIS objects might interfere with
+          the dropping of the objects. </note>
         <section id="drop_postgis_cmd">
           <title>Using the DROP EXTENSION Command</title>
           <p>Depending on the extensions you enabled for PostGIS, drop support for the extensions in
