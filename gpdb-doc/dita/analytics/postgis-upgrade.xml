@@ -33,14 +33,16 @@
         </ul></p>
     </body>
     <topic id="topic_r22_s5x_3mb">
-      <title>Upgrading PostGIS 2.5.4 package from pivotal.2 to pivotal.3</title>
+      <title>Upgrading PostGIS 2.5.4 package from pivotal.1 or pivotal.2 to pivotal.3</title>
       <body>
-        <p>Upgrading the installed PostGIS 2.5.4 package from <codeph>pivotal.2</codeph> to
-            <codeph>pivotal.3</codeph> updates the PostGIS 2.5.4 to a new minor release
-            <codeph>pivotal.3</codeph> that uses the same PostGIS version (2.5.4).</p>
+        <p>Upgrading the installed PostGIS 2.5.4 package from <codeph>pivotal.1</codeph> or
+            <codeph>pivotal.2</codeph> to <codeph>pivotal.3</codeph> updates the PostGIS 2.5.4 to a
+          new minor release <codeph>pivotal.3</codeph> that uses the same PostGIS version
+          (2.5.4).</p>
         <ol id="ul_sjw_sp4_kmb">
           <li>Confirm you have a PostGIS 2.5.4 package
-              <codeph>postgis-2.5.4+<b>pivotal.2</b></codeph> installed in a Greenplum Database
+              <codeph>postgis-2.5.4+<b>pivotal.1</b></codeph> or
+                <codeph>postgis-2.5.4+<b>pivotal.2</b></codeph> installed in a Greenplum Database
             system. See <xref href="#topic_yzz_l3h_kmb" format="dita"/>.</li>
           <li>Upgrade the PostGIS package in the Greenplum Database system using the
               <codeph>gppkg</codeph> option <codeph>-u</codeph>. The command updates the package to
@@ -48,6 +50,12 @@
             package.<codeblock dir="ltr">gppkg -u postgis-2.5.4+pivotal.3.build.1-gp6-rhel7-x86_64.gppkg</codeblock></li>
           <li>Run the <codeph>gppkg -q --all</codeph> command to verify the updated package version
             is installed in the Greenplum Database system. </li>
+          <li dir="ltr">For all databases with PostGIS enabled, run the PostGIS 2.5.4
+              <codeph>postgis_manager.sh</codeph> script in the directory
+              <codeph>$GPHOME/share/postgresql/contrib/postgis-2.5</codeph> to upgrade PostGIS in
+            that database. This command upgrades PostGIS that is enabled in the database
+              <codeph>mytest</codeph> in the Greenplum Database
+            system.<codeblock>$GPHOME/share/postgresql/contrib/postgis-2.5/postgis_manager.sh mytest upgrade</codeblock></li>
         </ol>
       </body>
     </topic>
@@ -67,10 +75,14 @@
           <li>Confirm you have a PostGIS 2.5.4 package
               <codeph>postgis-2.5.4+<b>pivotal.1</b></codeph> installed in a Greenplum Database
             system. See <xref href="#topic_yzz_l3h_kmb" format="dita"/>.</li>
-          <li>Upgrade the PostGIS package in the Greenplum Database system using the
-              <codeph>gppkg</codeph> option <codeph>-u</codeph>. This command updates the package to
-            the <codeph>postgis-2.5.4+pivotal.2.build.2</codeph>
-              package.<codeblock dir="ltr">$ gppkg -u postgis-2.5.4+pivotal.2.build.2-gp6-rhel7-x86_64.gppkg</codeblock><p>Run
+          <li>remove the package <codeph>postgis-2.5.4+<b>pivotal.1</b></codeph> from the system.
+            This command removes a <codeph>postgis-2.5.4+pivotal.1</codeph> package from a Greenplum
+            Database
+            system.<codeblock dir="ltr">gppkg -r postgis-2.5.4+pivotal.1.build.3</codeblock></li>
+          <li>Install the PostGIS package in the Greenplum Database system using the
+              <codeph>gppkg</codeph> option <codeph>-i</codeph>. This command install the package
+              <codeph>postgis-2.5.4+pivotal.2.build.2</codeph> package on a RedHat 7 or CentOS 7
+              system.<codeblock dir="ltr">$ gppkg -i postgis-2.5.4+pivotal.2.build.2-gp6-rhel7-x86_64.gppkg</codeblock><p>Run
               the <codeph>gppkg -q --all</codeph> command to verify the updated package version is
               installed in the Greenplum Database system. </p></li>
           <li>Run the following commands in all databases that have PostGIS 2.5.4 enabled. The
@@ -109,10 +121,14 @@
           <li>Confirm you have PostGIS 2.5.4 package
               <codeph>postgis-2.5.4+<b>pivotal.2.build.1</b></codeph> installed in a Greenplum
             Database system. See <xref href="#topic_yzz_l3h_kmb" format="dita"/>.</li>
-          <li dir="ltr">Upgrade PostGIS 2.5.4 to the <codeph>build.2</codeph> package in the
-            Greenplum Database system using the <codeph>gppkg</codeph> option <codeph>-u</codeph>.
-            This command upgrades PostGIS on a RedHat 7 or CentOS 7
-            system.<codeblock>$ gppkg -u postgis-2.5.4+pivotal.2.build.2-gp6-rhel7-x86_64.gppkg</codeblock></li>
+          <li>Remove the package <codeph>postgis-2.5.4+<b>pivotal.2.build.1</b></codeph> from the
+            system. This command removes a <codeph>postgis-2.5.4+pivotal.2.build.1</codeph> package
+            from a Greenplum Database
+            system.<codeblock dir="ltr">gppkg -r postgis-2.5.4+pivotal.2.build.1</codeblock></li>
+          <li dir="ltr">Install PostGIS 2.5.4 to the <codeph>build.2</codeph> package in the
+            Greenplum Database system using the <codeph>gppkg</codeph> option <codeph>-i</codeph>.
+            This command installs PostGIS on a RedHat 7 or CentOS 7
+            system.<codeblock>$ gppkg -i postgis-2.5.4+pivotal.2.build.2-gp6-rhel7-x86_64.gppkg</codeblock></li>
           <li>Run the <codeph>gppkg -q --all</codeph> command to verify the updated package version
             is installed in the Greenplum Database system. </li>
         </ol>
