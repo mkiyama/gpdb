@@ -150,21 +150,23 @@ where <varname>action</varname> is one of:
                                                   <li>The compression parameter setting specified in
                                                   the <codeph>ALTER TABLE</codeph> command
                                                   <codeph>ENCODING</codeph> clause.</li>
+                                                  <li>If the server configuration parameter
+                                                  <codeph><xref
+                                                  href="../config_params/guc-list.xml#gp_add_column_inherits_table_setting"
+                                                  >gp_add_column_inherits_table_setting</xref></codeph>
+                                                  is <codeph>on</codeph>, use the table's data
+                                                  compression parameters specified in the
+                                                  <codeph>WITH</codeph> clause when the table was
+                                                  created. The default server configuration
+                                                  parameter default is <codeph>off</codeph>, the
+                                                  <codeph>WITH</codeph> clause parameters are
+                                                  ignored.</li>
                                                   <li>The compression parameter setting specified in
                                                   the server configuration parameter <codeph><xref
                                                   href="../config_params/guc-list.xml#gp_default_storage_options"
                                                   >gp_default_storage_option</xref></codeph>.</li>
                                                   <li>The default compression parameter value.</li>
-                                                </ol></p><p>By default, the table's data compression
-                                                parameters specified in the <codeph>WITH</codeph>
-                                                clause when the table was created are ignored. The
-                                                server configuration parameter <codeph><xref
-                                                  href="../config_params/guc-list.xml#gp_add_column_inherits_table_setting"
-                                                  >gp_add_column_inherits_table_setting</xref></codeph>.
-                                                controls whether the table's compression parameters
-                                                can be used when a column is added. With the default
-                                                value, <codeph>off</codeph>, the table's data
-                                                compression parameters are ignored. </p></li>
+                                                </ol></p></li>
                                 <li><b>DROP COLUMN [IF EXISTS]</b> — Drops a column from a table.
                                         Note that if you drop table columns that are being used as
                                         the Greenplum Database distribution key, the distribution
