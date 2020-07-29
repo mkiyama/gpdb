@@ -21,6 +21,8 @@
         <xref href="#postgis_support" format="dita"/>
       </li>
     </ul>
+    <p>For information about upgrading PostGIS on Greenplum Database 6 systems, see <xref
+      href="postgis-upgrade.xml"/></p>
   </body>
   <topic id="topic2" xml:lang="en">
     <title id="ij166739">About PostGIS</title>
@@ -146,6 +148,8 @@
           <li><xref href="#topic_fx2_fpx_llb" format="dita"/></li>
           <li><xref href="#topic_bgz_vcl_r1b" format="dita"/></li>
         </ul></p>
+      <p>For information about upgrading PostGIS on Greenplum Database 6 systems, see <xref
+        href="postgis-upgrade.xml"/></p>
     </body>
     <topic id="topic_ln5_xcl_r1b">
       <title>Enabling PostGIS Support</title>
