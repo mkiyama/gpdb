@@ -52,8 +52,8 @@
             <codeph>postgis_version()</codeph> function.</li>
       </ol>
       <p>After you have completed the upgrade to PostGIS 2.5.4 <codeph>pivotal.3</codeph> for the
-        Greenplum system and all the databases with PostGIS enabled, you enable PostGIS in a in a
-        new database with the <codeph>CREATE EXTENSION postgis</codeph> command. To remove PostGIS
+        Greenplum system and all the databases with PostGIS enabled, you enable PostGIS in a new
+        database with the <codeph>CREATE EXTENSION postgis</codeph> command. To remove PostGIS
         support, use the <codeph>DROP EXTENSION postgis CASCADE</codeph> command.</p>
     </body>
     <topic id="topic_unj_v5n_kmb">
@@ -97,8 +97,8 @@
           system.<codeblock>$GPHOME/share/postgresql/contrib/postgis-2.5/postgis_manager.sh mytest upgrade</codeblock></li>
       </ol>
       <p>After you have completed the upgrade to PostGIS 2.5.4 <codeph>pivotal.3</codeph> for the
-        Greenplum system and all the databases with PostGIS enabled, you enable PostGIS in a in a
-        new database with the <codeph>CREATE EXTENSION postgis</codeph> command. To remove PostGIS
+        Greenplum system and all the databases with PostGIS enabled, you enable PostGIS in a new
+        database with the <codeph>CREATE EXTENSION postgis</codeph> command. To remove PostGIS
         support, use the <codeph>DROP EXTENSION postgis CASCADE</codeph> command.</p>
     </body>
   </topic>
@@ -129,7 +129,7 @@
     <title>Notes</title>
     <body>
       <p>Starting with the Greenplum <codeph>postgis-2.5.4+pivotal.2</codeph> package, you enable
-        support PostGIS in a database with the <codeph>CREATE EXTENSION</codeph> command. For
+        support for PostGIS in a database with the <codeph>CREATE EXTENSION</codeph> command. For
         previous PostGIS 2.5.4 packages and all PostGIS 2.1.5 packages, you use an SQL script.</p>
     </body>
   </topic>
