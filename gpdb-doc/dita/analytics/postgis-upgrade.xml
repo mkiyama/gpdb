@@ -13,11 +13,11 @@
     <note>For Greenplum Database 6, you can upgrade from PostGIS 2.1.5 to 2.5.4, or from a PostGIS
       2.5.4 package to a newer PostGIS 2.5.4 package using the <codeph>postgis_manager.sh</codeph>
       script described in the upgrade instructions. <p>Upgrading PostGIS using the
-          <codeph>postgis_manager.sh</codeph> script does not require you to remove PostGIS and
-        re-install it. In fact, removing PostGIS support from a database drops PostGIS database
-        objects from the database. Users accessing PostGIS objects might interfere with the dropping
-        of PostGIS objects. See the Notes section in <xref href="postGIS.xml#topic_bgz_vcl_r1b"
-        />.</p></note>
+          <codeph>postgis_manager.sh</codeph> script does not require you to remove PostGIS support
+        and re-enable it. </p><p>Removing PostGIS support from a database drops PostGIS database
+        objects from the database without warning. Users accessing PostGIS objects might interfere
+        with the dropping of PostGIS objects. See the Notes section in <xref
+          href="postGIS.xml#topic_bgz_vcl_r1b"/>.</p></note>
   </body>
   <topic id="topic_zgw_v5x_3mb">
     <title>Upgrading from PostGIS 2.1.5 to the PostGIS 2.5.4 pivotal.3 Package</title>

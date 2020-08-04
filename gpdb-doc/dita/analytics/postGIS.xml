@@ -266,6 +266,10 @@ CREATE EXTENSION address_standardizer_data_us ;</codeblock></li>
             <codeph>POSTGIS_ENABLE_OUTDB_RASTERS</codeph>,
             <codeph>POSTGIS_GDAL_ENABLED_DRIVERS</codeph>. The environment variables are removed
           when you uninstall the PostGIS extension package.</p>
+        <note type="warning">Removing PostGIS support from a database drops PostGIS database objects
+          from the database without warning. Users accessing PostGIS objects might interfere with
+          the dropping of PostGIS objects. See <xref href="#topic_bgz_vcl_r1b/postgis_note"
+            format="dita">Notes</xref>.</note>
         <section id="drop_postgis_cmd">
           <title>Using the DROP EXTENSION Command</title>
           <p>Depending on the extensions you enabled for PostGIS, drop support for the extensions in
@@ -301,7 +305,7 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
             command restarts Greenplum Database.</p>
           <codeblock>gpstop -ra</codeblock>
         </section>
-        <section>
+        <section id="postgis_note">
           <title>Notes</title>
           <p>Removing PostGIS support from a database drops PostGIS objects from the database.
             Dropping the PostGIS objects cascades to objects that reference the PostGIS objects.
