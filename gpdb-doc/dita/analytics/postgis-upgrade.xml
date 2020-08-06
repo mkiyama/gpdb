@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
 <topic id="topic_khf_ltc_vbb">
-  <title>Upgrading from PostGIS 2.1.5 or 2.5.4</title>
+  <title>Upgrading PostGIS 2.1.5 or 2.5.4</title>
   <body>
     <p>For Greenplum Database 6, you can upgrade from PostGIS 2.1.5 to 2.5.4, or from a PostGIS
       2.5.4 package to a newer PostGIS 2.5.4 package.</p>
