@@ -15,7 +15,7 @@
       connections to other QEs. For a description of Greenplum query processing and parallel query
       processing, see <xref href="../query/topics/parallel-proc.xml"/>.</p>
     <p>By default, connections between the QD on the master and QEs on segment instances and between
-      QEs on different segment instances requires a separate network port. You can configure a
+      QEs on different segment instances require a separate network port. You can configure a
       Greenplum system to use proxies when Greenplum communicates between the QD and QEs and between
       QEs on different segment instances. The interconnect proxies require only one network
       connection for Greenplum internal communication between two segment instances, so it consumes
@@ -31,10 +31,10 @@
               href="../../ref_guide/config_params/guc-list.xml#gp_interconnect_type" format="dita"
             /></codeph> to <codeph>proxy</codeph>.</li>
       </ul></p>
-    <note>If you expand a Greenplum Database system, do not use proxies with the Greenplum
-      interconnect. Also, after adding new segment instances to the Greenplum system, you must
-      update the server configuration parameter <codeph>gp_interconnect_addresses</codeph> to
-      include the new segment instances before enabling Greenplum interconnect proxies.</note>
+    <note>When expanding a Greenplum Database system, you must disable interconnect proxies before
+      adding new hosts and segment instances to the system, and you must update the
+        <codeph>gp_interconnect_proxy_addresses</codeph> parameter with the newly-added segment
+      instances before you re-enable interconnect proxies. </note>
   </body>
   <topic id="topic_z4l_lcg_4mb">
     <title>Example</title>
@@ -52,13 +52,12 @@
           <li><xref href="#topic_z4l_lcg_4mb/set_gpdb_proxy" format="dita">Setting Interconnect
               Proxies for the System</xref></li>
         </ul></p>
-      <section id="set_proxy_address">
-        <title>Setting the Interconnect Proxy Addresses</title>
-        <p>Set the <codeph>gp_interconnect_addresses</codeph> parameter to specify the proxy ports
+      <section id="set_proxy_address"><title>Setting the Interconnect Proxy Addresses</title><p>Set
+          the <codeph>gp_interconnect_proxy_addresses</codeph> parameter to specify the proxy ports
           for the master and segment instances. The syntax for the value has the following format
-          and you must specify the parameter value as a single-quoted string.</p>
-        <codeblock>&lt;db_id>:&lt;cont_id>:&lt;seg_ip>:&lt;port>[,&lt;dbid>:&lt;segid>:&lt;ip>:&lt;port> ... ]</codeblock>
-        <p>For the master, standby master and segment instance, the first three fields,
+          and you must specify the parameter value as a single-quoted
+          string.</p><codeblock>&lt;db_id>:&lt;cont_id>:&lt;seg_ip>:&lt;port>[,&lt;dbid>:&lt;segid>:&lt;ip>:&lt;port> ... ]</codeblock><p>For
+          the master, standby master, and segment instance, the first three fields,
             <varname>db_id</varname>, <varname>cont_id</varname>, and <varname>seg_ip</varname> can
           be found in the <codeph><xref
               href="../../ref_guide/system_catalogs/gp_segment_configuration.xml"
@@ -69,22 +68,15 @@
               table.</li>
             <li><varname>cont_id</varname> is the <codeph>content</codeph> column in the catalog
               table.</li>
-            <li><varname>seg_ip</varname> is the IP address corresponding to
+            <li><varname>seg_ip</varname> is the IP address corresponding to the
                 <codeph>address</codeph> column in the catalog table. If the
                 <codeph>address</codeph> is a hostname, use the IP address of the hostname.</li>
             <li><varname>port</varname> is the TCP/IP port for the segment instance proxy that you
               specify.</li>
-          </ul></p>
-        <p>This example <codeph><xref href="../../utility_guide/ref/gpconfig.xml"
-            >gpconfig</xref></codeph> command sets the value for
-            <codeph>gp_interconnect_proxy_addresses</codeph> as a single-quoted string that is
-          enclosed in double quotes. The Greenplum system consists of a master and a single segment
-          instance.
-          <codeblock>gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'1:-1:192.168.180.50:35432,2:0:192.168.180.54:35000'"</codeblock></p>
-        <p>This is an example script that you can run on the Greenplum master host to create a
-          string that can be used as the value for the
-            <codeph>gp_interconnect_proxy_addresses</codeph> parameter.</p>
-        <codeblock>#!/usr/bin/env bash
+          </ul></p><p>This is an example script that you can run on the Greenplum master host to
+          create a string that can be used as the value for the
+            <codeph>gp_interconnect_proxy_addresses</codeph>
+        parameter.</p><codeblock>#!/usr/bin/env bash
 # This script creates a string that can be used to with the gp_interconnect_proxy_addresses GUC
 : ${delta:=-1000}
 
@@ -103,10 +95,14 @@ psql -tqA -d postgres -P pager=off -F ' ' \
 | xargs -rI'{}' echo "'{}'"
 # sets the gp_interconnect_proxy_addresses parameter
 # | xargs -rI'{}' gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'{}'"
-</codeblock>
-        <p>After setting the <codeph>gp_interconnect_proxy_addresses</codeph> parameter, restart the
-          system with the <codeph>gpstop -ra</codeph> command.</p>
-      </section>
+</codeblock>This
+        example <codeph><xref href="../../utility_guide/ref/gpconfig.xml">gpconfig</xref></codeph>
+        command sets the value for <codeph>gp_interconnect_proxy_addresses</codeph> as a
+        single-quoted string that is enclosed in double quotes. The Greenplum system consists of a
+        master and a single segment instance.
+          <codeblock>gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'1:-1:192.168.180.50:35432,2:0:192.168.180.54:35000'"</codeblock><p>After
+          setting the <codeph>gp_interconnect_proxy_addresses</codeph> parameter, restart the system
+          with the <codeph>gpstop -ra</codeph> command.</p></section>
       <section id="test_proxy">
         <title>Testing the Interconnect Proxies</title>
         <p>To test the proxy ports configured for the system, you can set the

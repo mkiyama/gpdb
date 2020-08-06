@@ -3671,10 +3671,10 @@
           <codeph>proxy</codeph>. Otherwise, this parameter is ignored. The default value is an
         empty string (""). </p>
       <p>When the <codeph>gp_interconnect_type</codeph> parameter is set to <codeph>proxy</codeph>,
-        You must specify a proxy port for the master, standby master and all primary and mirror
+        You must specify a proxy port for the master, standby master, and all primary and mirror
         segment instances in this format:</p>
       <codeblock>&lt;db_id>:&lt;cont_id>:&lt;seg_ip>:&lt;port>[,&lt;dbid>:&lt;segid>:&lt;ip>:&lt;port> ... ]</codeblock>
-      <p>For the master, standby master and segment instance, the first three fields,
+      <p>For the master, standby master, and segment instance, the first three fields,
           <varname>db_id</varname>, <varname>cont_id</varname>, and <varname>seg_ip</varname> can be
         found in the <codeph><xref href="../system_catalogs/gp_segment_configuration.xml"
             >gp_segment_configuration</xref></codeph> catalog table. The fourth field,
@@ -3827,9 +3827,9 @@
         segment instances - less than that if the query workload involves complex, multi-slice
         queries.</p>
       <p>The <codeph>PROXY</codeph> value specifies using the TCP protocol, and when running
-        queries, use a proxy for Greenplum interconnect communication between the master instance
-        and segment instances and between two segments. When this parameter is set to
-          <codeph>PROXY</codeph>, you must specify the proxy ports the for the master and segment
+        queries, using a proxy for Greenplum interconnect communication between the master instance
+        and segment instances and between two segment instances. When this parameter is set to
+          <codeph>PROXY</codeph>, you must specify the proxy ports for the master and segment
         instances with the server configuration parameter <codeph><xref
             href="#gp_interconnect_proxy_addresses" format="dita"/></codeph>. For information about
         configuring and using proxies with the Greenplum interconnect, see <xref
