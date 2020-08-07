@@ -134,8 +134,13 @@ returns table(dbid smallint, content smallint, ip text, port int) as $$
         plpy.notice('''if the settings are correct, re-run with 'update proxy' to apply.''')
     return results
 $$ language plpythonu execute on master;</codeblock>
-        <p>After you create the function in a database, this command lists the segment instance
-          values for the <codeph>gp_interconnect_proxy_addresses</codeph> parameter.
+        <note>When you run the function, you should connect to the database using the Greenplum
+          interconnect type <codeph>UDPIFC</codeph> or <codeph>TCP</codeph>. This example uses
+            <codeph>psql</codeph> to connect to the database <codeph>mytest</codeph> with the
+          interconnect type
+          <codeph>UDPIFC</codeph>.<codeblock>PGOPTIONS="-c gp_interconnect_type=udpifc" psql -d mytest</codeblock></note>
+        <p>Running this command lists the segment instance values for the
+            <codeph>gp_interconnect_proxy_addresses</codeph> parameter.
           <codeblock>select my_setup_ic_proxy(-1000, '');</codeblock></p>
         <p>This command runs the function to set the
           parameter.<codeblock>select my_setup_ic_proxy(-1000, 'update proxy');</codeblock></p>
