@@ -158,7 +158,12 @@ where <varname>action</varname> is one of:
                                                   href="../config_params/guc-list.xml#gp_default_storage_options"
                                                   >gp_default_storage_option</xref></codeph>.</li>
                                                   <li>The default compression parameter value.</li>
-                                                </ol></p></li>
+                                                </ol></p><p>For append-optimized and hash tables,
+                                                  <codeph>ADD COLUMN</codeph> requires a table
+                                                rewrite. For information about table rewrites
+                                                performed by <codeph>ALTER TABLE</codeph>, see <xref
+                                                  href="#topic1/section5" format="dita"
+                                                >Notes</xref>.</p></li>
                                 <li><b>DROP COLUMN [IF EXISTS]</b> — Drops a column from a table.
                                         Note that if you drop table columns that are being used as
                                         the Greenplum Database distribution key, the distribution
@@ -185,10 +190,15 @@ where <varname>action</varname> is one of:
                                         default conversion is the same as an assignment cast from
                                         old data type to new. A <codeph>USING</codeph> clause must
                                         be provided if there is no implicit or assignment cast from
-                                        old to new type.<note>GPORCA supports collation only when
-                                                all columns in the query use the same collation. If
-                                                columns in the query use different collations, then
-                                                Greenplum uses the Postgres Planner.</note></li>
+                                        old to new type.
+                                        <note>GPORCA supports collation only when all columns in the
+                                                query use the same collation. If columns in the
+                                                query use different collations, then Greenplum uses
+                                                the Postgres Planner.</note><p>Changing a column
+                                                data type requires a table rewrite. For information
+                                                about table rewrites performed by <codeph>ALTER
+                                                  TABLE</codeph>, see <xref href="#topic1/section5"
+                                                  format="dita">Notes</xref>.</p></li>
                                 <li id="ay136904"><b>SET/DROP DEFAULT</b> — Sets or removes the
                                         default value for a column. Default values only apply in
                                         subsequent <codeph>INSERT</codeph> or
@@ -966,39 +976,25 @@ where <varname>action</varname> is one of:
                                                   <entry>Yes</entry>
                                                   <entry>Yes</entry>
                                                 </row>
-                                                <row>
-                                                  <entry><codeph>ADD COLUMN DEFAULT
-                                                  NULL</codeph></entry>
-                                                  <entry>No</entry>
-                                                  <entry>Yes</entry>
-                                                  <entry>Yes</entry>
-                                                </row>
-                                                <row>
-                                                  <entry><codeph>ADD COLUMN DEFAULT
-                                                  VALUE</codeph></entry>
-                                                  <entry>No</entry>
-                                                  <entry>Yes</entry>
-                                                  <entry>Yes</entry>
-                                                </row>
                                         </tbody>
                                 </tgroup>
                         </table>
-                        <note>Adding or removing a system <codeph>oid</codeph> column also requires
-                                a table rewrite. <p>When a column is added with <codeph>ADD
-                                                COLUMN</codeph>, all existing rows in the table are
-                                        initialized with the column's default value, or
-                                                <codeph>NULL</codeph> if no <codeph>DEFAULT</codeph>
-                                        clause is specified. Adding a column with a non-null default
-                                        or changing the type of an existing column will require the
-                                        entire table and indexes to be rewritten. As an exception,
-                                        if the <codeph>USING</codeph> clause does not change the
-                                        column contents and the old type is either binary coercible
-                                        to the new type or an unconstrained domain over the new
-                                        type, a table rewrite is not needed, but any indexes on the
-                                        affected columns must still be rebuilt. Table and/or index
-                                        rebuilds may take a significant amount of time for a large
-                                        table; and will temporarily require as much as double the
-                                        disk space. </p></note>
+                        <note>Dropping a system <codeph>oid</codeph> column also requires a table
+                                rewrite. <p>When a column is added with <codeph>ADD COLUMN</codeph>,
+                                        all existing rows in the table are initialized with the
+                                        column's default value, or <codeph>NULL</codeph> if no
+                                                <codeph>DEFAULT</codeph> clause is specified. Adding
+                                        a column with a non-null default or changing the type of an
+                                        existing column will require the entire table and indexes to
+                                        be rewritten. As an exception, if the <codeph>USING</codeph>
+                                        clause does not change the column contents and the old type
+                                        is either binary coercible to the new type or an
+                                        unconstrained domain over the new type, a table rewrite is
+                                        not needed, but any indexes on the affected columns must
+                                        still be rebuilt. Table and/or index rebuilds may take a
+                                        significant amount of time for a large table; and will
+                                        temporarily require as much as double the disk space.
+                                </p></note>
                         <note type="important">The forms of <codeph>ALTER TABLE</codeph> that
                                 perform a table rewrite on an append-optimized table are not
                                 MVCC-safe. After a table rewrite, the table will appear empty to
