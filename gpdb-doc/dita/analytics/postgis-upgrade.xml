@@ -34,7 +34,7 @@
         <li>Confirm you have a PostGIS 2.1.5 package such as
             <codeph>postgis-2.1.5+pivotal.1</codeph> installed in a Greenplum Database system. See
             <xref href="#topic_yzz_l3h_kmb" format="dita"/>.</li>
-        <li dir="ltr">Install the PostGIS 2.5.4 package into Greenplum Database system with the
+        <li dir="ltr">Install the PostGIS 2.5.4 package into the Greenplum Database system with the
             <codeph>gppkg</codeph>
             utility.<codeblock dir="ltr">gppkg -i postgis-2.5.4+pivotal.3.build.1-gp6-rhel7-x86_64.gppkg</codeblock><p>Run
             the <codeph>gppkg -q --all</codeph> command to verify the updated package version is
@@ -48,7 +48,7 @@
         <li>After running the script, you can verify that PostGIS 2.5.4 is installed and enabled as
           an extension in a database with this
           query.<codeblock># SELECT * FROM pg_available_extensions WHERE name = 'postgis' ;</codeblock></li>
-        <li dir="ltr">You can validate that the PostGIS 2.5 is enabled in the database with the
+        <li dir="ltr">You can validate that PostGIS 2.5 is enabled in the database with the
             <codeph>postgis_version()</codeph> function.</li>
       </ol>
       <p>After you have completed the upgrade to PostGIS 2.5.4 <codeph>pivotal.3</codeph> for the

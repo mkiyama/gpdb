@@ -312,7 +312,7 @@ export POSTGIS_GDAL_ENABLED_DRIVERS=DISABLE_ALL</codeblock>
             Before removing PostGIS support, ensure that no users are accessing the database. Users
             accessing PostGIS objects might interfere with dropping PostGIS objects.</p>
           <p>For example, this <codeph>CREATE TABLE</codeph> command creates a table with column
-              <codeph>b</codeph> is defined with PostGIS <codeph>geometry</codeph> data
+              <codeph>b</codeph> that is defined with the PostGIS <codeph>geometry</codeph> data
             type.<codeblock># CREATE TABLE test(a int, b geometry) DISTRIBUTED RANDOMLY;</codeblock></p>
           <p>This is the table definition in a database with PostGIS
             enabled.<codeblock># \d test
